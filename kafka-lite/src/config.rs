@@ -1,0 +1,93 @@
+//! Configuration for kafka-lite server
+
+use clap::Parser;
+use std::path::PathBuf;
+
+/// A fast, lightweight, single-node Kafka-compatible API server
+#[derive(Parser, Debug, Clone)]
+#[command(name = "kafka-lite")]
+#[command(author, version, about, long_about = None)]
+pub struct Config {
+    /// Host address to bind to
+    #[arg(long, default_value = "0.0.0.0", env = "KAFKA_LITE_HOST")]
+    pub host: String,
+
+    /// Port to listen on
+    #[arg(short, long, default_value_t = 9092, env = "KAFKA_LITE_PORT")]
+    pub port: u16,
+
+    /// Data directory for persistence
+    #[arg(long, default_value = "./data", env = "KAFKA_LITE_DATA_DIR")]
+    pub data_dir: PathBuf,
+
+    /// Run in memory-only mode (no persistence, fastest)
+    #[arg(long, default_value_t = false, env = "KAFKA_LITE_MEMORY_ONLY")]
+    pub memory_only: bool,
+
+    /// Maximum segment size in bytes
+    #[arg(long, default_value_t = 1024 * 1024 * 1024, env = "KAFKA_LITE_SEGMENT_SIZE")]
+    pub segment_size: u64,
+
+    /// Message retention in milliseconds (default: 7 days)
+    #[arg(long, default_value_t = 7 * 24 * 60 * 60 * 1000, env = "KAFKA_LITE_RETENTION_MS")]
+    pub retention_ms: u64,
+
+    /// Number of partitions for auto-created topics
+    #[arg(long, default_value_t = 1, env = "KAFKA_LITE_DEFAULT_PARTITIONS")]
+    pub default_partitions: i32,
+
+    /// Enable auto-creation of topics
+    #[arg(long, default_value_t = true, env = "KAFKA_LITE_AUTO_CREATE_TOPICS")]
+    pub auto_create_topics: bool,
+
+    /// Broker ID (for Kafka protocol compatibility)
+    #[arg(long, default_value_t = 0, env = "KAFKA_LITE_BROKER_ID")]
+    pub broker_id: i32,
+
+    /// Cluster ID
+    #[arg(long, default_value = "kafka-lite-cluster", env = "KAFKA_LITE_CLUSTER_ID")]
+    pub cluster_id: String,
+
+    /// Enable Prometheus metrics endpoint
+    #[arg(long, default_value_t = false, env = "KAFKA_LITE_METRICS")]
+    pub metrics: bool,
+
+    /// Metrics port
+    #[arg(long, default_value_t = 9093, env = "KAFKA_LITE_METRICS_PORT")]
+    pub metrics_port: u16,
+}
+
+impl Config {
+    /// Get the socket address to bind to
+    pub fn bind_addr(&self) -> String {
+        format!("{}:{}", self.host, self.port)
+    }
+
+    /// Get advertised listener for Kafka protocol
+    pub fn advertised_listener(&self) -> String {
+        if self.host == "0.0.0.0" {
+            format!("localhost:{}", self.port)
+        } else {
+            format!("{}:{}", self.host, self.port)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_config() {
+        let config = Config::parse_from::<[&str; 0], &str>([]);
+        assert_eq!(config.port, 9092);
+        assert_eq!(config.host, "0.0.0.0");
+        assert!(!config.memory_only);
+    }
+
+    #[test]
+    fn test_memory_only_flag() {
+        let config = Config::parse_from(["kafka-lite", "--memory-only"]);
+        assert!(config.memory_only);
+    }
+}

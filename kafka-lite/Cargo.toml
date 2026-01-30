@@ -1,0 +1,90 @@
+[package]
+name = "heimq"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["heimq contributors"]
+description = "A fast, lightweight, single-node Kafka-compatible API server"
+license = "MIT"
+repository = "https://github.com/heimq/heimq"
+keywords = ["kafka", "messaging", "streaming", "queue"]
+categories = ["network-programming", "asynchronous"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.44", features = ["full"] }
+
+# Kafka protocol - code-generated wire protocol support
+kafka-protocol = "0.15"
+
+# Serialization
+bytes = "1.10"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# CLI
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Data structures
+dashmap = "6.1"
+parking_lot = "0.12"
+crossbeam = "0.8"
+
+# Time
+chrono = "0.4"
+
+# CRC for record batches
+crc32c = "0.6"
+
+# Compression support
+flate2 = "1.0"          # gzip
+snap = "1.1"            # snappy
+lz4 = "1.28"            # lz4
+zstd = "0.13"           # zstd
+
+# Optional persistence
+memmap2 = "0.9"
+
+# Metrics
+metrics = "0.24"
+metrics-exporter-prometheus = "0.16"
+
+[dev-dependencies]
+# Test utilities
+tokio-test = "0.4"
+tempfile = "3.16"
+
+# Testing with real Kafka clients
+rdkafka = { version = "0.37", features = ["cmake-build"] }
+
+[features]
+default = []
+
+[[bin]]
+name = "heimq"
+path = "src/main.rs"
+
+# Benchmarks - uncomment when rdkafka is available
+# [[bench]]
+# name = "throughput"
+# harness = false
+
+# [[bench]]
+# name = "latency"
+# harness = false
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.bench]
+lto = true
+codegen-units = 1
