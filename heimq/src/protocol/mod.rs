@@ -49,3 +49,16 @@ pub fn get_api_version_range(api_key: i16) -> Option<(i16, i16)> {
         .find(|(key, _, _)| *key == api_key)
         .map(|(_, min, max)| (*min, *max))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_api_supported_and_range() {
+        assert!(is_api_supported(0, 0));
+        assert!(!is_api_supported(0, 9));
+        assert_eq!(get_api_version_range(0), Some((0, 8)));
+        assert_eq!(get_api_version_range(999), None);
+    }
+}

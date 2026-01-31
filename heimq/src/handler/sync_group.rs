@@ -1,6 +1,6 @@
 //! SyncGroup request handler (API Key 14)
 
-use crate::consumer_group::ConsumerGroupManager;
+use crate::consumer_group::{ConsumerGroup, ConsumerGroupManager};
 use crate::error::Result;
 use bytes::Buf;
 use kafka_protocol::messages::SyncGroupResponse;
@@ -95,16 +95,7 @@ pub fn handle(
     }
 
     // If this is the leader, store the assignments
-    if group.leader_id() == Some(member_id.clone()) {
-        for (assign_member_id, assignment) in &assignments {
-            group.set_assignment(assign_member_id, assignment.clone());
-        }
-
-        // Select protocol and complete rebalance
-        if let Some(protocol) = group.select_protocol() {
-            group.complete_rebalance(protocol);
-        }
-    }
+    if group.leader_id() == Some(member_id.clone()) { apply_leader_assignments(&group, &assignments); }
 
     // Return this member's assignment
     if let Some(assignment) = group.get_assignment(&member_id) {
@@ -136,4 +127,15 @@ fn read_string(cursor: &mut Cursor<&[u8]>) -> Option<String> {
     let mut buf = vec![0u8; len as usize];
     cursor.copy_to_slice(&mut buf);
     Some(String::from_utf8_lossy(&buf).to_string())
+}
+
+fn apply_leader_assignments(group: &Arc<ConsumerGroup>, assignments: &[(String, Vec<u8>)]) {
+    for (assign_member_id, assignment) in assignments {
+        group.set_assignment(assign_member_id, assignment.clone());
+    }
+
+    // Select protocol and complete rebalance
+    if let Some(protocol) = group.select_protocol() {
+        group.complete_rebalance(protocol);
+    }
 }

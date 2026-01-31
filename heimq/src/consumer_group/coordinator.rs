@@ -32,3 +32,28 @@ impl Coordinator {
         self.config.port as i32
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_coordinator_fields() {
+        let mut config = Config::parse_from(["heimq"]);
+        config.host = "0.0.0.0".to_string();
+        config.port = 9099;
+        config.broker_id = 7;
+        let coordinator = Coordinator::new(Arc::new(config));
+
+        assert_eq!(coordinator.broker_id(), 7);
+        assert_eq!(coordinator.host(), "localhost");
+        assert_eq!(coordinator.port(), 9099);
+
+        let mut config = Config::parse_from(["heimq"]);
+        config.host = "127.0.0.1".to_string();
+        config.port = 9092;
+        let coordinator = Coordinator::new(Arc::new(config));
+        assert_eq!(coordinator.host(), "127.0.0.1");
+    }
+}

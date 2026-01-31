@@ -1,6 +1,6 @@
 //! JoinGroup request handler (API Key 11)
 
-use crate::consumer_group::{ConsumerGroupManager, Member};
+use crate::consumer_group::{ConsumerGroup, ConsumerGroupManager, Member};
 use crate::error::Result;
 use bytes::Buf;
 use kafka_protocol::messages::join_group_response::JoinGroupResponseMember;
@@ -138,17 +138,7 @@ pub fn handle(
     response.member_id = StrBytes::from_string(actual_member_id.clone());
 
     // If this member is the leader, include all members
-    if group.leader_id() == Some(actual_member_id.clone()) {
-        for m in group.members() {
-            let mut member_info = JoinGroupResponseMember::default();
-            member_info.member_id = StrBytes::from_string(m.member_id.clone());
-            // Find the metadata for the selected protocol
-            if let Some((_, metadata)) = m.protocols.iter().find(|(n, _)| n == &protocol) {
-                member_info.metadata = bytes::Bytes::from(metadata.clone());
-            }
-            response.members.push(member_info);
-        }
-    }
+    if group.leader_id() == Some(actual_member_id.clone()) { add_leader_members(&mut response, &group, &protocol); }
 
     Ok(response)
 }
@@ -167,4 +157,20 @@ fn read_string(cursor: &mut Cursor<&[u8]>) -> Option<String> {
     let mut buf = vec![0u8; len as usize];
     cursor.copy_to_slice(&mut buf);
     Some(String::from_utf8_lossy(&buf).to_string())
+}
+
+fn add_leader_members(
+    response: &mut JoinGroupResponse,
+    group: &Arc<ConsumerGroup>,
+    protocol: &str,
+) {
+    for m in group.members() {
+        let mut member_info = JoinGroupResponseMember::default();
+        member_info.member_id = StrBytes::from_string(m.member_id.clone());
+        // Find the metadata for the selected protocol
+        if let Some((_, metadata)) = m.protocols.iter().find(|(n, _)| n == protocol) {
+            member_info.metadata = bytes::Bytes::from(metadata.clone());
+        }
+        response.members.push(member_info);
+    }
 }

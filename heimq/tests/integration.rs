@@ -29,21 +29,33 @@ struct TestServer {
 impl TestServer {
     fn start() -> Self {
         let port = get_test_port();
+        let test_args = format!("--port {} --memory-only", port);
 
         // Start the server - suppress output to avoid flooding test logs
-        let child = Command::new("./target/debug/heimq")
-            .args(["--port", &port.to_string(), "--memory-only"])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .or_else(|_| {
-                Command::new("./target/release/heimq")
-                    .args(["--port", &port.to_string(), "--memory-only"])
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
-            })
-            .expect("Failed to start heimq - run 'cargo build' first");
+        let child = if let Some(bin) = option_env!("CARGO_BIN_EXE_heimq") {
+            Command::new(bin)
+                .env("HEIMQ_TEST_ARGS", &test_args)
+                .args(["--port", &port.to_string(), "--memory-only"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+        } else {
+            Command::new("./target/debug/heimq")
+                .env("HEIMQ_TEST_ARGS", &test_args)
+                .args(["--port", &port.to_string(), "--memory-only"])
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .or_else(|_| {
+                    Command::new("./target/release/heimq")
+                        .env("HEIMQ_TEST_ARGS", &test_args)
+                        .args(["--port", &port.to_string(), "--memory-only"])
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                })
+        }
+        .expect("Failed to start heimq - run 'cargo build' first");
 
         // Wait for server to be ready
         std::thread::sleep(Duration::from_millis(500));

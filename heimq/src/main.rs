@@ -9,6 +9,8 @@ mod handler;
 mod protocol;
 mod server;
 mod storage;
+#[cfg(test)]
+mod test_support;
 
 use clap::Parser;
 use config::Config;
@@ -16,19 +18,25 @@ use server::Server;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
-    tracing_subscriber::registry()
+fn init_tracing() {
+    let _ = tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "heimq=info".into()),
         )
         .with(tracing_subscriber::fmt::layer())
-        .init();
+        .try_init();
+}
 
-    // Parse configuration
-    let config = Config::parse();
+fn max_connections_from_env() -> Option<usize> {
+    std::env::var("HEIMQ_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+}
+
+async fn run_with_config(config: Config, max_connections: Option<usize>) -> anyhow::Result<()> {
+    init_tracing();
 
     info!(
         "Starting heimq v{} on {}:{}",
@@ -43,9 +51,106 @@ async fn main() -> anyhow::Result<()> {
         info!("Data directory: {}", config.data_dir.display());
     }
 
-    // Create and run server
     let server = Server::new(config)?;
-    server.run().await?;
+    server.run_with_max_connections(max_connections).await?;
 
     Ok(())
+}
+
+fn config_from_env() -> Config {
+    #[cfg(any(test, coverage))]
+    {
+        if let Ok(args) = std::env::var("HEIMQ_TEST_ARGS") {
+            let mut argv = vec!["heimq".to_string()];
+            argv.extend(args.split_whitespace().map(|arg| arg.to_string()));
+            return Config::parse_from(argv);
+        }
+        return Config::parse_from(["heimq"]);
+    }
+    #[cfg(not(any(test, coverage)))]
+    Config::parse()
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let max_connections = max_connections_from_env();
+    run_with_config(config_from_env(), max_connections).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::net::TcpStream;
+
+    async fn run_once(memory_only: bool) -> anyhow::Result<()> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let port = listener.local_addr()?.port();
+        drop(listener);
+
+        let config = Config {
+            host: "127.0.0.1".to_string(),
+            port,
+            data_dir: std::path::PathBuf::from("/tmp/heimq-test"),
+            memory_only,
+            segment_size: 1024 * 1024,
+            retention_ms: 60_000,
+            default_partitions: 1,
+            auto_create_topics: true,
+            broker_id: 0,
+            cluster_id: "test".to_string(),
+            metrics: false,
+            metrics_port: 9093,
+        };
+
+        let task = tokio::spawn(async move { run_with_config(config, Some(1)).await });
+
+        for _ in 0..10 {
+            if TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        }
+        task.await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_run_with_config_memory_modes() {
+        run_once(true).await.unwrap();
+        run_once(false).await.unwrap();
+    }
+
+    #[test]
+    fn test_max_connections_from_env() {
+        std::env::set_var("HEIMQ_MAX_CONNECTIONS", "2");
+        assert_eq!(max_connections_from_env(), Some(2));
+        std::env::remove_var("HEIMQ_MAX_CONNECTIONS");
+        assert_eq!(max_connections_from_env(), None);
+    }
+
+    #[test]
+    fn test_main_uses_env_args() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        std::env::set_var(
+            "HEIMQ_TEST_ARGS",
+            format!("--host 127.0.0.1 --port {} --memory-only", port),
+        );
+        std::env::set_var("HEIMQ_MAX_CONNECTIONS", "1");
+
+        let result = super::main();
+        assert!(result.is_err());
+
+        drop(listener);
+        std::env::remove_var("HEIMQ_TEST_ARGS");
+        std::env::remove_var("HEIMQ_MAX_CONNECTIONS");
+    }
+
+    #[test]
+    fn test_config_from_env_defaults() {
+        std::env::remove_var("HEIMQ_TEST_ARGS");
+        let config = config_from_env();
+        assert_eq!(config.host, "0.0.0.0");
+        assert_eq!(config.port, 9092);
+    }
 }

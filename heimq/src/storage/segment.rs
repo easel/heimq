@@ -105,6 +105,22 @@ mod tests {
         assert_eq!(data, vec![5, 6, 7, 8]);
     }
 
+    #[test]
+    fn test_contains_and_last_offset() {
+        let mut segment = Segment::new(5);
+        assert!(!segment.contains(5));
+        assert_eq!(segment.last_offset(), None);
+
+        segment.append(5, vec![1]);
+        segment.append(6, vec![2]);
+
+        assert!(segment.contains(5));
+        assert!(segment.contains(6));
+        assert!(!segment.contains(4));
+        assert_eq!(segment.last_offset(), Some(6));
+        assert_eq!(segment.base_offset(), 5);
+    }
+
     proptest! {
         #[test]
         fn prop_segment_size_matches_appends(batches in prop::collection::vec(prop::collection::vec(any::<u8>(), 1..64), 1..32)) {

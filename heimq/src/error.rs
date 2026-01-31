@@ -55,3 +55,31 @@ impl HeimqError {
 pub fn str_bytes(s: String) -> StrBytes {
     StrBytes::from_string(s)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_codes() {
+        assert_eq!(HeimqError::TopicNotFound("t".into()).to_error_code(), 3);
+        assert_eq!(
+            HeimqError::PartitionNotFound {
+                topic: "t".into(),
+                partition: 1
+            }
+            .to_error_code(),
+            3
+        );
+        assert_eq!(HeimqError::InvalidOffset(1).to_error_code(), 1);
+        assert_eq!(HeimqError::ConsumerGroup("g".into()).to_error_code(), 16);
+        assert_eq!(HeimqError::Protocol("p".into()).to_error_code(), 35);
+        assert_eq!(HeimqError::Config("c".into()).to_error_code(), -1);
+    }
+
+    #[test]
+    fn test_str_bytes_helper() {
+        let value = str_bytes("hello".to_string());
+        assert_eq!(value.as_str(), "hello");
+    }
+}

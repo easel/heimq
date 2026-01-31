@@ -90,4 +90,23 @@ mod tests {
         let config = Config::parse_from(["heimq", "--memory-only"]);
         assert!(config.memory_only);
     }
+
+    #[test]
+    fn test_advertised_listener() {
+        let mut config = Config::parse_from(["heimq"]);
+        config.port = 9094;
+        config.host = "0.0.0.0".to_string();
+        assert_eq!(config.advertised_listener(), "localhost:9094");
+
+        config.host = "127.0.0.1".to_string();
+        assert_eq!(config.advertised_listener(), "127.0.0.1:9094");
+    }
+
+    #[test]
+    fn test_bind_addr() {
+        let mut config = Config::parse_from(["heimq"]);
+        config.host = "127.0.0.1".to_string();
+        config.port = 5555;
+        assert_eq!(config.bind_addr(), "127.0.0.1:5555");
+    }
 }

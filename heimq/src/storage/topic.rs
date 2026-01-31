@@ -64,4 +64,10 @@ mod tests {
         assert!(topic.get_partition(2).is_ok());
         assert!(topic.get_partition(3).is_err());
     }
+
+    #[test]
+    fn test_partitions_slice() {
+        let topic = Topic::new("test".to_string(), 2);
+        assert_eq!(topic.partitions().len(), 2);
+    }
 }

@@ -231,12 +231,20 @@ impl ConsumerGroup {
             }
         }
 
-        // Select the protocol supported by all members
+        // Select a deterministic protocol supported by all members
         let member_count = members.len();
-        protocol_counts
+        let mut supported: Vec<String> = protocol_counts
             .into_iter()
-            .find(|(_, count)| *count == member_count)
-            .map(|(protocol, _)| protocol)
+            .filter_map(|(protocol, count)| {
+                if count == member_count {
+                    Some(protocol)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        supported.sort();
+        supported.into_iter().next()
     }
 
     /// Complete rebalance - move to stable state
@@ -312,5 +320,141 @@ mod tests {
         assert_eq!(gen, 1);
         assert_eq!(group.state(), GroupState::PreparingRebalance);
         assert_eq!(group.leader_id(), Some("member-1".to_string()));
+    }
+
+    #[test]
+    fn test_remove_member_and_leader_election() {
+        let group = ConsumerGroup::new("test-group".to_string());
+        let member1 = Member::new(
+            "member-1".to_string(),
+            "client-1".to_string(),
+            "127.0.0.1".to_string(),
+            30000,
+            300000,
+            "consumer".to_string(),
+            vec![("range".to_string(), vec![])],
+        );
+        let member2 = Member::new(
+            "member-2".to_string(),
+            "client-2".to_string(),
+            "127.0.0.1".to_string(),
+            30000,
+            300000,
+            "consumer".to_string(),
+            vec![("range".to_string(), vec![])],
+        );
+
+        group.add_member(member1);
+        group.add_member(member2);
+        assert!(group.remove_member("member-1"));
+        assert_eq!(group.leader_id(), Some("member-2".to_string()));
+
+        assert!(group.remove_member("member-2"));
+        assert_eq!(group.state(), GroupState::Empty);
+    }
+
+    #[test]
+    fn test_protocol_selection_and_rebalance() {
+        let group = ConsumerGroup::new("test-group".to_string());
+        assert!(group.select_protocol().is_none());
+
+        let member = Member::new(
+            "member-1".to_string(),
+            "client-1".to_string(),
+            "127.0.0.1".to_string(),
+            30000,
+            300000,
+            "consumer".to_string(),
+            vec![("range".to_string(), vec![]), ("roundrobin".to_string(), vec![])],
+        );
+        group.add_member(member);
+        assert_eq!(group.select_protocol(), Some("range".to_string()));
+
+        group.complete_rebalance("range".to_string());
+        assert_eq!(group.state(), GroupState::Stable);
+        assert_eq!(group.protocol(), Some("range".to_string()));
+    }
+
+    #[test]
+    fn test_heartbeat_and_assignment() {
+        let group = ConsumerGroup::new("test-group".to_string());
+        let member = Member::new(
+            "member-1".to_string(),
+            "client-1".to_string(),
+            "127.0.0.1".to_string(),
+            30000,
+            300000,
+            "consumer".to_string(),
+            vec![("range".to_string(), vec![])],
+        );
+        group.add_member(member);
+
+        assert!(group.heartbeat("member-1"));
+        assert!(!group.heartbeat("missing"));
+
+        group.set_assignment("member-1", vec![1, 2, 3]);
+        assert_eq!(group.get_assignment("member-1"), Some(vec![1, 2, 3]));
+    }
+
+    #[test]
+    fn test_remove_expired_members() {
+        let group = ConsumerGroup::new("test-group".to_string());
+        let mut member = Member::new(
+            "member-1".to_string(),
+            "client-1".to_string(),
+            "127.0.0.1".to_string(),
+            1,
+            300000,
+            "consumer".to_string(),
+            vec![("range".to_string(), vec![])],
+        );
+        member.last_heartbeat = Instant::now() - Duration::from_millis(10);
+        group.add_member(member);
+
+        let expired = group.remove_expired_members();
+        assert_eq!(expired, vec!["member-1".to_string()]);
+    }
+
+    #[test]
+    fn test_protocol_type_and_expired_member_retention() {
+        let group = ConsumerGroup::new("test-group".to_string());
+
+        let member1 = Member::new(
+            "member-1".to_string(),
+            "client".to_string(),
+            "127.0.0.1".to_string(),
+            5,
+            5,
+            "consumer".to_string(),
+            vec![
+                ("range".to_string(), vec![]),
+                ("roundrobin".to_string(), vec![]),
+            ],
+        );
+        let member2 = Member::new(
+            "member-2".to_string(),
+            "client".to_string(),
+            "127.0.0.1".to_string(),
+            10_000,
+            10_000,
+            "consumer".to_string(),
+            vec![("range".to_string(), vec![])],
+        );
+
+        group.add_member(member1);
+        group.add_member(member2);
+
+        assert_eq!(group.protocol_type(), Some("consumer".to_string()));
+        assert_eq!(group.select_protocol(), Some("range".to_string()));
+
+        {
+            let mut members = group.members.write();
+            let expired = members.get_mut("member-1").unwrap();
+            expired.last_heartbeat = Instant::now() - Duration::from_millis(50);
+        }
+
+        let expired = group.remove_expired_members();
+        assert_eq!(expired, vec!["member-1".to_string()]);
+        assert_eq!(group.state(), GroupState::PreparingRebalance);
     }
 }

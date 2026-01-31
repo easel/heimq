@@ -65,3 +65,21 @@ impl ConsumerGroupManager {
         self.groups.iter().map(|e| e.key().clone()).collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+    use clap::Parser;
+
+    #[test]
+    fn test_list_groups() {
+        let config = Arc::new(Config::parse_from(["heimq"]));
+        let manager = ConsumerGroupManager::new(config);
+        manager.get_or_create_group("g1");
+        manager.get_or_create_group("g2");
+        let groups = manager.list_groups();
+        assert!(groups.contains(&"g1".to_string()));
+        assert!(groups.contains(&"g2".to_string()));
+    }
+}

@@ -219,4 +219,48 @@ mod tests {
         let topics = storage.list_topics();
         assert_eq!(topics.len(), 2);
     }
+
+    #[test]
+    fn test_get_all_metadata_and_delete_missing() {
+        let storage = Storage::new(test_config());
+        storage.create_topic("topic1", 1).unwrap();
+        storage.create_topic("topic2", 2).unwrap();
+        let metadata = storage.get_all_topic_metadata();
+        assert_eq!(metadata.len(), 2);
+
+        let missing = storage.delete_topic("missing");
+        assert!(missing.is_err());
+    }
+
+    #[test]
+    fn test_append_fetch_total_messages() {
+        let storage = Storage::new(test_config());
+        storage.create_topic("topic", 1).unwrap();
+        let records = vec![1, 2, 3];
+        let (base_offset, count) = storage.append("topic", 0, &records).unwrap();
+        assert_eq!(base_offset, 0);
+        assert_eq!(count, 1);
+        assert_eq!(storage.total_messages(), 1);
+
+        let (fetched, hw) = storage.fetch("topic", 0, 0, 1024).unwrap();
+        assert_eq!(fetched, records);
+        assert_eq!(hw, 1);
+    }
+
+    #[test]
+    fn test_auto_create_disabled() {
+        let mut config = (*test_config()).clone();
+        config.auto_create_topics = false;
+        let storage = Storage::new(Arc::new(config));
+        let result = storage.append("missing", 0, &[1, 2, 3]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fetch_invalid_offset() {
+        let storage = Storage::new(test_config());
+        storage.create_topic("topic", 1).unwrap();
+        let result = storage.fetch("topic", 0, -1, 1024);
+        assert!(result.is_err());
+    }
 }

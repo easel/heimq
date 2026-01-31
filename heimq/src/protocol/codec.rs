@@ -119,9 +119,28 @@ pub fn encode_response_body<R: Encodable>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support::init_tracing;
+    use anyhow::anyhow;
+
+    struct FailingEncode;
+
+    impl Encodable for FailingEncode {
+        fn encode<B: kafka_protocol::protocol::buf::ByteBufMut>(
+            &self,
+            _buf: &mut B,
+            _version: i16,
+        ) -> anyhow::Result<()> {
+            Err(anyhow!("boom"))
+        }
+
+        fn compute_size(&self, _version: i16) -> anyhow::Result<usize> {
+            Ok(0)
+        }
+    }
 
     #[test]
     fn test_decode_request_header() {
+        init_tracing();
         // API key 18 (ApiVersions), version 0, correlation_id 1, no client_id
         let data = [
             0x00, 0x12, // api_key = 18
@@ -134,5 +153,78 @@ mod tests {
         assert_eq!(header.api_key, 18);
         assert_eq!(header.api_version, 0);
         assert_eq!(header.correlation_id, 1);
+    }
+
+    #[test]
+    fn test_decode_with_client_id() {
+        let mut data = vec![];
+        data.extend_from_slice(&18i16.to_be_bytes());
+        data.extend_from_slice(&0i16.to_be_bytes());
+        data.extend_from_slice(&7i32.to_be_bytes());
+        data.extend_from_slice(&3i16.to_be_bytes());
+        data.extend_from_slice(b"app");
+
+        let (header, body) = decode_request(&data).unwrap();
+        assert_eq!(header.correlation_id, 7);
+        assert_eq!(header.client_id.as_deref(), Some("app"));
+        assert!(body.is_empty());
+    }
+
+    #[test]
+    fn test_encode_response_body() {
+        use kafka_protocol::messages::ApiVersionsResponse;
+        let response = ApiVersionsResponse::default();
+        let buf = encode_response_body(5, 0, &response).unwrap();
+        assert!(buf.len() >= 4);
+    }
+
+    #[test]
+    fn test_decode_request_too_short() {
+        let data = [0x00, 0x01, 0x02];
+        assert!(decode_request(&data).is_err());
+    }
+
+    #[test]
+    fn test_decode_request_invalid_client_id_length() {
+        let data = [
+            0x00, 0x12, // api_key
+            0x00, 0x00, // api_version
+            0x00, 0x00, 0x00, 0x01, // correlation_id
+            0x00, 0x04, // client_id length 4
+            0x61, // only one byte
+        ];
+        let (header, _) = decode_request(&data).unwrap();
+        assert!(header.client_id.is_none());
+    }
+
+    #[test]
+    fn test_decode_request_missing_client_id_field() {
+        let data = [
+            0x00, 0x12, // api_key
+            0x00, 0x00, // api_version
+            0x00, 0x00, 0x00, 0x01, // correlation_id
+        ];
+        let (header, _) = decode_request(&data).unwrap();
+        assert!(header.client_id.is_none());
+    }
+
+    #[test]
+    fn test_encode_response_error_mapping() {
+        let response = FailingEncode;
+        let err = encode_response(1, 0, &response).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn test_encode_response_body_error_mapping() {
+        let response = FailingEncode;
+        let err = encode_response_body(1, 0, &response).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn test_compute_size_for_failing_encode() {
+        let response = FailingEncode;
+        assert_eq!(response.compute_size(0).unwrap(), 0);
     }
 }

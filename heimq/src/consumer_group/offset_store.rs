@@ -116,4 +116,26 @@ mod tests {
         let store = OffsetStore::new();
         assert!(store.fetch("group1", "topic1", 0).is_none());
     }
+
+    #[test]
+    fn test_fetch_all_and_delete_group() {
+        let store = OffsetStore::new();
+        store.commit("group1", "topic1", 0, 10, 0, None);
+        store.commit("group1", "topic2", 1, 20, 0, Some("meta".into()));
+        store.commit("group2", "topic1", 0, 30, 0, None);
+
+        let all = store.fetch_all_for_group("group1");
+        assert_eq!(all.len(), 2);
+
+        store.delete_group("group1");
+        assert!(store.fetch("group1", "topic1", 0).is_none());
+        assert!(store.fetch("group1", "topic2", 1).is_none());
+        assert!(store.fetch("group2", "topic1", 0).is_some());
+    }
+
+    #[test]
+    fn test_default_store() {
+        let store = OffsetStore::default();
+        assert!(store.fetch("missing", "topic", 0).is_none());
+    }
 }

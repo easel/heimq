@@ -14,3 +14,6 @@ pub mod offset_commit;
 pub mod offset_fetch;
 pub mod produce;
 pub mod sync_group;
+
+#[cfg(test)]
+mod tests;
