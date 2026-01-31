@@ -10,14 +10,21 @@ use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopi
 use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
 use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
 use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
+use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+use kafka_protocol::messages::fetch_response::FetchResponse;
 use kafka_protocol::messages::list_offsets_request::{ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic};
 use kafka_protocol::messages::list_offsets_response::ListOffsetsResponse;
+use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
+use kafka_protocol::messages::metadata_response::MetadataResponse;
 use kafka_protocol::messages::offset_commit_request::{OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic};
 use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
 use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
 use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
+use kafka_protocol::messages::produce_request::{PartitionProduceData, ProduceRequest, TopicProduceData};
+use kafka_protocol::messages::produce_response::ProduceResponse;
 use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
+use kafka_protocol::records::{Compression, Record, RecordBatchDecoder, RecordBatchEncoder, RecordEncodeOptions, TimestampType};
 use std::io::{Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU16, AtomicUsize, Ordering};
@@ -151,6 +158,37 @@ fn create_topic(server: &TestServer, topic: &str, partitions: i32) -> CreateTopi
     send_request(server, 19, 1, &request)
 }
 
+fn new_record(offset: i64) -> Record {
+    Record {
+        transactional: false,
+        control: false,
+        partition_leader_epoch: 0,
+        producer_id: -1,
+        producer_epoch: -1,
+        timestamp_type: TimestampType::Creation,
+        timestamp: offset,
+        sequence: offset as i32,
+        offset,
+        key: Some(format!("key-{offset}").into()),
+        value: Some(format!("value-{offset}").into()),
+        headers: Default::default(),
+    }
+}
+
+fn encode_record_batch(records: &[Record]) -> bytes::Bytes {
+    let mut encoded = BytesMut::new();
+    RecordBatchEncoder::encode(
+        &mut encoded,
+        records,
+        &RecordEncodeOptions {
+            version: 2,
+            compression: Compression::None,
+        },
+    )
+    .expect("encode record batch");
+    encoded.freeze()
+}
+
 #[test]
 fn contract_api_versions_matches_supported_range() {
     let server = TestServer::start();
@@ -188,6 +226,32 @@ fn contract_api_versions_matches_supported_range() {
 }
 
 #[test]
+fn contract_metadata_auto_creates_topic() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-metadata");
+
+    let mut topic_req = MetadataRequestTopic::default();
+    topic_req.name = Some(TopicName(StrBytes::from_string(topic.clone())));
+
+    let mut request = MetadataRequest::default();
+    request.topics = Some(vec![topic_req]);
+    request.allow_auto_topic_creation = true;
+
+    let response: MetadataResponse = send_request(&server, 3, 4, &request);
+    assert!(!response.brokers.is_empty(), "expected broker metadata");
+    assert!(response.cluster_id.is_some(), "cluster id should be set for v4");
+
+    let topic_response = response
+        .topics
+        .iter()
+        .find(|t| t.name.as_ref().map(|n| n.0.as_str()) == Some(topic.as_str()))
+        .expect("topic metadata");
+
+    assert_eq!(topic_response.error_code, 0);
+    assert!(!topic_response.partitions.is_empty(), "expected partitions");
+}
+
+#[test]
 fn contract_create_and_delete_topics() {
     let server = TestServer::start();
     let topic = unique_topic("contract-topic");
@@ -203,6 +267,60 @@ fn contract_create_and_delete_topics() {
     let delete_response: DeleteTopicsResponse = send_request(&server, 20, 1, &delete_request);
     let delete_result = delete_response.responses.first().expect("delete result");
     assert_eq!(delete_result.error_code, 0);
+}
+
+#[test]
+fn contract_produce_fetch_roundtrip() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-produce");
+
+    let response = create_topic(&server, &topic, 1);
+    let result = response.topics.first().expect("topic result");
+    assert_eq!(result.error_code, 0);
+
+    let records = vec![new_record(0)];
+    let encoded = encode_record_batch(&records);
+
+    let mut partition = PartitionProduceData::default();
+    partition.index = 0;
+    partition.records = Some(encoded);
+
+    let mut topic_data = TopicProduceData::default();
+    topic_data.name = TopicName(StrBytes::from_string(topic.clone()));
+    topic_data.partition_data = vec![partition];
+
+    let mut produce_request = ProduceRequest::default();
+    produce_request.acks = 1;
+    produce_request.timeout_ms = 1000;
+    produce_request.topic_data = vec![topic_data];
+
+    let produce_response: ProduceResponse = send_request(&server, 0, 2, &produce_request);
+    let produce_partition = &produce_response.responses[0].partition_responses[0];
+    assert_eq!(produce_partition.error_code, 0);
+
+    let mut fetch_partition = FetchPartition::default();
+    fetch_partition.partition = 0;
+    fetch_partition.fetch_offset = 0;
+    fetch_partition.partition_max_bytes = 1024 * 1024;
+
+    let mut fetch_topic = FetchTopic::default();
+    fetch_topic.topic = TopicName(StrBytes::from_string(topic));
+    fetch_topic.partitions = vec![fetch_partition];
+
+    let mut fetch_request = FetchRequest::default();
+    fetch_request.replica_id = BrokerId(-1);
+    fetch_request.max_wait_ms = 1000;
+    fetch_request.min_bytes = 1;
+    fetch_request.max_bytes = 1024 * 1024;
+    fetch_request.topics = vec![fetch_topic];
+
+    let fetch_response: FetchResponse = send_request(&server, 1, 3, &fetch_request);
+    let partition_response = &fetch_response.responses[0].partitions[0];
+    assert_eq!(partition_response.error_code, 0);
+    let mut fetched = partition_response.records.clone().expect("records present");
+    let decoded = RecordBatchDecoder::decode_all(&mut fetched).expect("decode fetched");
+    let decoded_records: Vec<Record> = decoded.into_iter().flat_map(|r| r.records).collect();
+    assert_eq!(decoded_records, records);
 }
 
 #[test]
@@ -293,4 +411,3 @@ fn contract_offset_commit_and_fetch() {
     assert_eq!(fetch_partition.error_code, 0);
     assert_eq!(fetch_partition.committed_offset, 42);
 }
-
