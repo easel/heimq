@@ -81,7 +81,7 @@ impl Server {
                 );
 
                 tokio::spawn(async move {
-                    if let Err(e) = handle_connection(socket, router).await {
+                    if let Err(e) = handle_connection(Box::new(socket), router).await {
                         debug!(error = %e, "Connection error");
                     }
                 });
@@ -96,11 +96,11 @@ impl Server {
     }
 }
 
+trait AsyncStream: AsyncRead + AsyncWrite + Unpin + Send {}
+impl<T> AsyncStream for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
+
 /// Handle a single connection
-async fn handle_connection<S>(mut socket: S, router: Router) -> Result<()>
-where
-    S: AsyncRead + AsyncWrite + Unpin,
-{
+async fn handle_connection(mut socket: Box<dyn AsyncStream>, router: Router) -> Result<()> {
     let mut buffer = BytesMut::with_capacity(64 * 1024);
 
     loop {
@@ -488,7 +488,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            handle_connection(socket, router).await
+            handle_connection(Box::new(socket), router).await
         });
 
         let stream = TcpStream::connect(addr).await.unwrap();
@@ -510,7 +510,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            handle_connection(socket, router).await
+            handle_connection(Box::new(socket), router).await
         });
 
         let mut stream = TcpStream::connect(addr).await.unwrap();
@@ -536,7 +536,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            handle_connection(socket, router).await
+            handle_connection(Box::new(socket), router).await
         });
 
         let mut stream = TcpStream::connect(addr).await.unwrap();
@@ -560,7 +560,7 @@ mod tests {
 
         let request = framed_request(18, 0, 1, &[]);
         let stream = ScriptedStream::new(request);
-        let result = handle_connection(stream, router).await;
+        let result = handle_connection(Box::new(stream), router).await;
         assert!(result.is_ok());
     }
 
@@ -580,7 +580,7 @@ mod tests {
         let router = Router::new(storage, consumer_groups, config);
 
         let stream = ScriptedStream::with_read_error();
-        let result = handle_connection(stream, router).await;
+        let result = handle_connection(Box::new(stream), router).await;
         assert!(result.is_err());
     }
 
@@ -594,7 +594,7 @@ mod tests {
 
         let request = framed_request(18, 0, 1, &[]);
         let stream = ScriptedStream::with_write_error(request);
-        let result = handle_connection(stream, router).await;
+        let result = handle_connection(Box::new(stream), router).await;
         assert!(result.is_err());
     }
 }

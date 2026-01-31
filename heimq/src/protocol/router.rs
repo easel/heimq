@@ -74,10 +74,13 @@ impl Router {
         encode_response(header.correlation_id, header.api_version, response).map_err(Into::into)
     }
 
-    fn handle_and_encode<R, F>(&self, header: &RequestHeader, handler: F) -> Result<Bytes>
+    fn handle_and_encode<R>(
+        &self,
+        header: &RequestHeader,
+        handler: Box<dyn FnOnce() -> Result<R> + '_>,
+    ) -> Result<Bytes>
     where
         R: Encodable,
-        F: FnOnce() -> Result<R>,
     {
         let response = handler()?;
         self.encode_response_bytes(header, &response)
@@ -89,75 +92,94 @@ impl Router {
     }
 
     fn handle_metadata(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            metadata::handle(header.api_version, body, &self.storage, &self.config)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| metadata::handle(header.api_version, body, &self.storage, &self.config)),
+        )
     }
 
     fn handle_produce(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || produce::handle(header.api_version, body, &self.storage))
+        self.handle_and_encode(
+            header,
+            Box::new(|| produce::handle(header.api_version, body, &self.storage)),
+        )
     }
 
     fn handle_fetch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || fetch::handle(header.api_version, body, &self.storage))
+        self.handle_and_encode(
+            header,
+            Box::new(|| fetch::handle(header.api_version, body, &self.storage)),
+        )
     }
 
     fn handle_list_offsets(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || list_offsets::handle(header.api_version, body, &self.storage))
+        self.handle_and_encode(
+            header,
+            Box::new(|| list_offsets::handle(header.api_version, body, &self.storage)),
+        )
     }
 
     fn handle_create_topics(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            create_topics::handle(header.api_version, body, &self.storage)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| create_topics::handle(header.api_version, body, &self.storage)),
+        )
     }
 
     fn handle_delete_topics(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            delete_topics::handle(header.api_version, body, &self.storage)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| delete_topics::handle(header.api_version, body, &self.storage)),
+        )
     }
 
     fn handle_find_coordinator(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            find_coordinator::handle(header.api_version, body, &self.config)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| find_coordinator::handle(header.api_version, body, &self.config)),
+        )
     }
 
     fn handle_join_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            join_group::handle(header.api_version, body, &self.consumer_groups)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| join_group::handle(header.api_version, body, &self.consumer_groups)),
+        )
     }
 
     fn handle_sync_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            sync_group::handle(header.api_version, body, &self.consumer_groups)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| sync_group::handle(header.api_version, body, &self.consumer_groups)),
+        )
     }
 
     fn handle_heartbeat(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            heartbeat::handle(header.api_version, body, &self.consumer_groups)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| heartbeat::handle(header.api_version, body, &self.consumer_groups)),
+        )
     }
 
     fn handle_leave_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            leave_group::handle(header.api_version, body, &self.consumer_groups)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| leave_group::handle(header.api_version, body, &self.consumer_groups)),
+        )
     }
 
     fn handle_offset_commit(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            offset_commit::handle(header.api_version, body, &self.consumer_groups)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| offset_commit::handle(header.api_version, body, &self.consumer_groups)),
+        )
     }
 
     fn handle_offset_fetch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        self.handle_and_encode(header, || {
-            offset_fetch::handle(header.api_version, body, &self.consumer_groups)
-        })
+        self.handle_and_encode(
+            header,
+            Box::new(|| offset_fetch::handle(header.api_version, body, &self.consumer_groups)),
+        )
     }
 
     fn handle_unsupported(&self, header: &RequestHeader) -> Result<Bytes> {
@@ -187,7 +209,21 @@ mod tests {
     use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequest;
     use kafka_protocol::messages::produce_request::{PartitionProduceData, ProduceRequest, TopicProduceData};
     use kafka_protocol::messages::sync_group_request::SyncGroupRequest;
-    use kafka_protocol::messages::{ApiVersionsResponse, BrokerId, GroupId, TopicName};
+    use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
+    use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
+    use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
+    use kafka_protocol::messages::fetch_response::FetchResponse;
+    use kafka_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
+    use kafka_protocol::messages::heartbeat_response::HeartbeatResponse;
+    use kafka_protocol::messages::join_group_response::JoinGroupResponse;
+    use kafka_protocol::messages::leave_group_response::LeaveGroupResponse;
+    use kafka_protocol::messages::list_offsets_response::ListOffsetsResponse;
+    use kafka_protocol::messages::metadata_response::MetadataResponse;
+    use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
+    use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
+    use kafka_protocol::messages::produce_response::ProduceResponse;
+    use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
+    use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
     use anyhow::anyhow;
     use kafka_protocol::protocol::{Encodable, StrBytes};
 
@@ -422,9 +458,48 @@ mod tests {
         let failing = FailingEncode;
         assert_eq!(failing.compute_size(0).unwrap(), 0);
 
-        let err = router.handle_and_encode::<ApiVersionsResponse, _>(&header, || {
-            Err(crate::error::HeimqError::Protocol("handler-fail".to_string()))
-        });
+        let err = router.handle_and_encode::<ApiVersionsResponse>(
+            &header,
+            Box::new(|| Err(crate::error::HeimqError::Protocol("handler-fail".to_string()))),
+        );
         assert!(err.is_err());
+    }
+
+    #[test]
+    fn handle_and_encode_errors_cover_all_responses() {
+        let config = test_config(true);
+        let storage = test_storage(true);
+        let consumer_groups = test_consumer_groups(config.clone());
+        let router = Router::new(storage, consumer_groups, config);
+
+        let header = RequestHeader {
+            api_key: 18,
+            api_version: 0,
+            correlation_id: 1,
+            client_id: None,
+        };
+
+        fn assert_handler_error<R: Encodable>(router: &Router, header: &RequestHeader) {
+            let err = router.handle_and_encode::<R>(
+                header,
+                Box::new(|| Err(crate::error::HeimqError::Protocol("handler-fail".to_string()))),
+            );
+            assert!(err.is_err());
+        }
+
+        assert_handler_error::<ApiVersionsResponse>(&router, &header);
+        assert_handler_error::<MetadataResponse>(&router, &header);
+        assert_handler_error::<ProduceResponse>(&router, &header);
+        assert_handler_error::<FetchResponse>(&router, &header);
+        assert_handler_error::<ListOffsetsResponse>(&router, &header);
+        assert_handler_error::<CreateTopicsResponse>(&router, &header);
+        assert_handler_error::<DeleteTopicsResponse>(&router, &header);
+        assert_handler_error::<FindCoordinatorResponse>(&router, &header);
+        assert_handler_error::<JoinGroupResponse>(&router, &header);
+        assert_handler_error::<HeartbeatResponse>(&router, &header);
+        assert_handler_error::<LeaveGroupResponse>(&router, &header);
+        assert_handler_error::<SyncGroupResponse>(&router, &header);
+        assert_handler_error::<OffsetCommitResponse>(&router, &header);
+        assert_handler_error::<OffsetFetchResponse>(&router, &header);
     }
 }

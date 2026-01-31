@@ -1363,6 +1363,7 @@ fn join_group_read_string_edges() {
 
 #[test]
 fn leave_group_parses_member_list() {
+    init_tracing();
     let config = test_config(true);
     let consumer_groups = test_consumer_groups(config);
     let group = consumer_groups.get_or_create_group("group");

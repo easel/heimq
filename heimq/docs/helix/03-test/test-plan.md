@@ -45,26 +45,21 @@ heimq targets Kafka protocol compatibility on a single node with no durability g
 
 ## Test Organization
 
-### Directory Structure (target)
+### Directory Structure (current + target)
 
 ```
 heimq/
 ├── tests/
+│   ├── contract.rs
 │   ├── integration.rs
-│   ├── contract/
-│   │   ├── api_versions.rs
-│   │   ├── metadata.rs
-│   │   ├── produce.rs
-│   │   ├── fetch.rs
-│   │   └── consumer_groups.rs
-│   └── fixtures/
+│   └── fixtures/ (planned)
 └── src/
     └── ... (unit + property tests in modules)
 ```
 
 ### Naming Conventions
 
-- Contract tests: `tests/contract/{api}.rs`
+- Contract tests: `tests/contract.rs` (current), `tests/contract/{api}.rs` (target)
 - Integration tests: `tests/integration.rs`
 - Property/unit tests: module-level `#[cfg(test)]`
 
@@ -83,6 +78,9 @@ heimq/
 | Contract Coverage | 100% of supported APIs | 90% | CI gate |
 | Integration Coverage | Produce/Fetch/Groups | Critical paths | CI gate |
 | Property Coverage | Storage + codec invariants | Core set | CI gate |
+| Line/Region Coverage | 100% | 100% | CI gate |
+
+**Current status**: 100% line + region coverage via `cargo llvm-cov --workspace --all-features`.
 
 ### Critical Paths (P0)
 
@@ -105,24 +103,24 @@ heimq/
 ## Implementation Roadmap
 
 ### Phase 1: Property-Based Foundation (P0)
-- [ ] Storage invariants: segment read, partition offsets, log start/high watermark.
+- [x] Storage invariants: segment read, partition offsets, log start/high watermark.
 - [ ] Codec invariants: request/response framing and correlation id integrity.
 
 ### Phase 2: Contract Tests for Supported APIs (P0)
-- [ ] ApiVersions: version ranges match `SUPPORTED_APIS`.
-- [ ] Metadata: topic discovery + error behavior.
-- [ ] Produce + Fetch: offsets, max_bytes, empty record batches.
-- [ ] ListOffsets: earliest/latest/timestamp semantics.
-- [ ] CreateTopics/DeleteTopics: idempotency and errors.
-- [ ] Consumer Groups: FindCoordinator, Join/Sync/Heartbeat/Leave, OffsetCommit/Fetch.
+- [x] ApiVersions: version ranges match `SUPPORTED_APIS`.
+- [x] Metadata: topic discovery + error behavior.
+- [x] Produce + Fetch: offsets, max_bytes, empty record batches.
+- [x] ListOffsets: earliest/latest/timestamp semantics.
+- [x] CreateTopics/DeleteTopics: idempotency and errors.
+- [ ] Consumer Groups: FindCoordinator, Join/Sync/Heartbeat/Leave, OffsetCommit/Fetch (unit tests done; contract parity pending).
 
 ### Phase 3: Integration and Regression (P0)
-- [ ] Expand integration test coverage to include consumer group offsets.
+- [ ] Expand integration test coverage to include consumer group offsets and group lifecycle.
 - [ ] Add legacy protocol edge cases via `kafka` crate.
 
 ### Phase 4: Baseline Parity (P0)
 - [ ] Add Kafka docker target to `scripts/compatibility-test.sh`.
-- [ ] Store golden request/response fixtures for parity regression tests.
+- [ ] Add Redpanda/Kafka golden request/response fixtures for parity regression tests.
 
 ## Risk Assessment
 

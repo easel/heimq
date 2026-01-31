@@ -228,4 +228,59 @@ mod tests {
         let response = FailingEncode;
         assert_eq!(response.compute_size(0).unwrap(), 0);
     }
+
+    #[test]
+    fn test_encode_response_invalid_versions_error() {
+        use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
+        use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
+        use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
+        use kafka_protocol::messages::fetch_response::FetchResponse;
+        use kafka_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
+        use kafka_protocol::messages::heartbeat_response::HeartbeatResponse;
+        use kafka_protocol::messages::join_group_response::JoinGroupResponse;
+        use kafka_protocol::messages::leave_group_response::LeaveGroupResponse;
+        use kafka_protocol::messages::list_offsets_response::ListOffsetsResponse;
+        use kafka_protocol::messages::metadata_response::MetadataResponse;
+        use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
+        use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
+        use kafka_protocol::messages::produce_response::ProduceResponse;
+        use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
+
+        let invalid_version = i16::MAX;
+        let err = encode_response(1, invalid_version, &ApiVersionsResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &MetadataResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &ProduceResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &FetchResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &ListOffsetsResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &CreateTopicsResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &DeleteTopicsResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &FindCoordinatorResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &JoinGroupResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &HeartbeatResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &LeaveGroupResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &SyncGroupResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &OffsetCommitResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        let err = encode_response(1, invalid_version, &OffsetFetchResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn test_encode_response_body_invalid_version_error() {
+        use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
+        let err = encode_response_body(1, i16::MAX, &ApiVersionsResponse::default()).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
 }
