@@ -122,6 +122,38 @@ heimq/
 - [ ] Add Kafka docker target to `scripts/compatibility-test.sh`.
 - [ ] Add Redpanda/Kafka golden request/response fixtures for parity regression tests.
 
+## Test Infrastructure
+
+### Environment Requirements
+
+**Local Development**:
+- Rust toolchain with `cargo`, `llvm-cov`, and `clang` available.
+- Docker (for Kafka/Redpanda parity runs).
+
+**CI/CD Pipeline**:
+- Linux runner with Rust toolchain.
+- Docker-in-Docker or privileged docker for parity jobs.
+
+### Tools and Dependencies
+
+| Tool | Version | Purpose |
+| --- | --- | --- |
+| cargo | stable | Build + run tests |
+| cargo-llvm-cov | latest | Coverage reporting |
+| proptest | 1.x | Property-based tests |
+| rdkafka | latest | Kafka client integration |
+| docker | latest | Kafka/Redpanda parity |
+
+### CI/CD Integration
+
+```
+test:
+  stage: test
+  script:
+    - cargo test --workspace --all-features
+    - cargo llvm-cov --workspace --all-features --fail-under-lines 100 --fail-under-regions 100
+```
+
 ## Risk Assessment
 
 | Risk | Impact | Probability | Mitigation |

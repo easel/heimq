@@ -5,6 +5,7 @@
 **Type**: Protocol (Kafka TCP Wire)
 **Status**: Draft
 **Version**: 0.1.0
+**Source**: Kafka Protocol Guide (`https://kafka.apache.org/protocol/`)
 
 *This contract defines heimq's Kafka wire-protocol surface area, supported versions, exclusions, and test coverage expectations.*
 
@@ -14,7 +15,9 @@
 - No distributed consensus, replication, or controller responsibilities.
 - No security, transactions, or ACLs in scope for this contract.
 
-## Transport and Framing
+## Protocol Interface Contract
+
+### Transport and Framing
 
 - **Transport**: TCP, binary Kafka protocol.
 - **Framing**: 4-byte big-endian message length, followed by request header + body.
@@ -22,7 +25,7 @@
 - **Response header**: correlation_id.
 - **Flexible versions**: Not supported (requires compact types/varints).
 
-## Version Policy
+### Version Policy
 
 - API versions are limited to pre-flexible versions to avoid compact encodings.
 - The supported version range for each API is reported via ApiVersions.
@@ -33,7 +36,6 @@ Kafka API keys listed here follow the current Apache Kafka protocol spec.
 
 Legend:
 - **Supported**: Implemented in heimq.
-- **Gap**: Expected for functional completeness but not yet implemented.
 - **Excluded**: Out of scope for single-node/no-durability design (reason noted).
 
 Reason codes (Exclusions):
@@ -56,71 +58,70 @@ Reason codes (Exclusions):
 | 12 | Heartbeat | Supported | 0-4 | `src/handler/tests.rs` | Simplified liveness |
 | 13 | LeaveGroup | Supported | 0-4 | `src/handler/tests.rs` | Member removal only |
 | 14 | SyncGroup | Supported | 0-4 | `src/handler/tests.rs` | Simplified assignment |
-| 15 | DescribeGroups | Gap | N/A | None | Admin/visibility (R4) |
-| 16 | ListGroups | Gap | N/A | None | Admin/visibility (R4) |
-| 17 | SaslHandshake | Excluded (R2) | N/A | N/A | No auth support |
+| 15 | DescribeGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 16 | ListGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 17 | SaslHandshake | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
 | 18 | ApiVersions | Supported | 0-3 | `src/handler/tests.rs`; `tests/contract.rs`; `src/protocol/router.rs` | Version negotiation only |
 | 19 | CreateTopics | Supported | 0-6 | `src/handler/tests.rs`; `tests/contract.rs` | No config validation |
 | 20 | DeleteTopics | Supported | 0-5 | `src/handler/tests.rs`; `tests/contract.rs` | Best-effort delete |
-| 21 | DeleteRecords | Gap | N/A | None | Log truncation API (R4) |
-| 22 | InitProducerId | Excluded (R3) | N/A | N/A | Transactions/idempotence |
-| 23 | OffsetForLeaderEpoch | Excluded (R1) | N/A | N/A | Leader epoch management |
-| 24 | AddPartitionsToTxn | Excluded (R3) | N/A | N/A | Transactions |
-| 25 | AddOffsetsToTxn | Excluded (R3) | N/A | N/A | Transactions |
-| 26 | EndTxn | Excluded (R3) | N/A | N/A | Transactions |
-| 27 | WriteTxnMarkers | Excluded (R3) | N/A | N/A | Transactions |
-| 28 | TxnOffsetCommit | Excluded (R3) | N/A | N/A | Transactions |
-| 29 | DescribeAcls | Excluded (R2) | N/A | N/A | No auth/ACLs |
-| 30 | CreateAcls | Excluded (R2) | N/A | N/A | No auth/ACLs |
-| 31 | DeleteAcls | Excluded (R2) | N/A | N/A | No auth/ACLs |
-| 32 | DescribeConfigs | Gap | N/A | None | Admin/configs (R4) |
-| 33 | AlterConfigs | Excluded (R4) | N/A | N/A | Admin/configs |
-| 34 | AlterReplicaLogDirs | Excluded (R1) | N/A | N/A | Multi-broker log dirs |
-| 35 | DescribeLogDirs | Excluded (R1) | N/A | N/A | Multi-broker log dirs |
-| 36 | SaslAuthenticate | Excluded (R2) | N/A | N/A | No auth support |
-| 37 | CreatePartitions | Gap | N/A | None | Admin/partition management (R4) |
-| 38 | CreateDelegationToken | Excluded (R2) | N/A | N/A | No auth |
-| 39 | RenewDelegationToken | Excluded (R2) | N/A | N/A | No auth |
-| 40 | ExpireDelegationToken | Excluded (R2) | N/A | N/A | No auth |
-| 41 | DescribeDelegationToken | Excluded (R2) | N/A | N/A | No auth |
-| 42 | DeleteGroups | Gap | N/A | None | Admin/group cleanup (R4) |
-| 43 | ElectLeaders | Excluded (R1) | N/A | N/A | Multi-broker leadership |
-| 44 | IncrementalAlterConfigs | Excluded (R4) | N/A | N/A | Admin/configs |
-| 45 | AlterPartitionReassignments | Excluded (R1) | N/A | N/A | Multi-broker reassignment |
-| 46 | ListPartitionReassignments | Excluded (R1) | N/A | N/A | Multi-broker reassignment |
-| 47 | OffsetDelete | Gap | N/A | None | Group offset management (R4) |
-| 48 | DescribeClientQuotas | Excluded (R4) | N/A | N/A | Quotas not supported |
-| 49 | AlterClientQuotas | Excluded (R4) | N/A | N/A | Quotas not supported |
-| 50 | DescribeUserScramCredentials | Excluded (R2) | N/A | N/A | No auth |
-| 51 | AlterUserScramCredentials | Excluded (R2) | N/A | N/A | No auth |
-| 55 | DescribeQuorum | Excluded (R1) | N/A | N/A | KRaft/controller |
-| 57 | UpdateFeatures | Excluded (R1) | N/A | N/A | KRaft/controller |
-| 60 | DescribeCluster | Gap | N/A | None | Admin/cluster metadata (R4) |
-| 61 | DescribeProducers | Excluded (R3) | N/A | N/A | Idempotent/transactional |
-| 64 | UnregisterBroker | Excluded (R1) | N/A | N/A | KRaft/controller |
-| 65 | DescribeTransactions | Excluded (R3) | N/A | N/A | Transactions |
-| 66 | ListTransactions | Excluded (R3) | N/A | N/A | Transactions |
-| 68 | ConsumerGroupHeartbeat | Gap | N/A | None | New group protocol (R5) |
-| 69 | ConsumerGroupDescribe | Gap | N/A | None | New group protocol (R5) |
-| 71 | GetTelemetrySubscriptions | Excluded (R5) | N/A | N/A | Telemetry not supported |
-| 72 | PushTelemetry | Excluded (R5) | N/A | N/A | Telemetry not supported |
-| 74 | ListConfigResources | Gap | N/A | None | Admin/configs (R4) |
-| 75 | DescribeTopicPartitions | Gap | N/A | None | Admin metadata (R4) |
-| 76 | ShareGroupHeartbeat | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 77 | ShareGroupDescribe | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 78 | ShareFetch | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 79 | ShareAcknowledge | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 80 | AddRaftVoter | Excluded (R1) | N/A | N/A | KRaft/controller |
-| 81 | RemoveRaftVoter | Excluded (R1) | N/A | N/A | KRaft/controller |
-| 83 | InitializeShareGroupState | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 84 | ReadShareGroupState | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 85 | WriteShareGroupState | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 86 | DeleteShareGroupState | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 87 | ReadShareGroupStateSummary | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 90 | DescribeShareGroupOffsets | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 91 | AlterShareGroupOffsets | Excluded (R5) | N/A | N/A | Share groups not supported |
-| 92 | DeleteShareGroupOffsets | Excluded (R5) | N/A | N/A | Share groups not supported |
-
+| 21 | DeleteRecords | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 22 | InitProducerId | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 23 | OffsetForLeaderEpoch | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 24 | AddPartitionsToTxn | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 25 | AddOffsetsToTxn | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 26 | EndTxn | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 27 | WriteTxnMarkers | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 28 | TxnOffsetCommit | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 29 | DescribeAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 30 | CreateAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 31 | DeleteAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 32 | DescribeConfigs | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 33 | AlterConfigs | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 34 | AlterReplicaLogDirs | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 35 | DescribeLogDirs | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 36 | SaslAuthenticate | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 37 | CreatePartitions | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 38 | CreateDelegationToken | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 39 | RenewDelegationToken | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 40 | ExpireDelegationToken | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 41 | DescribeDelegationToken | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 42 | DeleteGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 43 | ElectLeaders | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 44 | IncrementalAlterConfigs | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 45 | AlterPartitionReassignments | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 46 | ListPartitionReassignments | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 47 | OffsetDelete | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 48 | DescribeClientQuotas | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 49 | AlterClientQuotas | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 50 | DescribeUserScramCredentials | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 51 | AlterUserScramCredentials | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
+| 55 | DescribeQuorum | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 57 | UpdateFeatures | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 60 | DescribeCluster | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 61 | DescribeProducers | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 64 | UnregisterBroker | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 65 | DescribeTransactions | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 66 | ListTransactions | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 68 | ConsumerGroupHeartbeat | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 69 | ConsumerGroupDescribe | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 71 | GetTelemetrySubscriptions | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 72 | PushTelemetry | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 74 | ListConfigResources | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 75 | DescribeTopicPartitions | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
+| 76 | ShareGroupHeartbeat | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 77 | ShareGroupDescribe | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 78 | ShareFetch | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 79 | ShareAcknowledge | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 80 | AddRaftVoter | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 81 | RemoveRaftVoter | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
+| 83 | InitializeShareGroupState | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 84 | ReadShareGroupState | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 85 | WriteShareGroupState | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 86 | DeleteShareGroupState | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 87 | ReadShareGroupStateSummary | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 90 | DescribeShareGroupOffsets | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 91 | AlterShareGroupOffsets | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
+| 92 | DeleteShareGroupOffsets | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
 
 ## Error Contracts
 
@@ -147,4 +148,4 @@ Reason codes (Exclusions):
 
 - **Implementation**: `src/handler/*.rs`, `src/protocol/*`, `src/storage/*`.
 - **Tests**: `tests/contract.rs`, `tests/integration.rs`, `src/handler/tests.rs`, `src/protocol/router.rs`, storage module unit/property tests.
-- **Related Doc**: `docs/helix/03-test/test-plan.md`.
+- **Related Doc**: `docs/helix/03-test/test-plan/test-plan.md`.
