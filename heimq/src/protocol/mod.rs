@@ -13,22 +13,26 @@ use bytes::Bytes;
 use kafka_protocol::messages::*;
 
 /// API keys we support
+///
+/// Max versions are kept below "flexible versions" boundaries to avoid
+/// needing compact string (varint) encoding. Most flexible versions start at:
+/// - Produce v9, Fetch v12, Metadata v9, etc.
 pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     // (api_key, min_version, max_version)
-    (0, 0, 9),   // Produce
-    (1, 0, 13),  // Fetch
+    (0, 0, 8),   // Produce (v9+ uses flexible versions)
+    (1, 0, 11),  // Fetch (v12+ uses flexible versions)
     (2, 0, 7),   // ListOffsets
-    (3, 0, 12),  // Metadata
-    (8, 0, 8),   // OffsetCommit
-    (9, 0, 8),   // OffsetFetch
-    (10, 0, 4),  // FindCoordinator
-    (11, 0, 9),  // JoinGroup
+    (3, 0, 8),   // Metadata (v9+ uses flexible versions)
+    (8, 0, 7),   // OffsetCommit (v8+ uses flexible versions)
+    (9, 0, 7),   // OffsetFetch (v8+ uses flexible versions)
+    (10, 0, 3),  // FindCoordinator (v4+ uses flexible versions)
+    (11, 0, 8),  // JoinGroup (v9+ uses flexible versions)
     (12, 0, 4),  // Heartbeat
-    (13, 0, 5),  // LeaveGroup
-    (14, 0, 5),  // SyncGroup
+    (13, 0, 4),  // LeaveGroup (v5+ uses flexible versions)
+    (14, 0, 4),  // SyncGroup (v5+ uses flexible versions)
     (18, 0, 3),  // ApiVersions
-    (19, 0, 7),  // CreateTopics
-    (20, 0, 6),  // DeleteTopics
+    (19, 0, 6),  // CreateTopics (v7+ uses flexible versions)
+    (20, 0, 5),  // DeleteTopics (v6+ uses flexible versions)
 ];
 
 /// Check if an API version is supported

@@ -1,6 +1,6 @@
 //! Partition storage implementation
 
-use crate::error::{KafkaLiteError, Result};
+use crate::error::{HeimqError, Result};
 use crate::storage::Segment;
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -95,7 +95,7 @@ impl Partition {
         }
 
         if start_offset < self.log_start_offset.load(Ordering::SeqCst) {
-            return Err(KafkaLiteError::InvalidOffset(start_offset));
+            return Err(HeimqError::InvalidOffset(start_offset));
         }
 
         // Read from active segment

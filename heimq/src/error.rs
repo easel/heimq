@@ -1,11 +1,11 @@
-//! Error types for kafka-lite
+//! Error types for heimq
 
 use kafka_protocol::protocol::StrBytes;
 use thiserror::Error;
 
-/// Main error type for kafka-lite
+/// Main error type for heimq
 #[derive(Error, Debug)]
-pub enum KafkaLiteError {
+pub enum HeimqError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 
@@ -34,18 +34,18 @@ pub enum KafkaLiteError {
     Compression(String),
 }
 
-/// Result type alias for kafka-lite operations
-pub type Result<T> = std::result::Result<T, KafkaLiteError>;
+/// Result type alias for heimq operations
+pub type Result<T> = std::result::Result<T, HeimqError>;
 
-/// Convert kafka-lite errors to Kafka error codes
-impl KafkaLiteError {
+/// Convert heimq errors to Kafka error codes
+impl HeimqError {
     pub fn to_error_code(&self) -> i16 {
         match self {
-            KafkaLiteError::TopicNotFound(_) => 3,  // UNKNOWN_TOPIC_OR_PARTITION
-            KafkaLiteError::PartitionNotFound { .. } => 3,
-            KafkaLiteError::InvalidOffset(_) => 1,  // OFFSET_OUT_OF_RANGE
-            KafkaLiteError::ConsumerGroup(_) => 16, // NOT_COORDINATOR
-            KafkaLiteError::Protocol(_) => 35,      // UNSUPPORTED_VERSION
+            HeimqError::TopicNotFound(_) => 3,  // UNKNOWN_TOPIC_OR_PARTITION
+            HeimqError::PartitionNotFound { .. } => 3,
+            HeimqError::InvalidOffset(_) => 1,  // OFFSET_OUT_OF_RANGE
+            HeimqError::ConsumerGroup(_) => 16, // NOT_COORDINATOR
+            HeimqError::Protocol(_) => 35,      // UNSUPPORTED_VERSION
             _ => -1,                                // UNKNOWN_SERVER_ERROR
         }
     }

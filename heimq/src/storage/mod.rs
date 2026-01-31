@@ -1,4 +1,4 @@
-//! In-memory storage engine for kafka-lite
+//! In-memory storage engine for heimq
 //!
 //! Designed for speed over durability. Uses a simple segment-based log
 //! structure with optional persistence.
@@ -12,7 +12,7 @@ pub use segment::Segment;
 pub use topic::Topic;
 
 use crate::config::Config;
-use crate::error::{KafkaLiteError, Result};
+use crate::error::{HeimqError, Result};
 use bytes::Bytes;
 use dashmap::DashMap;
 use kafka_protocol::records::RecordBatchDecoder;
@@ -72,7 +72,7 @@ impl Storage {
     /// Create a topic with specific configuration
     pub fn create_topic(&self, name: &str, num_partitions: i32) -> Result<Arc<Topic>> {
         if self.topics.contains_key(name) {
-            return Err(KafkaLiteError::Protocol(format!(
+            return Err(HeimqError::Protocol(format!(
                 "Topic '{}' already exists",
                 name
             )));
@@ -87,7 +87,7 @@ impl Storage {
     /// Delete a topic
     pub fn delete_topic(&self, name: &str) -> Result<()> {
         if self.topics.remove(name).is_none() {
-            return Err(KafkaLiteError::TopicNotFound(name.to_string()));
+            return Err(HeimqError::TopicNotFound(name.to_string()));
         }
         info!(topic = name, "Deleted topic");
         Ok(())
@@ -117,7 +117,7 @@ impl Storage {
             self.get_or_create_topic(topic_name, self.config.default_partitions)
         } else {
             self.get_topic(topic_name)
-                .ok_or_else(|| KafkaLiteError::TopicNotFound(topic_name.to_string()))?
+                .ok_or_else(|| HeimqError::TopicNotFound(topic_name.to_string()))?
         };
 
         let partition = topic.get_partition(partition)?;
@@ -145,7 +145,7 @@ impl Storage {
     ) -> Result<(Vec<u8>, i64)> {
         let topic = self
             .get_topic(topic_name)
-            .ok_or_else(|| KafkaLiteError::TopicNotFound(topic_name.to_string()))?;
+            .ok_or_else(|| HeimqError::TopicNotFound(topic_name.to_string()))?;
 
         let partition = topic.get_partition(partition)?;
         partition.fetch(offset, max_bytes as usize)
@@ -155,7 +155,7 @@ impl Storage {
     pub fn high_watermark(&self, topic_name: &str, partition: i32) -> Result<i64> {
         let topic = self
             .get_topic(topic_name)
-            .ok_or_else(|| KafkaLiteError::TopicNotFound(topic_name.to_string()))?;
+            .ok_or_else(|| HeimqError::TopicNotFound(topic_name.to_string()))?;
 
         let partition = topic.get_partition(partition)?;
         Ok(partition.high_watermark())
@@ -165,7 +165,7 @@ impl Storage {
     pub fn log_start_offset(&self, topic_name: &str, partition: i32) -> Result<i64> {
         let topic = self
             .get_topic(topic_name)
-            .ok_or_else(|| KafkaLiteError::TopicNotFound(topic_name.to_string()))?;
+            .ok_or_else(|| HeimqError::TopicNotFound(topic_name.to_string()))?;
 
         let partition = topic.get_partition(partition)?;
         Ok(partition.log_start_offset())
@@ -190,7 +190,7 @@ mod tests {
         Arc::new(Config {
             host: "127.0.0.1".to_string(),
             port: 9092,
-            data_dir: std::path::PathBuf::from("/tmp/kafka-lite-test"),
+            data_dir: std::path::PathBuf::from("/tmp/heimq-test"),
             memory_only: true,
             segment_size: 1024 * 1024,
             retention_ms: 60000,

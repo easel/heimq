@@ -1,6 +1,6 @@
 #!/bin/bash
 # Compatibility test script
-# Runs kafka-lite against a real Kafka/Redpanda broker and compares behavior
+# Runs heimq against a real Kafka/Redpanda broker and compares behavior
 
 set -e
 
@@ -32,7 +32,7 @@ check_deps() {
 # Start a Redpanda container for comparison
 start_redpanda() {
     log_info "Starting Redpanda container..."
-    docker run -d --name kafka-lite-test-redpanda \
+    docker run -d --name heimq-test-redpanda \
         -p 19092:9092 \
         docker.redpanda.com/redpandadata/redpanda:latest \
         redpanda start --smp 1 --memory 512M \
@@ -48,28 +48,28 @@ start_redpanda() {
 # Stop Redpanda container
 stop_redpanda() {
     log_info "Stopping Redpanda container..."
-    docker stop kafka-lite-test-redpanda 2>/dev/null || true
-    docker rm kafka-lite-test-redpanda 2>/dev/null || true
+    docker stop heimq-test-redpanda 2>/dev/null || true
+    docker rm heimq-test-redpanda 2>/dev/null || true
 }
 
-# Start kafka-lite
-start_kafka_lite() {
-    log_info "Building kafka-lite..."
+# Start heimq
+start_heimq() {
+    log_info "Building heimq..."
     cd "$PROJECT_DIR"
     cargo build --release
 
-    log_info "Starting kafka-lite on port 29092..."
-    ./target/release/kafka-lite --port 29092 --memory-only &
-    KAFKA_LITE_PID=$!
+    log_info "Starting heimq on port 29092..."
+    ./target/release/heimq --port 29092 --memory-only &
+    HEIMQ_PID=$!
     sleep 2
-    log_info "kafka-lite started (PID: $KAFKA_LITE_PID)"
+    log_info "heimq started (PID: $HEIMQ_PID)"
 }
 
-# Stop kafka-lite
-stop_kafka_lite() {
-    if [ -n "$KAFKA_LITE_PID" ]; then
-        log_info "Stopping kafka-lite..."
-        kill $KAFKA_LITE_PID 2>/dev/null || true
+# Stop heimq
+stop_heimq() {
+    if [ -n "$HEIMQ_PID" ]; then
+        log_info "Stopping heimq..."
+        kill $HEIMQ_PID 2>/dev/null || true
     fi
 }
 
@@ -88,11 +88,11 @@ test_with_kcat() {
         log_info "Redpanda: kcat produce/consume OK" || \
         log_error "Redpanda: kcat produce/consume FAILED"
 
-    # Test kafka-lite
+    # Test heimq
     echo "test-message-2" | kcat -b localhost:29092 -t kcat-test -P 2>/dev/null
     kcat -b localhost:29092 -t kcat-test -C -c 1 -e 2>/dev/null | grep -q "test-message-2" && \
-        log_info "kafka-lite: kcat produce/consume OK" || \
-        log_error "kafka-lite: kcat produce/consume FAILED"
+        log_info "heimq: kcat produce/consume OK" || \
+        log_error "heimq: kcat produce/consume FAILED"
 }
 
 # Run Rust integration tests
@@ -111,7 +111,7 @@ run_compatibility_tests() {
 
 # Cleanup on exit
 cleanup() {
-    stop_kafka_lite
+    stop_heimq
     stop_redpanda
 }
 
@@ -121,11 +121,11 @@ trap cleanup EXIT
 main() {
     check_deps
 
-    log_info "=== Kafka-lite Compatibility Tests ==="
+    log_info "=== Heimq Compatibility Tests ==="
 
     # Start services
     start_redpanda
-    start_kafka_lite
+    start_heimq
 
     # Run tests
     test_with_kcat

@@ -60,8 +60,12 @@ metrics-exporter-prometheus = "0.16"
 tokio-test = "0.4"
 tempfile = "3.16"
 
-# Testing with real Kafka clients
-rdkafka = { version = "0.37", features = ["cmake-build"] }
+# Primary test client - rdkafka with librdkafka built from source
+# FIREWALLED: dev-dependency only, never in server binary
+rdkafka = { version = "0.36", features = ["cmake-build", "tokio"] }
+
+# Legacy protocol testing (pure Rust, v0-v2 message formats)
+kafka = { version = "0.10", default-features = false, features = ["gzip", "snappy"] }
 
 [features]
 default = []

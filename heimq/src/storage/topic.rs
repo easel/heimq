@@ -1,6 +1,6 @@
 //! Topic management
 
-use crate::error::{KafkaLiteError, Result};
+use crate::error::{HeimqError, Result};
 use crate::storage::Partition;
 use std::sync::Arc;
 
@@ -33,7 +33,7 @@ impl Topic {
     /// Get a specific partition
     pub fn get_partition(&self, partition: i32) -> Result<&Arc<Partition>> {
         self.partitions.get(partition as usize).ok_or_else(|| {
-            KafkaLiteError::PartitionNotFound {
+            HeimqError::PartitionNotFound {
                 topic: self.name.clone(),
                 partition,
             }

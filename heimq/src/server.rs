@@ -11,7 +11,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{debug, error, info, warn};
 
-/// The kafka-lite server
+/// The heimq server
 pub struct Server {
     config: Arc<Config>,
     storage: Arc<Storage>,
@@ -75,7 +75,7 @@ async fn handle_connection(mut socket: TcpStream, router: Router) -> Result<()> 
             if buffer.is_empty() {
                 return Ok(()); // Clean disconnect
             } else {
-                return Err(crate::error::KafkaLiteError::Protocol(
+                return Err(crate::error::HeimqError::Protocol(
                     "Connection closed with pending data".to_string(),
                 ));
             }

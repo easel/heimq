@@ -122,11 +122,22 @@ cargo build --release
 
 ## Testing
 
-### Using librdkafka (rdkafka-rs for Rust tests)
+### Integration Tests
+
+Integration tests use two Kafka client libraries:
+
+- **rdkafka** (dev-dependency): Modern protocol testing via librdkafka, built from source with `cmake-build` feature
+- **kafka** crate: Legacy protocol (v0/v1) compatibility verification
 
 ```bash
-cargo test --features integration-tests
+# Run all tests
+cargo test
+
+# Run integration tests only
+cargo test --test integration
 ```
+
+**Note**: rdkafka requires cmake and a C compiler. On first build, librdkafka is compiled from source (~2-3 min). This is a dev-dependency only and does not affect the server binary.
 
 ### Using kafka-python
 
@@ -142,10 +153,23 @@ for msg in consumer:
     print(msg.value)
 ```
 
+### Using kcat (CLI testing)
+
+```bash
+# Produce
+echo "hello" | kcat -b localhost:9092 -t test -P
+
+# Consume
+kcat -b localhost:9092 -t test -C -c 10 -e
+
+# Metadata
+kcat -b localhost:9092 -L
+```
+
 ### Compatibility Testing
 
 ```bash
-# Run against real Kafka for comparison
+# Run against real Kafka/Redpanda for comparison
 ./scripts/compatibility-test.sh
 ```
 
