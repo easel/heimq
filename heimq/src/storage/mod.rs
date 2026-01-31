@@ -15,14 +15,13 @@ use crate::config::Config;
 use crate::error::{HeimqError, Result};
 use bytes::Bytes;
 use dashmap::DashMap;
-use kafka_protocol::records::RecordBatchDecoder;
-use parking_lot::RwLock;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use tracing::{debug, info};
 
 /// Record stored in a partition
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Record {
     pub offset: i64,
     pub timestamp: i64,
@@ -94,6 +93,7 @@ impl Storage {
     }
 
     /// List all topics
+    #[allow(dead_code)]
     pub fn list_topics(&self) -> Vec<String> {
         self.topics.iter().map(|e| e.key().clone()).collect()
     }
@@ -121,7 +121,7 @@ impl Storage {
         };
 
         let partition = topic.get_partition(partition)?;
-        let (base_offset, count) = partition.append(records)?;
+        let (base_offset, count) = partition.append(records);
         self.total_messages.fetch_add(count, Ordering::Relaxed);
 
         debug!(
@@ -172,6 +172,7 @@ impl Storage {
     }
 
     /// Get total message count
+    #[allow(dead_code)]
     pub fn total_messages(&self) -> i64 {
         self.total_messages.load(Ordering::Relaxed)
     }
@@ -262,5 +263,16 @@ mod tests {
         storage.create_topic("topic", 1).unwrap();
         let result = storage.fetch("topic", 0, -1, 1024);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_partition_errors() {
+        let storage = Storage::new(test_config());
+        storage.create_topic("topic", 1).unwrap();
+
+        assert!(storage.append("topic", 2, &[1, 2, 3]).is_err());
+        assert!(storage.fetch("topic", 2, 0, 1024).is_err());
+        assert!(storage.high_watermark("topic", 2).is_err());
+        assert!(storage.log_start_offset("topic", 2).is_err());
     }
 }

@@ -21,6 +21,7 @@ impl Topic {
     }
 
     /// Get the topic name
+    #[allow(dead_code)]
     pub fn name(&self) -> &str {
         &self.name
     }
@@ -41,6 +42,7 @@ impl Topic {
     }
 
     /// Get all partitions
+    #[allow(dead_code)]
     pub fn partitions(&self) -> &[Arc<Partition>] {
         &self.partitions
     }

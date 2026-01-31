@@ -6,7 +6,7 @@ use bytes::Buf;
 use kafka_protocol::messages::offset_commit_response::{
     OffsetCommitResponsePartition, OffsetCommitResponseTopic,
 };
-use kafka_protocol::messages::{GroupId, OffsetCommitResponse, TopicName};
+use kafka_protocol::messages::{OffsetCommitResponse, TopicName};
 use kafka_protocol::protocol::StrBytes;
 use std::io::Cursor;
 use std::sync::Arc;

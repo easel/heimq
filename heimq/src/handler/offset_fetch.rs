@@ -6,7 +6,7 @@ use bytes::Buf;
 use kafka_protocol::messages::offset_fetch_response::{
     OffsetFetchResponsePartition, OffsetFetchResponseTopic,
 };
-use kafka_protocol::messages::{GroupId, OffsetFetchResponse, TopicName};
+use kafka_protocol::messages::{OffsetFetchResponse, TopicName};
 use kafka_protocol::protocol::StrBytes;
 use std::io::Cursor;
 use std::sync::Arc;

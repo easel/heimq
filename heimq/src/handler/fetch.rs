@@ -146,9 +146,9 @@ pub fn handle(
                     partition_data.high_watermark = high_watermark;
 
                     // Set log start offset
-                    if let Ok(log_start) = storage.log_start_offset(&topic_name, partition) {
-                        partition_data.log_start_offset = log_start;
-                    }
+                    partition_data.log_start_offset = storage
+                        .log_start_offset(&topic_name, partition)
+                        .unwrap_or(-1);
 
                     // Set records as raw bytes
                     if !records.is_empty() {

@@ -9,9 +9,6 @@ mod router;
 pub use codec::{decode_request, encode_response, RequestHeader};
 pub use router::Router;
 
-use bytes::Bytes;
-use kafka_protocol::messages::*;
-
 /// API keys we support
 ///
 /// Max versions are kept below "flexible versions" boundaries to avoid
@@ -36,6 +33,7 @@ pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
 ];
 
 /// Check if an API version is supported
+#[allow(dead_code)]
 pub fn is_api_supported(api_key: i16, api_version: i16) -> bool {
     SUPPORTED_APIS
         .iter()
@@ -43,6 +41,7 @@ pub fn is_api_supported(api_key: i16, api_version: i16) -> bool {
 }
 
 /// Get the version range for an API
+#[allow(dead_code)]
 pub fn get_api_version_range(api_key: i16) -> Option<(i16, i16)> {
     SUPPORTED_APIS
         .iter()

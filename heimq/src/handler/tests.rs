@@ -1,8 +1,7 @@
 use super::*;
-use crate::consumer_group::ConsumerGroupManager;
+use crate::consumer_group::{GroupState, Member};
 use crate::test_support::{encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage};
 use bytes::{BufMut, Bytes, BytesMut};
-use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
 use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
 use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
 use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
@@ -16,7 +15,7 @@ use kafka_protocol::messages::offset_commit_request::{OffsetCommitRequest, Offse
 use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, ProduceRequest, TopicProduceData};
 use kafka_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
-use kafka_protocol::messages::{ApiVersionsResponse, BrokerId, GroupId, TopicName};
+use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
 use kafka_protocol::protocol::StrBytes;
 use kafka_protocol::records::Record;
 use std::sync::Arc;
@@ -107,6 +106,21 @@ fn metadata_mixed_existing_and_missing_topics() {
 }
 
 #[test]
+fn metadata_version_zero_parses_topics() {
+    let storage = test_storage(true);
+    storage.create_topic("meta-v0", 1).unwrap();
+    let config = test_config(true);
+
+    let mut buf = BytesMut::new();
+    buf.put_i32(1);
+    put_str(&mut buf, Some("meta-v0"));
+
+    let response = metadata::handle(0, &buf, &storage, &config).unwrap();
+    assert_eq!(response.topics.len(), 1);
+    assert!(response.cluster_id.is_none());
+}
+
+#[test]
 fn create_topics_default_partitions_and_duplicate() {
     let storage = test_storage(true);
 
@@ -130,6 +144,25 @@ fn create_topics_default_partitions_and_duplicate() {
 
     let response = create_topics::handle(1, &[], &storage).unwrap();
     assert!(response.topics.is_empty());
+}
+
+#[test]
+fn create_topics_with_config_values() {
+    let storage = test_storage(true);
+    let mut buf = BytesMut::new();
+
+    buf.put_i32(1); // topic count
+    put_str(&mut buf, Some("cfg-topic"));
+    buf.put_i32(1); // num_partitions
+    buf.put_i16(1); // replication_factor
+    buf.put_i32(0); // assignment_count
+    buf.put_i32(1); // config_count
+    put_str(&mut buf, Some("cleanup.policy"));
+    put_str(&mut buf, Some("compact"));
+
+    let response = create_topics::handle(1, &buf, &storage).unwrap();
+    assert_eq!(response.topics.len(), 1);
+    assert_eq!(response.topics[0].error_code, 0);
 }
 
 #[test]
@@ -428,6 +461,78 @@ fn join_sync_heartbeat_leave_group_flow() {
     let body = encode_body(&leave, 3);
     let response = leave_group::handle(3, &body, &consumer_groups).unwrap();
     assert_eq!(response.error_code, 0);
+}
+
+#[test]
+fn sync_group_leader_applies_assignments_and_stabilizes() {
+    let config = test_config(true);
+    let consumer_groups = test_consumer_groups(config);
+    let group = consumer_groups.get_or_create_group("sync-group");
+
+    let member = Member::new(
+        "leader".to_string(),
+        "client".to_string(),
+        "127.0.0.1".to_string(),
+        30000,
+        30000,
+        "consumer".to_string(),
+        vec![("range".to_string(), vec![1, 2])],
+    );
+    let generation_id = group.add_member(member);
+
+    let mut buf = BytesMut::new();
+    put_str(&mut buf, Some("sync-group"));
+    buf.put_i32(generation_id);
+    put_str(&mut buf, Some("leader"));
+    buf.put_i32(1);
+    put_str(&mut buf, Some("leader"));
+    buf.put_i32(3);
+    buf.extend_from_slice(&[1, 2, 3]);
+
+    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    assert_eq!(response.error_code, 0);
+
+    let group = consumer_groups.get_group("sync-group").unwrap();
+    assert_eq!(group.state(), GroupState::Stable);
+    assert_eq!(group.get_assignment("leader"), Some(vec![1, 2, 3]));
+}
+
+#[test]
+fn sync_group_non_leader_missing_assignment() {
+    let config = test_config(true);
+    let consumer_groups = test_consumer_groups(config);
+    let group = consumer_groups.get_or_create_group("sync-group-2");
+
+    let leader = Member::new(
+        "leader".to_string(),
+        "client".to_string(),
+        "127.0.0.1".to_string(),
+        30000,
+        30000,
+        "consumer".to_string(),
+        vec![("range".to_string(), vec![])],
+    );
+    let follower = Member::new(
+        "follower".to_string(),
+        "client".to_string(),
+        "127.0.0.1".to_string(),
+        30000,
+        30000,
+        "consumer".to_string(),
+        vec![("range".to_string(), vec![])],
+    );
+    group.add_member(leader);
+    let generation_id = group.add_member(follower);
+
+    let mut buf = BytesMut::new();
+    put_str(&mut buf, Some("sync-group-2"));
+    buf.put_i32(generation_id);
+    put_str(&mut buf, Some("follower"));
+    buf.put_i32(0);
+
+    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.assignment.is_empty());
 }
 
 #[test]
@@ -780,6 +885,31 @@ fn fetch_optional_fields_and_records() {
 }
 
 #[test]
+fn fetch_sets_log_start_offset() {
+    let storage = test_storage(true);
+    storage.create_topic("fetch-log", 1).unwrap();
+    let batch = encode_record_batch(&[new_record(0)]);
+    storage.append("fetch-log", 0, &batch).unwrap();
+
+    let mut buf = BytesMut::new();
+    buf.put_i32(-1); // replica_id
+    buf.put_i32(0); // max_wait_ms
+    buf.put_i32(0); // min_bytes
+    buf.put_i32(1024); // max_bytes
+    buf.put_i8(0); // isolation_level (v4+)
+    buf.put_i32(1); // topic count
+    put_str(&mut buf, Some("fetch-log"));
+    buf.put_i32(1); // partition count
+    buf.put_i32(0); // partition
+    buf.put_i64(0); // fetch_offset
+    buf.put_i64(0); // log_start_offset (v5+)
+    buf.put_i32(1024); // partition_max_bytes
+
+    let response = fetch::handle(5, &buf, &storage).unwrap();
+    assert_eq!(response.responses[0].partitions[0].log_start_offset, 0);
+}
+
+#[test]
 fn list_offsets_truncated_and_errors() {
     let storage = test_storage(true);
 
@@ -1026,7 +1156,7 @@ fn offset_fetch_truncated_and_missing_offsets() {
     let config = test_config(true);
     let consumer_groups = test_consumer_groups(config);
 
-    let mut buf = BytesMut::new();
+    let buf = BytesMut::new();
     let response = offset_fetch::handle(1, &buf, &consumer_groups).unwrap();
     assert!(response.topics.is_empty());
 
@@ -1229,6 +1359,46 @@ fn join_group_read_string_edges() {
     buf.extend_from_slice(b"a");
     let response = join_group::handle(0, &buf, &consumer_groups).unwrap();
     assert_eq!(response.error_code, 35);
+}
+
+#[test]
+fn leave_group_parses_member_list() {
+    let config = test_config(true);
+    let consumer_groups = test_consumer_groups(config);
+    let group = consumer_groups.get_or_create_group("group");
+    let member = Member::new(
+        "member-1".to_string(),
+        "client".to_string(),
+        "127.0.0.1".to_string(),
+        30000,
+        30000,
+        "consumer".to_string(),
+        vec![("range".to_string(), vec![])],
+    );
+    group.add_member(member);
+
+    let mut buf = BytesMut::new();
+    put_str(&mut buf, Some("group"));
+    buf.put_i32(1);
+    put_str(&mut buf, Some("member-1"));
+    put_str(&mut buf, None);
+    let response = leave_group::handle(3, &buf, &consumer_groups).unwrap();
+    assert_eq!(response.error_code, 0);
+}
+
+#[test]
+fn leave_group_missing_member_is_ignored() {
+    let config = test_config(true);
+    let consumer_groups = test_consumer_groups(config);
+    consumer_groups.get_or_create_group("group");
+
+    let mut buf = BytesMut::new();
+    put_str(&mut buf, Some("group"));
+    buf.put_i32(1);
+    put_str(&mut buf, Some("missing"));
+    put_str(&mut buf, None);
+    let response = leave_group::handle(3, &buf, &consumer_groups).unwrap();
+    assert_eq!(response.error_code, 0);
 }
 
 #[test]

@@ -1,6 +1,5 @@
 //! Log segment implementation
 
-use bytes::Bytes;
 use std::collections::BTreeMap;
 
 /// A segment is a portion of the partition log
@@ -9,6 +8,7 @@ use std::collections::BTreeMap;
 /// with an index for offset-based lookups.
 pub struct Segment {
     /// Base offset of this segment
+    #[allow(dead_code)]
     base_offset: i64,
     /// Record batches stored by their base offset
     batches: BTreeMap<i64, Vec<u8>>,
@@ -27,11 +27,13 @@ impl Segment {
     }
 
     /// Get the base offset of this segment
+    #[allow(dead_code)]
     pub fn base_offset(&self) -> i64 {
         self.base_offset
     }
 
     /// Get the size of this segment in bytes
+    #[allow(dead_code)]
     pub fn size(&self) -> usize {
         self.size
     }
@@ -47,7 +49,7 @@ impl Segment {
         let mut result = Vec::new();
         let mut bytes_read = 0;
 
-        for (offset, batch) in self.batches.range(start_offset..) {
+        for (_offset, batch) in self.batches.range(start_offset..) {
             if bytes_read + batch.len() > max_bytes && !result.is_empty() {
                 break;
             }
@@ -59,6 +61,7 @@ impl Segment {
     }
 
     /// Check if this segment contains the given offset
+    #[allow(dead_code)]
     pub fn contains(&self, offset: i64) -> bool {
         if let Some((&last_offset, _)) = self.batches.last_key_value() {
             offset >= self.base_offset && offset <= last_offset
@@ -68,6 +71,7 @@ impl Segment {
     }
 
     /// Get the last offset in this segment
+    #[allow(dead_code)]
     pub fn last_offset(&self) -> Option<i64> {
         self.batches.last_key_value().map(|(&k, _)| k)
     }

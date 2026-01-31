@@ -30,9 +30,8 @@ pub fn handle(
             let count = cursor.get_i32();
             let mut ids = Vec::new();
             for _ in 0..count {
-                if let Some(member_id) = read_string(&mut cursor) {
-                    ids.push(member_id);
-                }
+                let member_id = read_string(&mut cursor).unwrap_or_default();
+                ids.push(member_id);
                 // Skip group_instance_id
                 let _ = read_string(&mut cursor);
             }

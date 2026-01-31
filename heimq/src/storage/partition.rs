@@ -11,6 +11,7 @@ pub struct Partition {
     /// The current segment being written to
     active_segment: RwLock<Segment>,
     /// Historical segments (read-only)
+    #[allow(dead_code)]
     segments: RwLock<Vec<Segment>>,
     /// Next offset to assign
     next_offset: AtomicI64,
@@ -38,7 +39,7 @@ impl Partition {
     /// Append a record batch to this partition
     ///
     /// Returns (base_offset, record_count)
-    pub fn append(&self, record_batch_data: &[u8]) -> Result<(i64, i64)> {
+    pub fn append(&self, record_batch_data: &[u8]) -> (i64, i64) {
         // Parse the record batch to count records and update offsets
         // For now, we store the raw bytes and track offsets
 
@@ -80,7 +81,7 @@ impl Partition {
         let mut segment = self.active_segment.write();
         segment.append(base_offset, batch);
 
-        Ok((base_offset, record_count))
+        (base_offset, record_count)
     }
 
     /// Fetch records starting from the given offset
@@ -143,7 +144,7 @@ mod tests {
 
             for count in counts {
                 let batch = record_batch_with_count(count);
-                let (base_offset, appended) = partition.append(&batch).expect("append should succeed");
+                let (base_offset, appended) = partition.append(&batch);
                 prop_assert_eq!(base_offset, expected_offset);
                 prop_assert_eq!(appended, count as i64);
                 expected_offset += count as i64;

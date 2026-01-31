@@ -7,6 +7,7 @@ use std::time::{Duration, Instant};
 
 /// Member state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum MemberState {
     /// Member is joining the group
     Joining,
@@ -20,6 +21,7 @@ pub enum MemberState {
 
 /// A member of a consumer group
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct Member {
     pub member_id: String,
     pub client_id: String,
@@ -58,6 +60,7 @@ impl Member {
     }
 
     /// Check if this member's session has expired
+    #[allow(dead_code)]
     pub fn is_expired(&self) -> bool {
         self.last_heartbeat.elapsed() > Duration::from_millis(self.session_timeout_ms as u64)
     }
@@ -70,6 +73,7 @@ impl Member {
 
 /// Group state
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum GroupState {
     /// No members
     Empty,
@@ -85,6 +89,7 @@ pub enum GroupState {
 
 /// A consumer group
 pub struct ConsumerGroup {
+    #[allow(dead_code)]
     group_id: String,
     state: RwLock<GroupState>,
     generation_id: AtomicI32,
@@ -109,10 +114,12 @@ impl ConsumerGroup {
         }
     }
 
+    #[allow(dead_code)]
     pub fn group_id(&self) -> &str {
         &self.group_id
     }
 
+    #[allow(dead_code)]
     pub fn state(&self) -> GroupState {
         *self.state.read()
     }
@@ -125,17 +132,19 @@ impl ConsumerGroup {
         self.leader_id.read().clone()
     }
 
+    #[allow(dead_code)]
     pub fn protocol(&self) -> Option<String> {
         self.protocol.read().clone()
     }
 
+    #[allow(dead_code)]
     pub fn protocol_type(&self) -> Option<String> {
         self.protocol_type.read().clone()
     }
 
     /// Generate a new member ID
     pub fn generate_member_id(&self, client_id: &str) -> String {
-        let num = self.next_member_id.fetch_add(1, Ordering::SeqCst);
+        let _num = self.next_member_id.fetch_add(1, Ordering::SeqCst);
         format!("{}-{}", client_id, uuid_simple())
     }
 
@@ -259,6 +268,7 @@ impl ConsumerGroup {
     }
 
     /// Check and remove expired members
+    #[allow(dead_code)]
     pub fn remove_expired_members(&self) -> Vec<String> {
         let mut expired = Vec::new();
         let mut members = self.members.write();
@@ -351,6 +361,42 @@ mod tests {
 
         assert!(group.remove_member("member-2"));
         assert_eq!(group.state(), GroupState::Empty);
+    }
+
+    #[test]
+    fn test_remove_non_leader_keeps_leader() {
+        let group = ConsumerGroup::new("test-group".to_string());
+        let member1 = Member::new(
+            "member-1".to_string(),
+            "client-1".to_string(),
+            "127.0.0.1".to_string(),
+            30000,
+            300000,
+            "consumer".to_string(),
+            vec![("range".to_string(), vec![])],
+        );
+        let member2 = Member::new(
+            "member-2".to_string(),
+            "client-2".to_string(),
+            "127.0.0.1".to_string(),
+            30000,
+            300000,
+            "consumer".to_string(),
+            vec![("range".to_string(), vec![])],
+        );
+
+        group.add_member(member1);
+        group.add_member(member2);
+
+        assert!(group.remove_member("member-2"));
+        assert_eq!(group.leader_id(), Some("member-1".to_string()));
+    }
+
+    #[test]
+    fn test_set_assignment_missing_member() {
+        let group = ConsumerGroup::new("test-group".to_string());
+        group.set_assignment("missing", vec![1, 2, 3]);
+        assert!(group.get_assignment("missing").is_none());
     }
 
     #[test]

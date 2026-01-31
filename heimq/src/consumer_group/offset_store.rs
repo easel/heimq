@@ -13,6 +13,7 @@ pub struct OffsetKey {
 
 /// Committed offset with metadata
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CommittedOffset {
     pub offset: i64,
     pub leader_epoch: i32,
@@ -87,6 +88,7 @@ impl OffsetStore {
     }
 
     /// Delete all offsets for a group
+    #[allow(dead_code)]
     pub fn delete_group(&self, group_id: &str) {
         self.offsets.retain(|k, _| k.group_id != group_id);
     }

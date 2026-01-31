@@ -11,6 +11,7 @@ pub struct RequestHeader {
     pub api_key: i16,
     pub api_version: i16,
     pub correlation_id: i32,
+    #[allow(dead_code)]
     pub client_id: Option<String>,
 }
 

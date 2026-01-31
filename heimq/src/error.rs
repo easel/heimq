@@ -5,6 +5,7 @@ use thiserror::Error;
 
 /// Main error type for heimq
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum HeimqError {
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -52,6 +53,7 @@ impl HeimqError {
 }
 
 /// Helper to convert String to StrBytes
+#[allow(dead_code)]
 pub fn str_bytes(s: String) -> StrBytes {
     StrBytes::from_string(s)
 }

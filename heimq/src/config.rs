@@ -64,6 +64,7 @@ impl Config {
     }
 
     /// Get advertised listener for Kafka protocol
+    #[allow(dead_code)]
     pub fn advertised_listener(&self) -> String {
         if self.host == "0.0.0.0" {
             format!("localhost:{}", self.port)

@@ -7,12 +7,14 @@ mod coordinator;
 mod group;
 mod offset_store;
 
+#[allow(unused_imports)]
 pub use coordinator::Coordinator;
-pub use group::{ConsumerGroup, Member, MemberState};
+#[allow(unused_imports)]
+pub use group::{ConsumerGroup, GroupState, Member, MemberState};
+#[allow(unused_imports)]
 pub use offset_store::OffsetStore;
 
 use crate::config::Config;
-use crate::error::Result;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tracing::info;
@@ -24,6 +26,7 @@ pub struct ConsumerGroupManager {
     /// Offset storage
     offset_store: Arc<OffsetStore>,
     /// Configuration
+    #[allow(dead_code)]
     config: Arc<Config>,
 }
 
@@ -61,6 +64,7 @@ impl ConsumerGroupManager {
     }
 
     /// List all groups
+    #[allow(dead_code)]
     pub fn list_groups(&self) -> Vec<String> {
         self.groups.iter().map(|e| e.key().clone()).collect()
     }

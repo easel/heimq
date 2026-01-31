@@ -91,9 +91,9 @@ pub fn handle(
                 break;
             }
             let value_len = cursor.get_i16();
-            if value_len > 0 && cursor.remaining() >= value_len as usize {
-                cursor.advance(value_len as usize);
-            }
+            let skip = value_len.max(0) as usize;
+            let available = cursor.remaining().min(skip);
+            cursor.advance(available);
         }
 
         let mut topic_result = CreatableTopicResult::default();
@@ -117,10 +117,11 @@ pub fn handle(
             Err(_) => {
                 // Topic already exists
                 topic_result.error_code = 36; // TOPIC_ALREADY_EXISTS
-                if let Some(topic) = storage.get_topic(&topic_name) {
-                    topic_result.num_partitions = topic.num_partitions();
-                    topic_result.replication_factor = 1;
-                }
+                let topic = storage
+                    .get_topic(&topic_name)
+                    .expect("topic exists after duplicate create");
+                topic_result.num_partitions = topic.num_partitions();
+                topic_result.replication_factor = 1;
             }
         }
 

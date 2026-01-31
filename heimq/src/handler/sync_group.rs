@@ -98,9 +98,8 @@ pub fn handle(
     if group.leader_id() == Some(member_id.clone()) { apply_leader_assignments(&group, &assignments); }
 
     // Return this member's assignment
-    if let Some(assignment) = group.get_assignment(&member_id) {
-        response.assignment = bytes::Bytes::from(assignment);
-    }
+    let assignment = group.get_assignment(&member_id).unwrap_or_default();
+    response.assignment = bytes::Bytes::from(assignment);
 
     debug!(
         group = %group_id,
@@ -135,7 +134,6 @@ fn apply_leader_assignments(group: &Arc<ConsumerGroup>, assignments: &[(String, 
     }
 
     // Select protocol and complete rebalance
-    if let Some(protocol) = group.select_protocol() {
-        group.complete_rebalance(protocol);
-    }
+    let protocol = group.select_protocol().unwrap_or_default();
+    group.complete_rebalance(protocol);
 }

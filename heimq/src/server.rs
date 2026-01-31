@@ -5,9 +5,9 @@ use crate::consumer_group::ConsumerGroupManager;
 use crate::error::Result;
 use crate::protocol::Router;
 use crate::storage::Storage;
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BytesMut};
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use std::net::SocketAddr;
 use tracing::{debug, error, info, warn};
@@ -34,6 +34,7 @@ impl Server {
     }
 
     /// Run the server
+    #[allow(dead_code)]
     pub async fn run(&self) -> Result<()> {
         let max_connections = std::env::var("HEIMQ_MAX_CONNECTIONS")
             .ok()
@@ -96,7 +97,10 @@ impl Server {
 }
 
 /// Handle a single connection
-async fn handle_connection(mut socket: TcpStream, router: Router) -> Result<()> {
+async fn handle_connection<S>(mut socket: S, router: Router) -> Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
     let mut buffer = BytesMut::with_capacity(64 * 1024);
 
     loop {
@@ -148,6 +152,111 @@ mod tests {
     use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
     use kafka_protocol::protocol::Encodable;
     use clap::Parser;
+    use std::pin::Pin;
+    use std::task::{Context, Poll};
+    use tokio::io::AsyncWriteExt;
+    use tokio::io::ReadBuf;
+
+    struct ScriptedStream {
+        data: Vec<u8>,
+        pos: usize,
+        fail_read: bool,
+        fail_write: bool,
+    }
+
+    impl ScriptedStream {
+        fn new(data: Vec<u8>) -> Self {
+            Self {
+                data,
+                pos: 0,
+                fail_read: false,
+                fail_write: false,
+            }
+        }
+
+        fn with_read_error() -> Self {
+            Self {
+                data: Vec::new(),
+                pos: 0,
+                fail_read: true,
+                fail_write: false,
+            }
+        }
+
+        fn with_write_error(data: Vec<u8>) -> Self {
+            Self {
+                data,
+                pos: 0,
+                fail_read: false,
+                fail_write: true,
+            }
+        }
+    }
+
+    impl AsyncRead for ScriptedStream {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<std::io::Result<()>> {
+            let this = self.get_mut();
+            if this.fail_read {
+                return Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "read failed",
+                )));
+            }
+
+            if this.pos >= this.data.len() {
+                return Poll::Ready(Ok(()));
+            }
+
+            let remaining = &this.data[this.pos..];
+            let to_copy = remaining.len().min(buf.remaining());
+            buf.put_slice(&remaining[..to_copy]);
+            this.pos += to_copy;
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    impl AsyncWrite for ScriptedStream {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<std::io::Result<usize>> {
+            let this = self.get_mut();
+            if this.fail_write {
+                return Poll::Ready(Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "write failed",
+                )));
+            }
+            Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    fn framed_request(api_key: i16, api_version: i16, correlation_id: i32, body: &[u8]) -> Vec<u8> {
+        let mut request = BytesMut::new();
+        request.put_i16(api_key);
+        request.put_i16(api_version);
+        request.put_i32(correlation_id);
+        request.put_i16(-1);
+        request.extend_from_slice(body);
+
+        let mut framed = BytesMut::new();
+        framed.put_i32(request.len() as i32);
+        framed.extend_from_slice(&request);
+        framed.to_vec()
+    }
 
     #[tokio::test]
     async fn test_server_creation() {
@@ -203,6 +312,45 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_run_with_listener_stops_at_max() {
+        init_tracing();
+        let config = Config::parse_from(["heimq"]);
+        let server = Server::new(config).unwrap();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server_task = tokio::spawn(async move { server.run_with_listener(listener, Some(1)).await });
+        let _client = TcpStream::connect(addr).await.unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_run_with_listener_continues_then_stops() {
+        init_tracing();
+        let config = Config::parse_from(["heimq"]);
+        let server = Server::new(config).unwrap();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server_task = tokio::spawn(async move { server.run_with_listener(listener, Some(2)).await });
+
+        let _client1 = TcpStream::connect(addr).await.unwrap();
+        let _client2 = TcpStream::connect(addr).await.unwrap();
+
+        tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
     async fn test_run_with_max_connections() {
         init_tracing();
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -226,6 +374,22 @@ mod tests {
             .unwrap()
             .unwrap()
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_run_with_max_connections_bind_error() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+
+        let mut config = Config::parse_from(["heimq"]);
+        config.host = "127.0.0.1".to_string();
+        config.port = port;
+        let server = Server::new(config).unwrap();
+
+        let result = server.run_with_max_connections(Some(1)).await;
+        assert!(result.is_err());
+
+        drop(listener);
     }
 
     #[tokio::test]
@@ -266,6 +430,25 @@ mod tests {
         let should_continue = server.handle_accept_result(Err(error), Some(1), &mut served);
         assert!(should_continue);
         assert_eq!(served, 0);
+    }
+
+    #[tokio::test]
+    async fn test_handle_accept_result_no_limit() {
+        init_tracing();
+        let config = Config::parse_from(["heimq"]);
+        let server = Server::new(config).unwrap();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let client_task = tokio::spawn(async move { TcpStream::connect(addr).await.unwrap() });
+
+        let (socket, peer) = listener.accept().await.unwrap();
+        client_task.await.unwrap();
+
+        let mut served = 0usize;
+        let should_continue = server.handle_accept_result(Ok((socket, peer)), None, &mut served);
+        assert!(should_continue);
+        assert_eq!(served, 1);
     }
 
     #[tokio::test]
@@ -365,5 +548,53 @@ mod tests {
 
         let result = server_task.await.unwrap();
         assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_handle_connection_scripted_ok() {
+        init_tracing();
+        let config = test_config(true);
+        let storage = test_storage(true);
+        let consumer_groups = test_consumer_groups(config.clone());
+        let router = Router::new(storage, consumer_groups, config);
+
+        let request = framed_request(18, 0, 1, &[]);
+        let stream = ScriptedStream::new(request);
+        let result = handle_connection(stream, router).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_scripted_stream_flush_shutdown() {
+        let mut stream = ScriptedStream::new(Vec::new());
+        stream.flush().await.unwrap();
+        stream.shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_handle_connection_read_error() {
+        init_tracing();
+        let config = test_config(true);
+        let storage = test_storage(true);
+        let consumer_groups = test_consumer_groups(config.clone());
+        let router = Router::new(storage, consumer_groups, config);
+
+        let stream = ScriptedStream::with_read_error();
+        let result = handle_connection(stream, router).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_handle_connection_write_error() {
+        init_tracing();
+        let config = test_config(true);
+        let storage = test_storage(true);
+        let consumer_groups = test_consumer_groups(config.clone());
+        let router = Router::new(storage, consumer_groups, config);
+
+        let request = framed_request(18, 0, 1, &[]);
+        let stream = ScriptedStream::with_write_error(request);
+        let result = handle_connection(stream, router).await;
+        assert!(result.is_err());
     }
 }

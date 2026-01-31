@@ -148,9 +148,7 @@ fn parse_topic_list(body: &[u8], _api_version: i16) -> Vec<String> {
 
         let mut buf = vec![0u8; len as usize];
         cursor.copy_to_slice(&mut buf);
-        if let Ok(s) = String::from_utf8(buf) {
-            topics.push(s);
-        }
+        topics.push(String::from_utf8_lossy(&buf).to_string());
     }
 
     topics
