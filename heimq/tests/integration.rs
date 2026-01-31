@@ -192,6 +192,7 @@ fn test_legacy_multiple_topics() {
 // ============================================================================
 
 #[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_simple_produce() {
     let server = TestServer::start();
     let topic = "rdkafka-simple-produce";
@@ -210,6 +211,7 @@ async fn test_rdkafka_simple_produce() {
 }
 
 #[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_produce_with_key() {
     let server = TestServer::start();
     let topic = "rdkafka-keyed-produce";
@@ -224,6 +226,7 @@ async fn test_rdkafka_produce_with_key() {
 }
 
 #[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_produce_no_key() {
     let server = TestServer::start();
     let topic = "rdkafka-no-key";
@@ -237,6 +240,7 @@ async fn test_rdkafka_produce_no_key() {
 }
 
 #[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_produce_empty_value() {
     let server = TestServer::start();
     let topic = "rdkafka-empty-value";
@@ -251,6 +255,7 @@ async fn test_rdkafka_produce_empty_value() {
 }
 
 #[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_produce_large_message() {
     let server = TestServer::start();
     let topic = "rdkafka-large-message";
@@ -267,6 +272,7 @@ async fn test_rdkafka_produce_large_message() {
 }
 
 #[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_rapid_produce() {
     let server = TestServer::start();
     let topic = "rdkafka-rapid";
@@ -286,6 +292,7 @@ async fn test_rdkafka_rapid_produce() {
 }
 
 #[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_produce_consume_roundtrip() {
     let server = TestServer::start();
     let topic = "rdkafka-roundtrip";
@@ -331,6 +338,7 @@ async fn test_rdkafka_produce_consume_roundtrip() {
 }
 
 #[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_multiple_topics() {
     let server = TestServer::start();
     let producer = server.rdkafka_producer();

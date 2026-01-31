@@ -59,6 +59,7 @@ metrics-exporter-prometheus = "0.16"
 # Test utilities
 tokio-test = "0.4"
 tempfile = "3.16"
+proptest = "1.6"
 
 # Primary test client - rdkafka with librdkafka built from source
 # FIREWALLED: dev-dependency only, never in server binary

@@ -119,6 +119,7 @@ impl Partition {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_new_partition() {
@@ -126,5 +127,29 @@ mod tests {
         assert_eq!(partition.id(), 0);
         assert_eq!(partition.high_watermark(), 0);
         assert_eq!(partition.log_start_offset(), 0);
+    }
+
+    fn record_batch_with_count(record_count: i32) -> Vec<u8> {
+        let mut batch = vec![0u8; 61];
+        batch[57..61].copy_from_slice(&record_count.to_be_bytes());
+        batch
+    }
+
+    proptest! {
+        #[test]
+        fn prop_append_advances_offsets(counts in prop::collection::vec(1i32..50, 1..32)) {
+            let partition = Partition::new(0);
+            let mut expected_offset = 0i64;
+
+            for count in counts {
+                let batch = record_batch_with_count(count);
+                let (base_offset, appended) = partition.append(&batch).expect("append should succeed");
+                prop_assert_eq!(base_offset, expected_offset);
+                prop_assert_eq!(appended, count as i64);
+                expected_offset += count as i64;
+            }
+
+            prop_assert_eq!(partition.high_watermark(), expected_offset);
+        }
     }
 }

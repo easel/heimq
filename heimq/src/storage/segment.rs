@@ -76,6 +76,7 @@ impl Segment {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     #[test]
     fn test_new_segment() {
@@ -102,5 +103,50 @@ mod tests {
 
         let data = segment.read(1, 1000);
         assert_eq!(data, vec![5, 6, 7, 8]);
+    }
+
+    proptest! {
+        #[test]
+        fn prop_segment_size_matches_appends(batches in prop::collection::vec(prop::collection::vec(any::<u8>(), 1..64), 1..32)) {
+            let mut segment = Segment::new(0);
+            let mut expected_size = 0usize;
+
+            for (i, batch) in batches.into_iter().enumerate() {
+                expected_size += batch.len();
+                segment.append(i as i64, batch);
+            }
+
+            prop_assert_eq!(segment.size(), expected_size);
+        }
+
+        #[test]
+        fn prop_read_matches_reference(
+            batches in prop::collection::vec(prop::collection::vec(any::<u8>(), 1..64), 1..32),
+            start_index in 0usize..32,
+            max_bytes in 1usize..512
+        ) {
+            let mut segment = Segment::new(0);
+            for (i, batch) in batches.iter().enumerate() {
+                segment.append(i as i64, batch.clone());
+            }
+
+            let start_offset = (start_index.min(batches.len().saturating_sub(1))) as i64;
+            let mut expected = Vec::new();
+            let mut bytes_read = 0usize;
+
+            for (i, batch) in batches.iter().enumerate() {
+                if (i as i64) < start_offset {
+                    continue;
+                }
+                if bytes_read + batch.len() > max_bytes && !expected.is_empty() {
+                    break;
+                }
+                expected.extend_from_slice(batch);
+                bytes_read += batch.len();
+            }
+
+            let actual = segment.read(start_offset, max_bytes);
+            prop_assert_eq!(actual, expected);
+        }
     }
 }
