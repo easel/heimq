@@ -55,15 +55,22 @@ struct TestServer {
 
 impl TestServer {
     fn start() -> Self {
+        Self::start_with_auto_create(true)
+    }
+
+    fn start_with_auto_create(auto_create: bool) -> Self {
         let port = next_port();
+        let auto_value = if auto_create { "true" } else { "false" };
         let child = Command::new("./target/debug/heimq")
             .args(["--port", &port.to_string(), "--memory-only"])
+            .env("HEIMQ_AUTO_CREATE_TOPICS", auto_value)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
             .or_else(|_| {
                 Command::new("./target/release/heimq")
                     .args(["--port", &port.to_string(), "--memory-only"])
+                    .env("HEIMQ_AUTO_CREATE_TOPICS", auto_value)
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .spawn()
@@ -189,6 +196,23 @@ fn encode_record_batch(records: &[Record]) -> bytes::Bytes {
     encoded.freeze()
 }
 
+fn produce_batch(server: &TestServer, topic: &str, batch: bytes::Bytes) -> ProduceResponse {
+    let mut partition = PartitionProduceData::default();
+    partition.index = 0;
+    partition.records = Some(batch);
+
+    let mut topic_data = TopicProduceData::default();
+    topic_data.name = TopicName(StrBytes::from_string(topic.to_string()));
+    topic_data.partition_data = vec![partition];
+
+    let mut produce_request = ProduceRequest::default();
+    produce_request.acks = 1;
+    produce_request.timeout_ms = 1000;
+    produce_request.topic_data = vec![topic_data];
+
+    send_request(server, 0, 2, &produce_request)
+}
+
 #[test]
 fn contract_api_versions_matches_supported_range() {
     let server = TestServer::start();
@@ -252,6 +276,28 @@ fn contract_metadata_auto_creates_topic() {
 }
 
 #[test]
+fn contract_metadata_unknown_topic_no_autocreate() {
+    let server = TestServer::start_with_auto_create(false);
+    let topic = unique_topic("contract-metadata-no-auto");
+
+    let mut topic_req = MetadataRequestTopic::default();
+    topic_req.name = Some(TopicName(StrBytes::from_string(topic.clone())));
+
+    let mut request = MetadataRequest::default();
+    request.topics = Some(vec![topic_req]);
+    request.allow_auto_topic_creation = true;
+
+    let response: MetadataResponse = send_request(&server, 3, 4, &request);
+    let topic_response = response
+        .topics
+        .iter()
+        .find(|t| t.name.as_ref().map(|n| n.0.as_str()) == Some(topic.as_str()))
+        .expect("topic metadata");
+
+    assert_eq!(topic_response.error_code, 3);
+}
+
+#[test]
 fn contract_create_and_delete_topics() {
     let server = TestServer::start();
     let topic = unique_topic("contract-topic");
@@ -280,21 +326,7 @@ fn contract_produce_fetch_roundtrip() {
 
     let records = vec![new_record(0)];
     let encoded = encode_record_batch(&records);
-
-    let mut partition = PartitionProduceData::default();
-    partition.index = 0;
-    partition.records = Some(encoded);
-
-    let mut topic_data = TopicProduceData::default();
-    topic_data.name = TopicName(StrBytes::from_string(topic.clone()));
-    topic_data.partition_data = vec![partition];
-
-    let mut produce_request = ProduceRequest::default();
-    produce_request.acks = 1;
-    produce_request.timeout_ms = 1000;
-    produce_request.topic_data = vec![topic_data];
-
-    let produce_response: ProduceResponse = send_request(&server, 0, 2, &produce_request);
+    let produce_response = produce_batch(&server, &topic, encoded);
     let produce_partition = &produce_response.responses[0].partition_responses[0];
     assert_eq!(produce_partition.error_code, 0);
 
@@ -321,6 +353,51 @@ fn contract_produce_fetch_roundtrip() {
     let decoded = RecordBatchDecoder::decode_all(&mut fetched).expect("decode fetched");
     let decoded_records: Vec<Record> = decoded.into_iter().flat_map(|r| r.records).collect();
     assert_eq!(decoded_records, records);
+}
+
+#[test]
+fn contract_fetch_respects_max_bytes() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-fetch-max-bytes");
+
+    let response = create_topic(&server, &topic, 1);
+    let result = response.topics.first().expect("topic result");
+    assert_eq!(result.error_code, 0);
+
+    let records_first = vec![new_record(0)];
+    let records_second = vec![new_record(1)];
+    let encoded_first = encode_record_batch(&records_first);
+    let encoded_second = encode_record_batch(&records_second);
+
+    let produce_response = produce_batch(&server, &topic, encoded_first.clone());
+    assert_eq!(produce_response.responses[0].partition_responses[0].error_code, 0);
+    let produce_response = produce_batch(&server, &topic, encoded_second);
+    assert_eq!(produce_response.responses[0].partition_responses[0].error_code, 0);
+
+    let mut fetch_partition = FetchPartition::default();
+    fetch_partition.partition = 0;
+    fetch_partition.fetch_offset = 0;
+    fetch_partition.partition_max_bytes = 1024 * 1024;
+
+    let mut fetch_topic = FetchTopic::default();
+    fetch_topic.topic = TopicName(StrBytes::from_string(topic));
+    fetch_topic.partitions = vec![fetch_partition];
+
+    let mut fetch_request = FetchRequest::default();
+    fetch_request.replica_id = BrokerId(-1);
+    fetch_request.max_wait_ms = 1000;
+    fetch_request.min_bytes = 1;
+    fetch_request.max_bytes = (encoded_first.len() as i32) + 1;
+    fetch_request.topics = vec![fetch_topic];
+
+    let fetch_response: FetchResponse = send_request(&server, 1, 3, &fetch_request);
+    let partition_response = &fetch_response.responses[0].partitions[0];
+    assert_eq!(partition_response.error_code, 0);
+
+    let mut fetched = partition_response.records.clone().expect("records present");
+    let decoded = RecordBatchDecoder::decode_all(&mut fetched).expect("decode fetched");
+    let decoded_records: Vec<Record> = decoded.into_iter().flat_map(|r| r.records).collect();
+    assert_eq!(decoded_records, records_first);
 }
 
 #[test]
