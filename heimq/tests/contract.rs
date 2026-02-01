@@ -4,6 +4,7 @@
 //! for supported endpoints.
 
 use bytes::{Buf, BufMut, BytesMut};
+use heimq::test_support::{unique_group, unique_topic, TestServer};
 use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
 use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
 use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
@@ -12,82 +13,40 @@ use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
 use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
 use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
 use kafka_protocol::messages::fetch_response::FetchResponse;
-use kafka_protocol::messages::list_offsets_request::{ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic};
+use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
+use kafka_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
+use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
+use kafka_protocol::messages::heartbeat_response::HeartbeatResponse;
+use kafka_protocol::messages::join_group_request::{JoinGroupRequest, JoinGroupRequestProtocol};
+use kafka_protocol::messages::join_group_response::JoinGroupResponse;
+use kafka_protocol::messages::leave_group_request::LeaveGroupRequest;
+use kafka_protocol::messages::leave_group_response::LeaveGroupResponse;
+use kafka_protocol::messages::list_offsets_request::{
+    ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic,
+};
 use kafka_protocol::messages::list_offsets_response::ListOffsetsResponse;
 use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
 use kafka_protocol::messages::metadata_response::MetadataResponse;
-use kafka_protocol::messages::offset_commit_request::{OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic};
+use kafka_protocol::messages::offset_commit_request::{
+    OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic,
+};
 use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
 use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
 use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
-use kafka_protocol::messages::produce_request::{PartitionProduceData, ProduceRequest, TopicProduceData};
+use kafka_protocol::messages::produce_request::{
+    PartitionProduceData, ProduceRequest, TopicProduceData,
+};
 use kafka_protocol::messages::produce_response::ProduceResponse;
+use kafka_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
+use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
 use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
-use kafka_protocol::records::{Compression, Record, RecordBatchDecoder, RecordBatchEncoder, RecordEncodeOptions, TimestampType};
+use kafka_protocol::records::{
+    Compression, Record, RecordBatchDecoder, RecordBatchEncoder, RecordEncodeOptions,
+    TimestampType,
+};
 use std::io::{Read, Write};
-use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU16, AtomicUsize, Ordering};
 use std::time::Duration;
-
-static PORT_COUNTER: AtomicU16 = AtomicU16::new(20092);
-static TOPIC_COUNTER: AtomicUsize = AtomicUsize::new(1);
-static GROUP_COUNTER: AtomicUsize = AtomicUsize::new(1);
-
-fn next_port() -> u16 {
-    PORT_COUNTER.fetch_add(1, Ordering::SeqCst)
-}
-
-fn unique_topic(prefix: &str) -> String {
-    let id = TOPIC_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("{}-{}", prefix, id)
-}
-
-fn unique_group(prefix: &str) -> String {
-    let id = GROUP_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("{}-{}", prefix, id)
-}
-
-struct TestServer {
-    child: Child,
-    port: u16,
-}
-
-impl TestServer {
-    fn start() -> Self {
-        Self::start_with_auto_create(true)
-    }
-
-    fn start_with_auto_create(auto_create: bool) -> Self {
-        let port = next_port();
-        let auto_value = if auto_create { "true" } else { "false" };
-        let child = Command::new("./target/debug/heimq")
-            .args(["--port", &port.to_string(), "--memory-only"])
-            .env("HEIMQ_AUTO_CREATE_TOPICS", auto_value)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .or_else(|_| {
-                Command::new("./target/release/heimq")
-                    .args(["--port", &port.to_string(), "--memory-only"])
-                    .env("HEIMQ_AUTO_CREATE_TOPICS", auto_value)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
-            })
-            .expect("Failed to start heimq - run 'cargo build' first");
-
-        std::thread::sleep(Duration::from_millis(300));
-        Self { child, port }
-    }
-}
-
-impl Drop for TestServer {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
 
 fn encode_request<R: Encodable>(
     api_key: i16,
@@ -487,4 +446,287 @@ fn contract_offset_commit_and_fetch() {
     let fetch_partition = &fetch_response.topics[0].partitions[0];
     assert_eq!(fetch_partition.error_code, 0);
     assert_eq!(fetch_partition.committed_offset, 42);
+}
+
+// ============================================================================
+// Consumer Group Contract Tests (Phase 2)
+// ============================================================================
+
+#[test]
+fn contract_find_coordinator_returns_self() {
+    let server = TestServer::start();
+    let group = unique_group("contract-coordinator");
+
+    let mut request = FindCoordinatorRequest::default();
+    request.key = StrBytes::from_string(group);
+
+    let response: FindCoordinatorResponse = send_request(&server, 10, 0, &request);
+    assert_eq!(response.error_code, 0, "expected no error");
+    assert_eq!(response.node_id.0, 0, "node_id should be 0 for single broker");
+    assert!(
+        response.host.as_str().contains("localhost") || response.host.as_str().contains("127.0.0.1"),
+        "host should contain localhost or 127.0.0.1, got: {}",
+        response.host.as_str()
+    );
+}
+
+#[test]
+fn contract_join_group_new_member() {
+    let server = TestServer::start();
+    let group = unique_group("contract-join");
+
+    // Create a protocol
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    // First JoinGroup with empty member_id -> should get MEMBER_ID_REQUIRED (79)
+    let mut request = JoinGroupRequest::default();
+    request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    request.session_timeout_ms = 30000;
+    request.rebalance_timeout_ms = 30000;
+    request.member_id = StrBytes::from_string(String::new());
+    request.protocol_type = StrBytes::from_string("consumer".to_string());
+    request.protocols = vec![protocol.clone()];
+
+    let response: JoinGroupResponse = send_request(&server, 11, 1, &request);
+    assert_eq!(response.error_code, 79, "first join should return MEMBER_ID_REQUIRED");
+    assert!(!response.member_id.is_empty(), "should be assigned a member_id");
+
+    let assigned_member_id = response.member_id.clone();
+
+    // Second JoinGroup with assigned member_id -> should succeed and become leader
+    let mut request2 = JoinGroupRequest::default();
+    request2.group_id = GroupId(StrBytes::from_string(group));
+    request2.session_timeout_ms = 30000;
+    request2.rebalance_timeout_ms = 30000;
+    request2.member_id = assigned_member_id.clone();
+    request2.protocol_type = StrBytes::from_string("consumer".to_string());
+    request2.protocols = vec![protocol];
+
+    let response2: JoinGroupResponse = send_request(&server, 11, 1, &request2);
+    assert_eq!(response2.error_code, 0, "second join should succeed");
+    assert_eq!(response2.leader, assigned_member_id, "member should become leader");
+    assert!(response2.generation_id > 0, "generation_id should be positive");
+}
+
+#[test]
+fn contract_sync_group_leader() {
+    let server = TestServer::start();
+    let group = unique_group("contract-sync");
+
+    // Join the group first
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    // First join - get member_id
+    let mut join_request = JoinGroupRequest::default();
+    join_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    join_request.session_timeout_ms = 30000;
+    join_request.rebalance_timeout_ms = 30000;
+    join_request.member_id = StrBytes::from_string(String::new());
+    join_request.protocol_type = StrBytes::from_string("consumer".to_string());
+    join_request.protocols = vec![protocol.clone()];
+
+    let join_response: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    let member_id = join_response.member_id.clone();
+
+    // Second join - become leader
+    join_request.member_id = member_id.clone();
+    let join_response: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    assert_eq!(join_response.error_code, 0);
+    let generation_id = join_response.generation_id;
+
+    // Now send SyncGroup as leader with assignment
+    let mut assignment = SyncGroupRequestAssignment::default();
+    assignment.member_id = member_id.clone();
+    assignment.assignment = bytes::Bytes::from(vec![0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    let mut sync_request = SyncGroupRequest::default();
+    sync_request.group_id = GroupId(StrBytes::from_string(group));
+    sync_request.generation_id = generation_id;
+    sync_request.member_id = member_id;
+    sync_request.assignments = vec![assignment];
+
+    let sync_response: SyncGroupResponse = send_request(&server, 14, 1, &sync_request);
+    assert_eq!(sync_response.error_code, 0, "sync_group should succeed");
+}
+
+#[test]
+fn contract_heartbeat_active_member() {
+    let server = TestServer::start();
+    let group = unique_group("contract-heartbeat");
+
+    // Join the group first
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    // First join - get member_id
+    let mut join_request = JoinGroupRequest::default();
+    join_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    join_request.session_timeout_ms = 30000;
+    join_request.rebalance_timeout_ms = 30000;
+    join_request.member_id = StrBytes::from_string(String::new());
+    join_request.protocol_type = StrBytes::from_string("consumer".to_string());
+    join_request.protocols = vec![protocol.clone()];
+
+    let join_response: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    let member_id = join_response.member_id.clone();
+
+    // Second join - become leader
+    join_request.member_id = member_id.clone();
+    let join_response: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    assert_eq!(join_response.error_code, 0);
+    let generation_id = join_response.generation_id;
+
+    // Send heartbeat
+    let mut heartbeat_request = HeartbeatRequest::default();
+    heartbeat_request.group_id = GroupId(StrBytes::from_string(group));
+    heartbeat_request.generation_id = generation_id;
+    heartbeat_request.member_id = member_id;
+
+    let heartbeat_response: HeartbeatResponse = send_request(&server, 12, 1, &heartbeat_request);
+    assert_eq!(heartbeat_response.error_code, 0, "heartbeat should succeed for active member");
+}
+
+#[test]
+fn contract_leave_group_success() {
+    let server = TestServer::start();
+    let group = unique_group("contract-leave");
+
+    // Join the group first
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    // First join - get member_id
+    let mut join_request = JoinGroupRequest::default();
+    join_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    join_request.session_timeout_ms = 30000;
+    join_request.rebalance_timeout_ms = 30000;
+    join_request.member_id = StrBytes::from_string(String::new());
+    join_request.protocol_type = StrBytes::from_string("consumer".to_string());
+    join_request.protocols = vec![protocol.clone()];
+
+    let join_response: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    let member_id = join_response.member_id.clone();
+
+    // Second join - become member
+    join_request.member_id = member_id.clone();
+    let join_response: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    assert_eq!(join_response.error_code, 0);
+
+    // Leave the group
+    let mut leave_request = LeaveGroupRequest::default();
+    leave_request.group_id = GroupId(StrBytes::from_string(group));
+    leave_request.member_id = member_id;
+
+    let leave_response: LeaveGroupResponse = send_request(&server, 13, 1, &leave_request);
+    assert_eq!(leave_response.error_code, 0, "leave_group should succeed");
+}
+
+#[test]
+fn contract_consumer_group_lifecycle() {
+    let server = TestServer::start();
+    let group = unique_group("contract-lifecycle");
+    let topic = unique_topic("contract-lifecycle");
+
+    // Create topic for offset commit/fetch
+    let response = create_topic(&server, &topic, 1);
+    assert_eq!(response.topics[0].error_code, 0);
+
+    // 1. FindCoordinator
+    let mut find_request = FindCoordinatorRequest::default();
+    find_request.key = StrBytes::from_string(group.clone());
+    let find_response: FindCoordinatorResponse = send_request(&server, 10, 0, &find_request);
+    assert_eq!(find_response.error_code, 0, "FindCoordinator should succeed");
+
+    // 2. JoinGroup (first call - get member_id)
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    let mut join_request = JoinGroupRequest::default();
+    join_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    join_request.session_timeout_ms = 30000;
+    join_request.rebalance_timeout_ms = 30000;
+    join_request.member_id = StrBytes::from_string(String::new());
+    join_request.protocol_type = StrBytes::from_string("consumer".to_string());
+    join_request.protocols = vec![protocol.clone()];
+
+    let join_response: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    assert_eq!(join_response.error_code, 79, "First JoinGroup should return MEMBER_ID_REQUIRED");
+    let member_id = join_response.member_id.clone();
+
+    // 3. JoinGroup (second call - become leader)
+    join_request.member_id = member_id.clone();
+    let join_response: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    assert_eq!(join_response.error_code, 0, "Second JoinGroup should succeed");
+    let generation_id = join_response.generation_id;
+    assert_eq!(join_response.leader, member_id, "Member should be leader");
+
+    // 4. SyncGroup
+    let mut assignment = SyncGroupRequestAssignment::default();
+    assignment.member_id = member_id.clone();
+    assignment.assignment = bytes::Bytes::from(vec![0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    let mut sync_request = SyncGroupRequest::default();
+    sync_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    sync_request.generation_id = generation_id;
+    sync_request.member_id = member_id.clone();
+    sync_request.assignments = vec![assignment];
+
+    let sync_response: SyncGroupResponse = send_request(&server, 14, 1, &sync_request);
+    assert_eq!(sync_response.error_code, 0, "SyncGroup should succeed");
+
+    // 5. Heartbeat
+    let mut heartbeat_request = HeartbeatRequest::default();
+    heartbeat_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    heartbeat_request.generation_id = generation_id;
+    heartbeat_request.member_id = member_id.clone();
+
+    let heartbeat_response: HeartbeatResponse = send_request(&server, 12, 1, &heartbeat_request);
+    assert_eq!(heartbeat_response.error_code, 0, "Heartbeat should succeed");
+
+    // 6. OffsetCommit
+    let mut commit_partition = OffsetCommitRequestPartition::default();
+    commit_partition.partition_index = 0;
+    commit_partition.committed_offset = 100;
+    commit_partition.commit_timestamp = 0;
+
+    let mut commit_topic = OffsetCommitRequestTopic::default();
+    commit_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    commit_topic.partitions = vec![commit_partition];
+
+    let mut commit_request = OffsetCommitRequest::default();
+    commit_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    commit_request.generation_id_or_member_epoch = generation_id;
+    commit_request.member_id = member_id.clone();
+    commit_request.topics = vec![commit_topic];
+
+    let commit_response: OffsetCommitResponse = send_request(&server, 8, 1, &commit_request);
+    assert_eq!(commit_response.topics[0].partitions[0].error_code, 0, "OffsetCommit should succeed");
+
+    // 7. OffsetFetch
+    let mut fetch_topic = OffsetFetchRequestTopic::default();
+    fetch_topic.name = TopicName(StrBytes::from_string(topic));
+    fetch_topic.partition_indexes = vec![0];
+
+    let mut fetch_request = OffsetFetchRequest::default();
+    fetch_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    fetch_request.topics = Some(vec![fetch_topic]);
+
+    let fetch_response: OffsetFetchResponse = send_request(&server, 9, 1, &fetch_request);
+    assert_eq!(fetch_response.topics[0].partitions[0].error_code, 0, "OffsetFetch should succeed");
+    assert_eq!(fetch_response.topics[0].partitions[0].committed_offset, 100, "Committed offset should match");
+
+    // 8. LeaveGroup
+    let mut leave_request = LeaveGroupRequest::default();
+    leave_request.group_id = GroupId(StrBytes::from_string(group));
+    leave_request.member_id = member_id;
+
+    let leave_response: LeaveGroupResponse = send_request(&server, 13, 1, &leave_request);
+    assert_eq!(leave_response.error_code, 0, "LeaveGroup should succeed");
 }

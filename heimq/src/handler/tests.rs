@@ -349,7 +349,7 @@ fn find_coordinator_single_node() {
     let response = find_coordinator::handle(0, &[], &config).unwrap();
     assert_eq!(response.error_code, 0);
     assert_eq!(response.node_id.0, config.broker_id);
-    assert_eq!(response.host.to_string(), "localhost");
+    assert_eq!(response.host.to_string(), "127.0.0.1");
 }
 
 #[test]

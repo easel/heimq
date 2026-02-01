@@ -67,7 +67,7 @@ impl Config {
     #[allow(dead_code)]
     pub fn advertised_listener(&self) -> String {
         if self.host == "0.0.0.0" {
-            format!("localhost:{}", self.port)
+            format!("127.0.0.1:{}", self.port)  // Use IPv4 to avoid IPv6 resolution issues
         } else {
             format!("{}:{}", self.host, self.port)
         }
@@ -97,7 +97,7 @@ mod tests {
         let mut config = Config::parse_from(["heimq"]);
         config.port = 9094;
         config.host = "0.0.0.0".to_string();
-        assert_eq!(config.advertised_listener(), "localhost:9094");
+        assert_eq!(config.advertised_listener(), "127.0.0.1:9094");
 
         config.host = "127.0.0.1".to_string();
         assert_eq!(config.advertised_listener(), "127.0.0.1:9094");

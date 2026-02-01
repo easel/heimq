@@ -2,15 +2,8 @@
 //!
 //! Focused on transport, simplicity, and speed at the expense of durability.
 
-mod config;
-mod consumer_group;
-mod error;
-mod handler;
-mod protocol;
-mod server;
-mod storage;
-#[cfg(test)]
-mod test_support;
+use heimq::config;
+use heimq::server;
 
 use clap::Parser;
 use config::Config;

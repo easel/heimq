@@ -5,76 +5,29 @@
 //!
 //! Note: rdkafka is a dev-dependency only - it does not affect the server binary.
 
+use heimq::test_support::TestServer;
 use kafka::client::KafkaClient;
 use kafka::producer::{Producer, Record, RequiredAcks};
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::Message;
-use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU16, Ordering};
 use std::time::Duration;
 
-static PORT_COUNTER: AtomicU16 = AtomicU16::new(19092);
-
-fn get_test_port() -> u16 {
-    PORT_COUNTER.fetch_add(1, Ordering::SeqCst)
+/// Extension trait to add Kafka client helpers to TestServer
+trait TestServerExt {
+    fn legacy_producer_for(&self, topic: &str) -> Producer;
+    fn rdkafka_producer(&self) -> FutureProducer;
+    fn rdkafka_consumer(&self, group_id: &str) -> BaseConsumer;
 }
 
-struct TestServer {
-    child: Child,
-    port: u16,
-}
-
-impl TestServer {
-    fn start() -> Self {
-        let port = get_test_port();
-        let test_args = format!("--port {} --memory-only", port);
-
-        // Start the server - suppress output to avoid flooding test logs
-        let child = if let Some(bin) = option_env!("CARGO_BIN_EXE_heimq") {
-            Command::new(bin)
-                .env("HEIMQ_TEST_ARGS", &test_args)
-                .args(["--port", &port.to_string(), "--memory-only"])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-        } else {
-            Command::new("./target/debug/heimq")
-                .env("HEIMQ_TEST_ARGS", &test_args)
-                .args(["--port", &port.to_string(), "--memory-only"])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
-                .or_else(|_| {
-                    Command::new("./target/release/heimq")
-                        .env("HEIMQ_TEST_ARGS", &test_args)
-                        .args(["--port", &port.to_string(), "--memory-only"])
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .spawn()
-                })
-        }
-        .expect("Failed to start heimq - run 'cargo build' first");
-
-        // Wait for server to be ready
-        std::thread::sleep(Duration::from_millis(500));
-
-        TestServer { child, port }
-    }
-
-    fn bootstrap_servers(&self) -> String {
-        format!("localhost:{}", self.port)
-    }
-
-    fn hosts(&self) -> Vec<String> {
-        vec![self.bootstrap_servers()]
-    }
-
+impl TestServerExt for TestServer {
     /// Create a kafka crate producer for legacy protocol testing
     fn legacy_producer_for(&self, topic: &str) -> Producer {
         let mut client = KafkaClient::new(self.hosts());
-        client.load_metadata(&[topic]).expect("Failed to load metadata");
+        client
+            .load_metadata(&[topic])
+            .expect("Failed to load metadata");
 
         Producer::from_client(client)
             .with_ack_timeout(Duration::from_secs(5))
@@ -101,13 +54,6 @@ impl TestServer {
             .set("enable.auto.commit", "false")
             .create()
             .expect("Failed to create rdkafka consumer")
-    }
-}
-
-impl Drop for TestServer {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
     }
 }
 
@@ -273,8 +219,8 @@ async fn test_rdkafka_produce_large_message() {
     let topic = "rdkafka-large-message";
     let producer = server.rdkafka_producer();
 
-    // 1MB message
-    let large_value = "x".repeat(1024 * 1024);
+    // 512KB message (rdkafka default limit is 1MB, so stay under it)
+    let large_value = "x".repeat(512 * 1024);
     let record = FutureRecord::to(topic)
         .payload(&large_value)
         .key("large");

@@ -25,7 +25,7 @@ pub fn handle(
     let mut broker = MetadataResponseBroker::default();
     broker.node_id = BrokerId(config.broker_id);
     broker.host = StrBytes::from_string(if config.host == "0.0.0.0" {
-        "localhost".to_string()
+        "127.0.0.1".to_string()  // Use IPv4 to avoid IPv6 resolution issues
     } else {
         config.host.clone()
     });

@@ -25,7 +25,7 @@ impl Coordinator {
     #[allow(dead_code)]
     pub fn host(&self) -> &str {
         if self.config.host == "0.0.0.0" {
-            "localhost"
+            "127.0.0.1"  // Use IPv4 to avoid IPv6 resolution issues
         } else {
             &self.config.host
         }
@@ -52,7 +52,7 @@ mod tests {
         let coordinator = Coordinator::new(Arc::new(config));
 
         assert_eq!(coordinator.broker_id(), 7);
-        assert_eq!(coordinator.host(), "localhost");
+        assert_eq!(coordinator.host(), "127.0.0.1");
         assert_eq!(coordinator.port(), 9099);
 
         let mut config = Config::parse_from(["heimq"]);

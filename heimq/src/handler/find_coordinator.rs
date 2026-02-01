@@ -18,7 +18,7 @@ pub fn handle(
     response.error_code = 0;
     response.node_id = BrokerId(config.broker_id);
     response.host = StrBytes::from_string(if config.host == "0.0.0.0" {
-        "localhost".to_string()
+        "127.0.0.1".to_string()  // Use IPv4 to avoid IPv6 resolution issues
     } else {
         config.host.clone()
     });

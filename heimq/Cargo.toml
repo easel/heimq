@@ -70,6 +70,11 @@ kafka = { version = "0.10", default-features = false, features = ["gzip", "snapp
 
 [features]
 default = []
+test-support = []
+
+[dev-dependencies.heimq]
+path = "."
+features = ["test-support"]
 
 [[bin]]
 name = "heimq"
