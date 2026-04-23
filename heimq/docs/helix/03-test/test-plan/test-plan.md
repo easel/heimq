@@ -84,10 +84,11 @@ heimq/
 
 ### Critical Paths (P0)
 
-1. Produce -> Fetch roundtrip (single partition)
+1. Produce -> Fetch roundtrip (single and multi-partition)
 2. Metadata discovery and auto-create behavior
-3. Consumer group join/sync/heartbeat lifecycle
-4. Offset commit + fetch for group consumption
+3. Consumer group join/sync/heartbeat lifecycle, including rebalance on join and leave
+4. Offset commit + fetch for group consumption (manual and auto-commit)
+5. Single-group delivery integrity across a multi-partition topic: no gaps, no duplicate ownership
 
 ## Baseline Alignment
 
@@ -112,15 +113,69 @@ heimq/
 - [x] Produce + Fetch: offsets, max_bytes, empty record batches.
 - [x] ListOffsets: earliest/latest/timestamp semantics.
 - [x] CreateTopics/DeleteTopics: idempotency and errors.
-- [ ] Consumer Groups: FindCoordinator, Join/Sync/Heartbeat/Leave, OffsetCommit/Fetch (unit tests done; contract parity pending).
+- [x] Consumer Groups: FindCoordinator, Join/Sync/Heartbeat/Leave, OffsetCommit/Fetch (`tests/contract.rs`).
 
 ### Phase 3: Integration and Regression (P0)
-- [ ] Expand integration test coverage to include consumer group offsets and group lifecycle.
+- [x] Expand integration test coverage to include consumer group offsets and group lifecycle (`tests/integration.rs`).
 - [ ] Add legacy protocol edge cases via `kafka` crate.
 
 ### Phase 4: Baseline Parity (P0)
 - [ ] Add Kafka docker target to `scripts/compatibility-test.sh`.
 - [ ] Add Redpanda/Kafka golden request/response fixtures for parity regression tests.
+
+### Phase 5: rdkafka Producer + Consumer E2E Gaps (P0/P1)
+
+Scope: rdkafka-driven end-to-end tests only. Contract/property/unit
+layers are covered by Phases 1–2. Prioritization follows external
+review (codex) after auditing `tests/integration.rs`.
+
+Spec traceability: exercises API-001 APIs Produce (0), Fetch (1),
+ListOffsets (2), Metadata (3), OffsetCommit (8), OffsetFetch (9),
+FindCoordinator (10), JoinGroup (11), Heartbeat (12), LeaveGroup
+(13), SyncGroup (14).
+
+#### P0 — Consumer group correctness
+- [ ] Single-group delivery integrity on a multi-partition topic: no gaps, no duplicate ownership across members (supersedes any "exactly-once" framing — not a Kafka guarantee).
+- [ ] Resume from committed offset after consumer restart in the same group.
+- [ ] Rebalance on member **leave** (graceful LeaveGroup + session-timeout expiry).
+- [ ] Rebalance on member **join** (second member added to an active group).
+- [ ] Multiple independent consumer groups reading the same topic with independent committed offsets.
+
+#### P0 — Offset behavior
+- [ ] `auto.offset.reset=earliest` vs `latest` on a fresh group with pre-existing messages.
+- [ ] Manual commit + committed-offset fetch path, distinct from auto-commit.
+- [ ] `enable.auto.commit=true` with explicit `auto.commit.interval.ms` covers the auto-commit code path.
+
+#### P0 — Multi-partition integrity and order
+- [ ] Multi-partition produce→consume roundtrip: every produced message is consumed exactly once across the group, across partitions.
+- [ ] Per-partition ordering: consumed offsets monotonic per partition under concurrent produce.
+
+#### P0 — Partition selection
+- [ ] Keyed-message partitioner determinism: same key → same partition on a multi-partition topic.
+- [ ] Explicit partition targeting via `rdkafka` producer API (bypass hash partitioner).
+
+#### P1 — Fetch wait behavior
+- [ ] Long-poll fetch: `fetch.min.bytes` + `fetch.max.wait.ms` blocks until data arrives or timeout.
+- [ ] Empty-topic consume timeout: consumer on an empty topic returns cleanly on poll timeout.
+
+#### P1 — Error paths and broker config
+- [ ] Produce to nonexistent topic with `auto.create.topics.enable=false`.
+- [ ] Oversized message vs `message.max.bytes`.
+- [ ] `auto.create.topics.enable` on/off behavior end-to-end.
+
+#### P1 — Throughput and concurrency
+- [ ] Concurrent rdkafka producers to the same topic.
+- [ ] Produce-while-consume soak: N thousand messages, assert no loss, no duplicates, monotonic per-partition offsets.
+
+#### P2 — Client-surface coverage (lower broker signal)
+- [ ] Record headers round-trip (produce → consume).
+- [ ] Compression codecs: gzip, snappy, lz4, zstd (distinct broker decode paths).
+- [ ] Seek to end, seek to arbitrary offset.
+- [ ] Pause / resume on assigned partitions.
+
+#### Dropped from earlier draft
+- `acks=0/1/all` — on a single-node in-memory broker, `acks=1` and `all` collapse to the same path; `acks=0` is not meaningfully observable from rdkafka. Not worth a dedicated test.
+- Batching / `linger.ms` / `batch.size` — client-side behavior; broker decode is already exercised by large-batch contract and soak tests.
 
 ## Test Infrastructure
 
