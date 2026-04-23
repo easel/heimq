@@ -298,6 +298,76 @@ async fn test_rdkafka_produce_consume_roundtrip() {
 
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_multi_partition_autocreate_roundtrip() {
+    // Reproduces the kcat smoke-test failure: with default_partitions=3 and
+    // auto_create_topics=true, producing keyed messages to a fresh topic
+    // succeeds at the delivery layer but a subsequent consumer sees
+    // "Unknown partition" because the topic did not materialize in metadata.
+    //
+    // Asserts the topic appears in metadata after produce and that all
+    // produced messages are consumable across the partitions.
+    let server = TestServer::start_with_partitions(true, 3);
+    let topic = "rdkafka-multi-partition-autocreate";
+    let producer = server.rdkafka_producer();
+
+    for (k, v) in [("k1", "first"), ("k2", "second"), ("k3", "third")] {
+        let record = FutureRecord::to(topic).payload(v).key(k);
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Metadata assertion: the auto-created topic must be visible.
+    let mut admin_client = KafkaClient::new(server.hosts());
+    admin_client
+        .load_metadata_all()
+        .expect("Failed to load metadata");
+    let topics_view = admin_client.topics();
+    let topic_names: Vec<_> = topics_view.names().collect();
+    assert!(
+        topic_names.contains(&topic),
+        "Topic {} not present in metadata after produce; got: {:?}",
+        topic,
+        topic_names
+    );
+
+    // Consume assertion: all three messages must be consumable.
+    let consumer = server.rdkafka_consumer("multi-partition-autocreate-group");
+    consumer.subscribe(&[topic]).expect("Failed to subscribe");
+
+    let mut received: Vec<(String, String, i32)> = Vec::new();
+    let timeout = Duration::from_secs(5);
+    let start = std::time::Instant::now();
+
+    while received.len() < 3 && start.elapsed() < timeout {
+        if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+            let msg = result.expect("consumer poll error");
+            let key = msg
+                .key()
+                .map(|k| String::from_utf8_lossy(k).to_string())
+                .unwrap_or_default();
+            let payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .unwrap_or_default();
+            received.push((key, payload, msg.partition()));
+        }
+    }
+
+    assert_eq!(
+        received.len(),
+        3,
+        "Expected 3 messages across partitions, got {}: {:?}",
+        received.len(),
+        received
+    );
+}
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_multiple_topics() {
     let server = TestServer::start();
     let producer = server.rdkafka_producer();

@@ -560,6 +560,7 @@ dependencies = [
  "crossbeam",
  "dashmap",
  "flate2",
+ "heimq",
  "kafka",
  "kafka-protocol",
  "lz4",
