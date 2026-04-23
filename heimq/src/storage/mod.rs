@@ -201,6 +201,7 @@ mod tests {
             cluster_id: "test".to_string(),
             metrics: false,
             metrics_port: 9093,
+            create_topics: Vec::new(),
         })
     }
 

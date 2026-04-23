@@ -26,6 +26,24 @@ impl Server {
         let storage = Arc::new(Storage::new(config.clone()));
         let consumer_groups = Arc::new(ConsumerGroupManager::new(config.clone()));
 
+        for spec in &config.create_topics {
+            match spec.split_once(':') {
+                Some((name, partitions)) if !name.is_empty() => {
+                    match partitions.trim().parse::<i32>() {
+                        Ok(n) if n > 0 => {
+                            if let Err(e) = storage.create_topic(name.trim(), n) {
+                                warn!(topic = name, error = %e, "pre-create topic failed");
+                            } else {
+                                info!(topic = name, partitions = n, "pre-created topic");
+                            }
+                        }
+                        _ => warn!(spec = %spec, "invalid partition count in --create-topic"),
+                    }
+                }
+                _ => warn!(spec = %spec, "invalid --create-topic spec; expected name:partitions"),
+            }
+        }
+
         Ok(Self {
             config,
             storage,
@@ -273,6 +291,7 @@ mod tests {
             cluster_id: "test".to_string(),
             metrics: false,
             metrics_port: 9093,
+            create_topics: Vec::new(),
         };
 
         let server = Server::new(config);

@@ -55,6 +55,11 @@ pub struct Config {
     /// Metrics port
     #[arg(long, default_value_t = 9093, env = "HEIMQ_METRICS_PORT")]
     pub metrics_port: u16,
+
+    /// Pre-create topics at startup. Format: "name:partitions", repeatable.
+    /// Env var: comma-separated list.
+    #[arg(long = "create-topic", env = "HEIMQ_CREATE_TOPICS", value_delimiter = ',')]
+    pub create_topics: Vec<String>,
 }
 
 impl Config {

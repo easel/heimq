@@ -49,15 +49,20 @@ pub struct TestServer {
 impl TestServer {
     /// Start a test server with default settings (auto_create_topics = true)
     pub fn start() -> Self {
-        Self::start_with_options(true)
+        Self::start_with_options(true, 1)
     }
 
     /// Start a test server with configurable auto_create_topics setting
     pub fn start_with_auto_create(auto_create: bool) -> Self {
-        Self::start_with_options(auto_create)
+        Self::start_with_options(auto_create, 1)
     }
 
-    fn start_with_options(auto_create: bool) -> Self {
+    /// Start a test server with a custom default_partitions for auto-created topics
+    pub fn start_with_partitions(auto_create: bool, default_partitions: i32) -> Self {
+        Self::start_with_options(auto_create, default_partitions)
+    }
+
+    fn start_with_options(auto_create: bool, default_partitions: i32) -> Self {
         let port = next_port();
         let auto_value = if auto_create { "true" } else { "false" };
 
@@ -80,6 +85,7 @@ impl TestServer {
         let child = Command::new(&binary)
             .args(["--port", &port.to_string(), "--memory-only"])
             .env("HEIMQ_AUTO_CREATE_TOPICS", auto_value)
+            .env("HEIMQ_DEFAULT_PARTITIONS", default_partitions.to_string())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -136,6 +142,7 @@ pub fn test_config(auto_create: bool) -> Arc<Config> {
         cluster_id: "test-cluster".to_string(),
         metrics: false,
         metrics_port: 9093,
+            create_topics: Vec::new(),
     })
 }
 

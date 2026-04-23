@@ -98,6 +98,7 @@ mod tests {
             cluster_id: "test".to_string(),
             metrics: false,
             metrics_port: 9093,
+            create_topics: Vec::new(),
         };
 
         let task = tokio::spawn(async move { run_with_config(config, Some(1)).await });
@@ -136,6 +137,7 @@ mod tests {
             cluster_id: "test".to_string(),
             metrics: false,
             metrics_port: 9093,
+            create_topics: Vec::new(),
         };
 
         let result = run_with_config(config, Some(1)).await;
