@@ -16,20 +16,23 @@ pub use router::Router;
 /// - Produce v9, Fetch v12, Metadata v9, etc.
 pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     // (api_key, min_version, max_version)
-    (0, 0, 8),   // Produce (v9+ uses flexible versions)
-    (1, 0, 11),  // Fetch (v12+ uses flexible versions)
-    (2, 0, 7),   // ListOffsets
-    (3, 0, 8),   // Metadata (v9+ uses flexible versions)
-    (8, 0, 7),   // OffsetCommit (v8+ uses flexible versions)
-    (9, 0, 7),   // OffsetFetch (v8+ uses flexible versions)
-    (10, 0, 3),  // FindCoordinator (v4+ uses flexible versions)
-    (11, 0, 8),  // JoinGroup (v9+ uses flexible versions)
-    (12, 0, 4),  // Heartbeat
-    (13, 0, 4),  // LeaveGroup (v5+ uses flexible versions)
-    (14, 0, 4),  // SyncGroup (v5+ uses flexible versions)
-    (18, 0, 3),  // ApiVersions
-    (19, 0, 6),  // CreateTopics (v7+ uses flexible versions)
-    (20, 0, 5),  // DeleteTopics (v6+ uses flexible versions)
+    // Max versions must stay below the flexible-version boundary
+    // for each API (flexible = compact strings + varints + tagged
+    // fields). The handlers parse the legacy layout only.
+    (0, 0, 8),   // Produce (v9+ flexible)
+    (1, 0, 11),  // Fetch (v12+ flexible)
+    (2, 0, 5),   // ListOffsets (v6+ flexible)
+    (3, 0, 8),   // Metadata (v9+ flexible)
+    (8, 0, 7),   // OffsetCommit (v8+ flexible)
+    (9, 0, 5),   // OffsetFetch (v6+ flexible)
+    (10, 0, 2),  // FindCoordinator (v3+ flexible)
+    (11, 0, 5),  // JoinGroup (v6+ flexible)
+    (12, 0, 3),  // Heartbeat (v4+ flexible)
+    (13, 0, 3),  // LeaveGroup (v4+ flexible)
+    (14, 0, 3),  // SyncGroup (v4+ flexible)
+    (18, 0, 2),  // ApiVersions (v3+ flexible for request only; keep v2 to avoid edge cases)
+    (19, 0, 4),  // CreateTopics (v5+ flexible)
+    (20, 0, 3),  // DeleteTopics (v4+ flexible)
 ];
 
 /// Check if an API version is supported
