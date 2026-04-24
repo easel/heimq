@@ -2613,3 +2613,77 @@ async fn test_rdkafka_keyed_partitioner_determinism() {
         partition_b
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_explicit_partition_target() {
+    // Produce to a specific partition via FutureRecord::partition() — this
+    // bypasses the partitioner entirely. Consume only that partition via
+    // assign() (no subscribe / consumer-group rebalance) and assert the
+    // message was delivered to the targeted partition.
+    let server = TestServer::start_with_partitions(true, 4);
+    let topic = unique_topic("rdkafka-explicit-partition-target");
+    let producer = server.rdkafka_producer();
+
+    const TARGET_PARTITION: i32 = 2;
+    let payload = "explicit-partition-payload";
+    let key = "explicit-partition-key";
+
+    let record: FutureRecord<'_, str, str> = FutureRecord::to(&topic)
+        .payload(payload)
+        .key(key)
+        .partition(TARGET_PARTITION);
+
+    let (delivered_partition, delivered_offset) = producer
+        .send(record, Duration::from_secs(5))
+        .await
+        .expect("Failed to produce to explicit partition");
+
+    assert_eq!(
+        delivered_partition, TARGET_PARTITION,
+        "broker must honor FutureRecord::partition() override: \
+         requested {} but message landed on {}",
+        TARGET_PARTITION, delivered_partition
+    );
+
+    let consumer = server.rdkafka_consumer("explicit-partition-target-group");
+
+    let mut tpl = TopicPartitionList::new();
+    tpl.add_partition_offset(&topic, TARGET_PARTITION, rdkafka::Offset::Beginning)
+        .expect("Failed to add partition to TPL");
+    consumer
+        .assign(&tpl)
+        .expect("Failed to assign explicit partition");
+
+    let mut found = false;
+    let timeout = Duration::from_secs(5);
+    let start = std::time::Instant::now();
+
+    while !found && start.elapsed() < timeout {
+        if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+            let msg = result.expect("consumer poll error");
+            assert_eq!(
+                msg.partition(),
+                TARGET_PARTITION,
+                "assign()-only consumer must not see messages from other partitions; \
+                 got partition {} (expected {})",
+                msg.partition(),
+                TARGET_PARTITION
+            );
+            let got_payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .unwrap_or_default();
+            if got_payload == payload && msg.offset() == delivered_offset {
+                found = true;
+            }
+        }
+    }
+
+    assert!(
+        found,
+        "expected to consume the explicitly-targeted message from partition {} \
+         (payload={:?}, offset={}) within timeout",
+        TARGET_PARTITION, payload, delivered_offset
+    );
+}
