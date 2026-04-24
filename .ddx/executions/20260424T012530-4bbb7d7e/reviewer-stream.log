@@ -1,0 +1,19 @@
+Helpers exist. The test is well-formed, produces to partition 2 of a 4-partition topic, uses `assign()` (not subscribe), and asserts both delivered partition and consumed partition match the target.
+
+---
+## Review: heimq-885505ce iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | Test `test_rdkafka_explicit_partition_target` added | APPROVE | heimq/tests/integration.rs:2618 — new `#[tokio::test]` with `#[ignore]` matching sibling rdkafka tests |
+| 2 | Produces to partition 2 of 4-partition topic via `FutureRecord::partition()` | APPROVE | heimq/tests/integration.rs:2626-2634 — `start_with_partitions(true, 4)`, `TARGET_PARTITION: i32 = 2`, `.partition(TARGET_PARTITION)` |
+| 3 | Consumes only targeted partition via `assign()` (not `subscribe()`) | APPROVE | heimq/tests/integration.rs:2652-2657 — `TopicPartitionList` + `consumer.assign(&tpl)` |
+| 4 | Asserts message present on targeted partition | APPROVE | heimq/tests/integration.rs:2637 (delivery partition) and 2665-2672 (consumed partition) assert `== TARGET_PARTITION`; final `assert!(found, ...)` at 2684 ensures payload/offset match |
+
+### Summary
+
+Test cleanly exercises explicit partition targeting: the producer-side assertion verifies rdkafka honored the partition override, and the `assign()`-only consumer proves isolation from other partitions. Uses existing `TestServer::start_with_partitions` and `rdkafka_consumer` helpers, and follows the `#[ignore]` convention of the surrounding rdkafka tests.
