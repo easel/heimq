@@ -1,7 +1,7 @@
 //! ListOffsets request handler (API Key 2)
 
 use crate::error::Result;
-use crate::storage::Storage;
+use crate::storage::LogBackend;
 use bytes::Buf;
 use kafka_protocol::messages::list_offsets_response::{
     ListOffsetsPartitionResponse, ListOffsetsTopicResponse,
@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub fn handle(
     api_version: i16,
     body: &[u8],
-    storage: &Arc<Storage>,
+    storage: &Arc<dyn LogBackend>,
 ) -> Result<ListOffsetsResponse> {
     let mut response = ListOffsetsResponse::default();
     let mut cursor = Cursor::new(body);

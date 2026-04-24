@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::error::Result;
-use crate::storage::Storage;
+use crate::storage::LogBackend;
 use bytes::Buf;
 use kafka_protocol::messages::metadata_response::{
     MetadataResponseBroker, MetadataResponsePartition, MetadataResponseTopic,
@@ -16,7 +16,7 @@ use std::sync::Arc;
 pub fn handle(
     api_version: i16,
     body: &[u8],
-    storage: &Arc<Storage>,
+    storage: &Arc<dyn LogBackend>,
     config: &Arc<Config>,
 ) -> Result<MetadataResponse> {
     let mut response = MetadataResponse::default();
@@ -43,7 +43,7 @@ pub fn handle(
             .iter()
             .filter_map(|name| {
                 storage
-                    .get_topic(name)
+                    .topic(name)
                     .map(|t| (name.clone(), t.num_partitions()))
             })
             .collect()

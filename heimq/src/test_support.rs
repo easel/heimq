@@ -2,7 +2,7 @@
 
 use crate::config::Config;
 use crate::consumer_group::ConsumerGroupManager;
-use crate::storage::Storage;
+use crate::storage::{LogBackend, MemoryLog};
 use bytes::{Bytes, BytesMut};
 use kafka_protocol::protocol::Encodable;
 use kafka_protocol::records::{Compression, Record, RecordBatchEncoder, RecordEncodeOptions};
@@ -146,8 +146,8 @@ pub fn test_config(auto_create: bool) -> Arc<Config> {
     })
 }
 
-pub fn test_storage(auto_create: bool) -> Arc<Storage> {
-    Arc::new(Storage::new(test_config(auto_create)))
+pub fn test_storage(auto_create: bool) -> Arc<dyn LogBackend> {
+    Arc::new(MemoryLog::new(test_config(auto_create)))
 }
 
 pub fn test_consumer_groups(config: Arc<Config>) -> Arc<ConsumerGroupManager> {

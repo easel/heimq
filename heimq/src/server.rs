@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::consumer_group::ConsumerGroupManager;
 use crate::error::Result;
 use crate::protocol::Router;
-use crate::storage::Storage;
+use crate::storage::{LogBackend, MemoryLog};
 use bytes::{Buf, BytesMut};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -15,7 +15,7 @@ use tracing::{debug, error, info, warn};
 /// The heimq server
 pub struct Server {
     config: Arc<Config>,
-    storage: Arc<Storage>,
+    storage: Arc<dyn LogBackend>,
     consumer_groups: Arc<ConsumerGroupManager>,
 }
 
@@ -23,7 +23,7 @@ impl Server {
     /// Create a new server instance
     pub fn new(config: Config) -> Result<Self> {
         let config = Arc::new(config);
-        let storage = Arc::new(Storage::new(config.clone()));
+        let storage: Arc<dyn LogBackend> = Arc::new(MemoryLog::new(config.clone()));
         let consumer_groups = Arc::new(ConsumerGroupManager::new(config.clone()));
 
         for spec in &config.create_topics {

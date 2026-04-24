@@ -1,7 +1,7 @@
 //! Produce request handler (API Key 0)
 
 use crate::error::Result;
-use crate::storage::Storage;
+use crate::storage::LogBackend;
 use bytes::Bytes;
 use kafka_protocol::messages::produce_request::ProduceRequest;
 use kafka_protocol::messages::produce_response::{PartitionProduceResponse, TopicProduceResponse};
@@ -14,7 +14,7 @@ use tracing::{debug, warn};
 pub fn handle(
     api_version: i16,
     body: &[u8],
-    storage: &Arc<Storage>,
+    storage: &Arc<dyn LogBackend>,
 ) -> Result<ProduceResponse> {
     debug!(api_version = api_version, body_len = body.len(), "Handling produce request");
 

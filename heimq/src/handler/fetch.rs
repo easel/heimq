@@ -1,7 +1,7 @@
 //! Fetch request handler (API Key 1)
 
 use crate::error::Result;
-use crate::storage::Storage;
+use crate::storage::LogBackend;
 use bytes::Buf;
 use kafka_protocol::messages::fetch_response::{
     FetchableTopicResponse, PartitionData,
@@ -16,7 +16,7 @@ use tracing::debug;
 pub fn handle(
     api_version: i16,
     body: &[u8],
-    storage: &Arc<Storage>,
+    storage: &Arc<dyn LogBackend>,
 ) -> Result<FetchResponse> {
     let mut response = FetchResponse::default();
     let mut cursor = Cursor::new(body);

@@ -1,7 +1,7 @@
 //! DeleteTopics request handler (API Key 20)
 
 use crate::error::Result;
-use crate::storage::Storage;
+use crate::storage::LogBackend;
 use bytes::Buf;
 use kafka_protocol::messages::delete_topics_response::DeletableTopicResult;
 use kafka_protocol::messages::{DeleteTopicsResponse, TopicName};
@@ -14,7 +14,7 @@ use tracing::info;
 pub fn handle(
     _api_version: i16,
     body: &[u8],
-    storage: &Arc<Storage>,
+    storage: &Arc<dyn LogBackend>,
 ) -> Result<DeleteTopicsResponse> {
     let mut response = DeleteTopicsResponse::default();
     let mut cursor = Cursor::new(body);

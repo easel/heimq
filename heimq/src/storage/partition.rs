@@ -1,26 +1,26 @@
-//! Partition storage implementation
+//! Partition storage implementation (in-memory)
 
 use crate::error::{HeimqError, Result};
-use crate::storage::Segment;
+use crate::storage::{FetchWait, PartitionLog, RecordBatchView, Segment};
 use parking_lot::RwLock;
 use std::sync::atomic::{AtomicI64, Ordering};
 
-/// A partition is an ordered, immutable sequence of records
-pub struct Partition {
+/// An in-memory partition log — an ordered, immutable sequence of records.
+pub struct MemoryPartitionLog {
     id: i32,
-    /// The current segment being written to
+    /// The current segment being written to.
     active_segment: RwLock<Segment>,
-    /// Historical segments (read-only)
+    /// Historical segments (read-only).
     #[allow(dead_code)]
     segments: RwLock<Vec<Segment>>,
-    /// Next offset to assign
+    /// Next offset to assign.
     next_offset: AtomicI64,
-    /// First available offset
+    /// First available offset.
     log_start_offset: AtomicI64,
 }
 
-impl Partition {
-    /// Create a new partition
+impl MemoryPartitionLog {
+    /// Create a new partition.
     pub fn new(id: i32) -> Self {
         Self {
             id,
@@ -31,67 +31,50 @@ impl Partition {
         }
     }
 
-    /// Get the partition ID
+    /// Get the partition ID.
     pub fn id(&self) -> i32 {
         self.id
     }
 
-    /// Append a record batch to this partition
+    /// Append raw record-batch bytes.
     ///
-    /// Returns (base_offset, record_count)
-    pub fn append(&self, record_batch_data: &[u8]) -> (i64, i64) {
-        // Parse the record batch to count records and update offsets
-        // For now, we store the raw bytes and track offsets
-
-        // Get the base offset for this batch
+    /// The caller is expected to hand us a Kafka v2 record-batch payload; we
+    /// rewrite its base offset in place and read the record count from the
+    /// batch header (defaulting to 1 if the payload is too short).
+    ///
+    /// Returns `(base_offset, record_count)`.
+    pub fn append_raw(&self, record_batch_data: &[u8]) -> (i64, i64) {
         let base_offset = self.next_offset.load(Ordering::SeqCst);
 
-        // Parse record batch header to get record count
-        // Kafka record batch format:
-        // - baseOffset (8 bytes)
-        // - batchLength (4 bytes)
-        // - partitionLeaderEpoch (4 bytes)
-        // - magic (1 byte)
-        // - crc (4 bytes)
-        // - attributes (2 bytes)
-        // - lastOffsetDelta (4 bytes)
-        // ... more fields
-        // - recordCount (4 bytes at offset 57)
-
+        // Read record count from the batch header (BE at offset 57..61).
         let record_count = if record_batch_data.len() >= 61 {
-            // Read recordCount from the batch header (little endian at offset 57-60)
             let count_bytes = &record_batch_data[57..61];
-            i32::from_be_bytes([count_bytes[0], count_bytes[1], count_bytes[2], count_bytes[3]]) as i64
+            i32::from_be_bytes([count_bytes[0], count_bytes[1], count_bytes[2], count_bytes[3]])
+                as i64
         } else {
-            // Fallback: assume 1 record
             1
         };
 
-        // Update the next offset
         self.next_offset.fetch_add(record_count, Ordering::SeqCst);
 
-        // Create a modified batch with correct base offset
         let mut batch = record_batch_data.to_vec();
         if batch.len() >= 8 {
-            // Write the base offset into the batch
             batch[0..8].copy_from_slice(&base_offset.to_be_bytes());
         }
 
-        // Append to active segment
         let mut segment = self.active_segment.write();
         segment.append(base_offset, batch);
 
         (base_offset, record_count)
     }
 
-    /// Fetch records starting from the given offset
+    /// Fetch records starting from the given offset.
     ///
-    /// Returns (record_batch_data, high_watermark)
+    /// Returns `(record_batch_data, high_watermark)`.
     pub fn fetch(&self, start_offset: i64, max_bytes: usize) -> Result<(Vec<u8>, i64)> {
         let high_watermark = self.high_watermark();
 
         if start_offset >= high_watermark {
-            // No new records
             return Ok((Vec::new(), high_watermark));
         }
 
@@ -99,21 +82,61 @@ impl Partition {
             return Err(HeimqError::InvalidOffset(start_offset));
         }
 
-        // Read from active segment
         let segment = self.active_segment.read();
         let data = segment.read(start_offset, max_bytes);
-
         Ok((data, high_watermark))
     }
 
-    /// Get the high watermark (next offset to be written)
+    /// High watermark (next offset to be written).
     pub fn high_watermark(&self) -> i64 {
         self.next_offset.load(Ordering::SeqCst)
     }
 
-    /// Get the log start offset (earliest available offset)
+    /// Log start offset (earliest available offset).
     pub fn log_start_offset(&self) -> i64 {
         self.log_start_offset.load(Ordering::SeqCst)
+    }
+}
+
+impl PartitionLog for MemoryPartitionLog {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn append(
+        &self,
+        view: &RecordBatchView<'_>,
+        raw_bytes: Option<&[u8]>,
+    ) -> Result<(i64, i64)> {
+        let bytes = raw_bytes.unwrap_or_else(|| view.raw());
+        Ok(self.append_raw(bytes))
+    }
+
+    fn read(
+        &self,
+        offset: i64,
+        max_bytes: usize,
+        _wait: FetchWait,
+    ) -> Result<(Vec<u8>, i64)> {
+        self.fetch(offset, max_bytes)
+    }
+
+    fn log_start_offset(&self) -> i64 {
+        MemoryPartitionLog::log_start_offset(self)
+    }
+
+    fn high_watermark(&self) -> i64 {
+        MemoryPartitionLog::high_watermark(self)
+    }
+
+    fn truncate_before(&self, offset: i64) -> Result<()> {
+        let current_start = self.log_start_offset.load(Ordering::SeqCst);
+        let hw = self.high_watermark();
+        if offset < current_start || offset > hw {
+            return Err(HeimqError::InvalidOffset(offset));
+        }
+        self.log_start_offset.store(offset, Ordering::SeqCst);
+        Ok(())
     }
 }
 
@@ -124,10 +147,10 @@ mod tests {
 
     #[test]
     fn test_new_partition() {
-        let partition = Partition::new(0);
+        let partition = MemoryPartitionLog::new(0);
         assert_eq!(partition.id(), 0);
         assert_eq!(partition.high_watermark(), 0);
-        assert_eq!(partition.log_start_offset(), 0);
+        assert_eq!(MemoryPartitionLog::log_start_offset(&partition), 0);
     }
 
     fn record_batch_with_count(record_count: i32) -> Vec<u8> {
@@ -136,15 +159,51 @@ mod tests {
         batch
     }
 
+    #[test]
+    fn trait_append_and_read_match_inherent() {
+        let partition = MemoryPartitionLog::new(0);
+        let batch = record_batch_with_count(3);
+        let view_result = RecordBatchView::from_bytes(&batch);
+        // The synthetic batch is malformed; decoding via view would fail,
+        // so we only verify the inherent path here.
+        assert!(view_result.is_err());
+
+        let (base, count) = partition.append_raw(&batch);
+        assert_eq!(base, 0);
+        assert_eq!(count, 3);
+
+        let (data, hw) =
+            <MemoryPartitionLog as PartitionLog>::read(&partition, 0, 1024, FetchWait::Immediate)
+                .unwrap();
+        assert_eq!(hw, 3);
+        assert!(!data.is_empty());
+    }
+
+    #[test]
+    fn truncate_before_moves_log_start() {
+        let partition = MemoryPartitionLog::new(0);
+        let batch = record_batch_with_count(5);
+        partition.append_raw(&batch);
+        assert_eq!(partition.high_watermark(), 5);
+
+        <MemoryPartitionLog as PartitionLog>::truncate_before(&partition, 3).unwrap();
+        assert_eq!(<MemoryPartitionLog as PartitionLog>::log_start_offset(&partition), 3);
+
+        // Past the high watermark is rejected.
+        assert!(<MemoryPartitionLog as PartitionLog>::truncate_before(&partition, 999).is_err());
+        // Below the current start is rejected.
+        assert!(<MemoryPartitionLog as PartitionLog>::truncate_before(&partition, 0).is_err());
+    }
+
     proptest! {
         #[test]
         fn prop_append_advances_offsets(counts in prop::collection::vec(1i32..50, 1..32)) {
-            let partition = Partition::new(0);
+            let partition = MemoryPartitionLog::new(0);
             let mut expected_offset = 0i64;
 
             for count in counts {
                 let batch = record_batch_with_count(count);
-                let (base_offset, appended) = partition.append(&batch);
+                let (base_offset, appended) = partition.append_raw(&batch);
                 prop_assert_eq!(base_offset, expected_offset);
                 prop_assert_eq!(appended, count as i64);
                 expected_offset += count as i64;

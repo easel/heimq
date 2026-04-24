@@ -5,7 +5,7 @@ use crate::consumer_group::ConsumerGroupManager;
 use crate::error::Result;
 use crate::handler::*;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
-use crate::storage::Storage;
+use crate::storage::LogBackend;
 use bytes::Bytes;
 use kafka_protocol::protocol::Encodable;
 use std::sync::Arc;
@@ -13,14 +13,14 @@ use tracing::{debug, warn};
 
 /// Routes requests to appropriate handlers
 pub struct Router {
-    storage: Arc<Storage>,
+    storage: Arc<dyn LogBackend>,
     consumer_groups: Arc<ConsumerGroupManager>,
     config: Arc<Config>,
 }
 
 impl Router {
     pub fn new(
-        storage: Arc<Storage>,
+        storage: Arc<dyn LogBackend>,
         consumer_groups: Arc<ConsumerGroupManager>,
         config: Arc<Config>,
     ) -> Self {

@@ -1,7 +1,7 @@
 //! CreateTopics request handler (API Key 19)
 
 use crate::error::Result;
-use crate::storage::Storage;
+use crate::storage::LogBackend;
 use bytes::Buf;
 use kafka_protocol::messages::create_topics_response::CreatableTopicResult;
 use kafka_protocol::messages::{CreateTopicsResponse, TopicName};
@@ -14,7 +14,7 @@ use tracing::info;
 pub fn handle(
     _api_version: i16,
     body: &[u8],
-    storage: &Arc<Storage>,
+    storage: &Arc<dyn LogBackend>,
 ) -> Result<CreateTopicsResponse> {
     let mut response = CreateTopicsResponse::default();
     let mut cursor = Cursor::new(body);
@@ -118,7 +118,7 @@ pub fn handle(
                 // Topic already exists
                 topic_result.error_code = 36; // TOPIC_ALREADY_EXISTS
                 let topic = storage
-                    .get_topic(&topic_name)
+                    .topic(&topic_name)
                     .expect("topic exists after duplicate create");
                 topic_result.num_partitions = topic.num_partitions();
                 topic_result.replication_factor = 1;
