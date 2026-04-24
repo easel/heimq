@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T012530-4bbb7d7e",
+  "bead_id": "heimq-885505ce",
+  "base_rev": "ef55c30aa1205eeec0884762c571883bf9283d93",
+  "created_at": "2026-04-24T01:25:34.34428515Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-885505ce",
+    "title": "e2e: explicit partition targeting",
+    "description": "rdkafka FutureProducer allows specifying a partition in FutureRecord::partition(). Produce to partition 2 of a 4-partition topic, consume only partition 2 via assign() rather than subscribe(), assert the message is present. Ensures heimq honors explicit partition selection bypassing the partitioner.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_explicit_partition_target)",
+    "acceptance": "`cargo test --test integration test_rdkafka_explicit_partition_target -- --ignored --nocapture` passes and asserts the message appears only on the targeted partition.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:partition-selection"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:25:30Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:25:30.497867517Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T012530-4bbb7d7e",
+    "prompt": ".ddx/executions/20260424T012530-4bbb7d7e/prompt.md",
+    "manifest": ".ddx/executions/20260424T012530-4bbb7d7e/manifest.json",
+    "result": ".ddx/executions/20260424T012530-4bbb7d7e/result.json",
+    "checks": ".ddx/executions/20260424T012530-4bbb7d7e/checks.json",
+    "usage": ".ddx/executions/20260424T012530-4bbb7d7e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-885505ce-20260424T012530-4bbb7d7e"
+  }
+}
