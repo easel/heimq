@@ -1,0 +1,20 @@
+Helpers exist. Test follows the pattern of the existing single-partition test and uses set-equality assertion.
+
+---
+## Review: heimq-c93b7b4a iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | New fn test_rdkafka_multi_partition_roundtrip in tests/integration.rs | APPROVE | heimq/tests/integration.rs:2291 — `async fn test_rdkafka_multi_partition_roundtrip` marked `#[ignore]` |
+| 2 | Uses ≥3 partitions | APPROVE | heimq/tests/integration.rs:2295 — `TestServer::start_with_partitions(true, 3)` + assert ≥3 partitions observed (line 2317) |
+| 3 | Produces N messages with varied keys distributing across partitions | APPROVE | heimq/tests/integration.rs:2302-2313 — 60 messages with unique keys; asserts `produced_partitions.len() >= 3` |
+| 4 | Single consumer subscribed to topic | APPROVE | heimq/tests/integration.rs:2326-2327 — single `rdkafka_consumer` subscribed to `&[&topic]` |
+| 5 | Set-equality of produced vs consumed (key,value) pairs | APPROVE | heimq/tests/integration.rs:2347-2353 — asserts both `missing` and `extra` are empty |
+
+### Summary
+
+Clean, minimal implementation matching the acceptance criteria. Uses existing `start_with_partitions` helper, drives 60 messages across 3 partitions, verifies spread via `produced_partitions`, and asserts strict set-equality with symmetric difference diagnostics. Ignore attribute matches the project convention for rdkafka tests.
