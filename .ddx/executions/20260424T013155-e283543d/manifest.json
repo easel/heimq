@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260424T013155-e283543d",
+  "bead_id": "heimq-4ac4601c",
+  "base_rev": "b2232f418332cd743cc18a1e90fb347e6ff2d114",
+  "created_at": "2026-04-24T01:32:04.154988747Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-4ac4601c",
+    "title": "Introduce RecordBatchView abstraction for structured log writes",
+    "description": "The log trait needs to accept parsed batch metadata so backends can implement retention by timestamp, compaction by key, header-aware filtering, etc. Today produce handler (src/handler/produce.rs) and fetch handler (src/handler/fetch.rs) pass raw record-batch bytes through to Storage::append.\n\nAdd a RecordBatchView type that carries: producer_id, producer_epoch, base_offset (placeholder), base_timestamp, max_timestamp, is_transactional, is_control, compression codec, record count, borrowed iterator over records (offset_delta, timestamp_delta, key, value, headers), and the original \u0026[u8] for fast-path pass-through.\n\nNo decoding work beyond what produce handler already does via kafka_protocol::records — we wrap that result.\n\nIn-scope files:\n- src/storage/record_batch_view.rs (new)\n- src/storage/mod.rs (re-export)\nOut of scope:\n- Calling it from handler/produce.rs (separate bead)\n- Changing storage API (separate bead)",
+    "acceptance": "`cargo test --lib storage::record_batch_view` passes with tests that construct a view from a kafka_protocol RecordBatch and iterate records. Existing tests unaffected.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:2-batch-view"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:31:55Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:31:55.3735474Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T013155-e283543d",
+    "prompt": ".ddx/executions/20260424T013155-e283543d/prompt.md",
+    "manifest": ".ddx/executions/20260424T013155-e283543d/manifest.json",
+    "result": ".ddx/executions/20260424T013155-e283543d/result.json",
+    "checks": ".ddx/executions/20260424T013155-e283543d/checks.json",
+    "usage": ".ddx/executions/20260424T013155-e283543d/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-4ac4601c-20260424T013155-e283543d"
+  }
+}
