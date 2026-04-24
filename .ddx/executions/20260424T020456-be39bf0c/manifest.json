@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260424T020456-be39bf0c",
+  "bead_id": "heimq-04def9c7",
+  "base_rev": "d40f24df8c9662f9a613bdb796a3e6c3543e2d6c",
+  "created_at": "2026-04-24T02:05:11.989307108Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-04def9c7",
+    "title": "Extract OffsetStore trait",
+    "description": "Commit offsets are today stored inside ConsumerGroupManager state. Extract an OffsetStore trait:\n\n- commit(group, topic, partition, offset, metadata)\n- fetch(group, topic, partition) -\u003e Option\u003cCommittedOffset\u003e\n- delete_group(group)\n- capabilities()\n\nCurrent implementation becomes MemoryOffsetStore. OffsetCommit/OffsetFetch handlers take Arc\u003cdyn OffsetStore\u003e.\n\nIn-scope files:\n- src/storage/offset_store.rs (new trait + memory impl)\n- src/consumer_group/offset_store.rs (refactor: concrete struct implements new trait)\n- src/handler/offset_commit.rs, src/handler/offset_fetch.rs (take Arc\u003cdyn OffsetStore\u003e)\n- src/server.rs (construction)\nOut of scope:\n- Postgres impl (separate bead)\n- GroupCoordinatorBackend (separate bead)",
+    "acceptance": "`cargo test --workspace` passes. kcat stress script passes. Offset commit/fetch unit tests remain green.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:4-offset-trait"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T02:04:56Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T02:04:56.112017159Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T020456-be39bf0c",
+    "prompt": ".ddx/executions/20260424T020456-be39bf0c/prompt.md",
+    "manifest": ".ddx/executions/20260424T020456-be39bf0c/manifest.json",
+    "result": ".ddx/executions/20260424T020456-be39bf0c/result.json",
+    "checks": ".ddx/executions/20260424T020456-be39bf0c/checks.json",
+    "usage": ".ddx/executions/20260424T020456-be39bf0c/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c"
+  }
+}
