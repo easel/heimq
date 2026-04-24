@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260424T013736-cd061fd2",
+  "bead_id": "heimq-20daf864",
+  "base_rev": "6de081f61a05d7543bba5aa0ee2f9ec9fd99ef05",
+  "created_at": "2026-04-24T01:37:45.573243187Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-20daf864",
+    "title": "Extract LogBackend + TopicLog + PartitionLog traits",
+    "description": "Replace the concrete Storage struct with three traits:\n\n- LogBackend: create_topic, delete_topic, list_topics, topic(name) -\u003e Arc\u003cdyn TopicLog\u003e, capabilities().\n- TopicLog: name(), num_partitions(), partition(id) -\u003e Arc\u003cdyn PartitionLog\u003e, config() -\u003e \u0026TopicConfig.\n- PartitionLog: append(RecordBatchView, raw_bytes: Option\u003c\u0026[u8]\u003e), read(offset, max_bytes, FetchWait), log_start_offset, high_watermark, truncate_before.\n\nRename existing Storage/Topic/Partition to MemoryLog/MemoryTopicLog/MemoryPartitionLog and have them implement the traits. Handlers receive Arc\u003cdyn LogBackend\u003e where they currently have Arc\u003cStorage\u003e. Zero behavior change expected.\n\nFetchWait enum: Immediate | LongPoll { min_bytes, max_wait_ms }.\n\nIn-scope files:\n- src/storage/mod.rs (trait defs + re-exports)\n- src/storage/memory.rs (new — rename of current impl)\n- src/storage/partition.rs, src/storage/segment.rs, src/storage/topic.rs (updated to implement traits)\n- src/handler/*.rs (call-site changes where they hold Arc\u003cStorage\u003e)\n- src/server.rs (holds Arc\u003cdyn LogBackend\u003e)\nOut of scope:\n- OffsetStore and GroupCoordinatorBackend (separate beads)\n- URL dispatch (separate bead)\n- Any non-memory backend (separate bead)\nDepends on: RecordBatchView bead",
+    "acceptance": "All existing tests pass unchanged: `cargo test --workspace` green. `cargo llvm-cov --workspace --all-features --fail-under-lines 100` still passes. `scripts/kcat-stress.sh` with default params still green.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:3-log-trait"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:37:36Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:37:36.591362041Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T013736-cd061fd2",
+    "prompt": ".ddx/executions/20260424T013736-cd061fd2/prompt.md",
+    "manifest": ".ddx/executions/20260424T013736-cd061fd2/manifest.json",
+    "result": ".ddx/executions/20260424T013736-cd061fd2/result.json",
+    "checks": ".ddx/executions/20260424T013736-cd061fd2/checks.json",
+    "usage": ".ddx/executions/20260424T013736-cd061fd2/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-20daf864-20260424T013736-cd061fd2"
+  }
+}
