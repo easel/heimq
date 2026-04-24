@@ -1,0 +1,16 @@
+---
+## Review: heimq-990ad721 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | New fn test_rdkafka_independent_consumer_groups in tests/integration.rs | APPROVE | heimq/tests/integration.rs:1690 — `async fn test_rdkafka_independent_consumer_groups` added, `#[ignore]` gated |
+| 2 | Both groups consume all N messages | APPROVE | integration.rs:1731 (G1 assert_eq len==N, payloads==produced) and :1760 (G2 same) |
+| 3 | G1 commit does not affect G2's committed offset | APPROVE | integration.rs:1744 (G1 sync commit offset+1), :1788 (assert G2 committed != G1's offset+1); G1's own commit confirmed at :1780 |
+
+### Summary
+
+The new test correctly produces N=8 messages, consumes the full set in two independent groups, commits in G1, and verifies via `committed()` that G2's offset for the same topic/partition is unaffected by G1's commit. Acceptance criteria are fully satisfied.

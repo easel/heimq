@@ -1,0 +1,4 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "The new test correctly produces N=8 messages, consumes the full set in two independent groups, commits in G1, and verifies via `committed()` that G2's offset for the same topic/partition is unaffected by G1's commit. Acceptance criteria are fully satisfied."
+}
