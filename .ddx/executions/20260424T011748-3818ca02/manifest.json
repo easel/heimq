@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T011748-3818ca02",
+  "bead_id": "heimq-c93b7b4a",
+  "base_rev": "b5002bf960ba654729b847c79285ce7c27ea2f0c",
+  "created_at": "2026-04-24T01:17:52.935750901Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-c93b7b4a",
+    "title": "e2e: multi-partition produce/consume roundtrip integrity",
+    "description": "Current test_rdkafka_produce_consume_roundtrip uses a single partition. This bead adds a version using \u003e=3 partitions. Produce N messages with varied keys (distributing across partitions), consume via a single consumer subscribed to the topic, assert set-equality of produced vs consumed payloads.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_multi_partition_roundtrip)",
+    "acceptance": "`cargo test --test integration test_rdkafka_multi_partition_roundtrip -- --ignored --nocapture` passes. Assertion is set-equality of produced and consumed (key, value) pairs across all partitions.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:multi-partition"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:17:48Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:17:48.986516849Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T011748-3818ca02",
+    "prompt": ".ddx/executions/20260424T011748-3818ca02/prompt.md",
+    "manifest": ".ddx/executions/20260424T011748-3818ca02/manifest.json",
+    "result": ".ddx/executions/20260424T011748-3818ca02/result.json",
+    "checks": ".ddx/executions/20260424T011748-3818ca02/checks.json",
+    "usage": ".ddx/executions/20260424T011748-3818ca02/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-c93b7b4a-20260424T011748-3818ca02"
+  }
+}
