@@ -1810,3 +1810,144 @@ async fn test_rdkafka_independent_consumer_groups() {
         rdkafka::Offset::Offset(offset + 1)
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_auto_offset_reset_earliest_vs_latest() {
+    // Pre-populate topic T with M messages before any consumer exists.
+    // C1 in new group G1 with auto.offset.reset=earliest must receive all M.
+    // C2 in new group G2 with auto.offset.reset=latest must receive zero
+    // existing messages but see subsequent produces.
+    let server = TestServer::start();
+    let topic = unique_topic("aor-earliest-vs-latest");
+    let group1 = unique_group("aor-earliest");
+    let group2 = unique_group("aor-latest");
+    let producer = server.rdkafka_producer();
+
+    const M: usize = 6;
+
+    let mut pre_produced: Vec<String> = Vec::with_capacity(M);
+    for i in 0..M {
+        let payload = format!("pre-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce pre-message");
+        pre_produced.push(payload);
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Consumer C1: auto.offset.reset=earliest (via rdkafka_consumer helper).
+    let consumer_c1 = server.rdkafka_consumer(&group1);
+    consumer_c1.subscribe(&[&topic]).expect("C1 failed to subscribe");
+
+    let mut c1_payloads: Vec<String> = Vec::with_capacity(M);
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while c1_payloads.len() < M && start.elapsed() < timeout {
+        if let Some(result) = consumer_c1.poll(Duration::from_millis(100)) {
+            match result {
+                Ok(msg) => {
+                    let payload = msg
+                        .payload()
+                        .map(|p| String::from_utf8_lossy(p).into_owned())
+                        .unwrap_or_default();
+                    c1_payloads.push(payload);
+                }
+                Err(e) => panic!("C1 error: {:?}", e),
+            }
+        }
+    }
+    assert_eq!(
+        c1_payloads.len(),
+        M,
+        "C1 (earliest) should receive all {} pre-existing messages, got {}: {:?}",
+        M,
+        c1_payloads.len(),
+        c1_payloads
+    );
+    assert_eq!(
+        c1_payloads, pre_produced,
+        "C1 (earliest) should see the full pre-produced set in order"
+    );
+
+    // Consumer C2: auto.offset.reset=latest.
+    let consumer_c2: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &group2)
+        .set("auto.offset.reset", "latest")
+        .set("enable.auto.commit", "false")
+        .create()
+        .expect("Failed to create consumer C2");
+    consumer_c2.subscribe(&[&topic]).expect("C2 failed to subscribe");
+
+    // Let C2 join the group and have its position set to latest before any
+    // new produces happen. Poll briefly — must not see any pre-existing messages.
+    let settle_deadline = std::time::Instant::now() + Duration::from_secs(3);
+    let mut c2_early: Vec<String> = Vec::new();
+    while std::time::Instant::now() < settle_deadline {
+        if let Some(result) = consumer_c2.poll(Duration::from_millis(100)) {
+            match result {
+                Ok(msg) => {
+                    let payload = msg
+                        .payload()
+                        .map(|p| String::from_utf8_lossy(p).into_owned())
+                        .unwrap_or_default();
+                    c2_early.push(payload);
+                }
+                Err(e) => panic!("C2 error during settle: {:?}", e),
+            }
+        }
+    }
+    assert!(
+        c2_early.is_empty(),
+        "C2 (latest) must receive zero pre-existing messages, got: {:?}",
+        c2_early
+    );
+
+    // Now produce additional messages; C2 (latest) must see these.
+    const N: usize = 4;
+    let mut post_produced: Vec<String> = Vec::with_capacity(N);
+    for i in 0..N {
+        let payload = format!("post-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce post-message");
+        post_produced.push(payload);
+    }
+
+    let mut c2_payloads: Vec<String> = Vec::with_capacity(N);
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while c2_payloads.len() < N && start.elapsed() < timeout {
+        if let Some(result) = consumer_c2.poll(Duration::from_millis(100)) {
+            match result {
+                Ok(msg) => {
+                    let payload = msg
+                        .payload()
+                        .map(|p| String::from_utf8_lossy(p).into_owned())
+                        .unwrap_or_default();
+                    c2_payloads.push(payload);
+                }
+                Err(e) => panic!("C2 error: {:?}", e),
+            }
+        }
+    }
+
+    assert_eq!(
+        c2_payloads.len(),
+        N,
+        "C2 (latest) should receive all {} post-join messages, got {}: {:?}",
+        N,
+        c2_payloads.len(),
+        c2_payloads
+    );
+    assert_eq!(
+        c2_payloads, post_produced,
+        "C2 (latest) should see only the messages produced after it joined, in order"
+    );
+}
