@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T010741-235e307b",
+  "bead_id": "heimq-a77fc237",
+  "base_rev": "931f235a1a970f442f35002e95b8d2d01cbf497d",
+  "created_at": "2026-04-24T01:07:45.029556881Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-a77fc237",
+    "title": "e2e: auto.offset.reset earliest vs latest on fresh group",
+    "description": "Pre-populate topic T with M messages before any consumer exists. Start consumer C1 in new group G1 with auto.offset.reset=earliest — must receive all M messages. Start consumer C2 in new group G2 with auto.offset.reset=latest — must receive zero existing messages but see subsequent produces.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_auto_offset_reset_earliest_vs_latest)",
+    "acceptance": "`cargo test --test integration test_rdkafka_auto_offset_reset_earliest_vs_latest -- --ignored --nocapture` passes with both branches asserted.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:offsets"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:07:41Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:07:41.164748583Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T010741-235e307b",
+    "prompt": ".ddx/executions/20260424T010741-235e307b/prompt.md",
+    "manifest": ".ddx/executions/20260424T010741-235e307b/manifest.json",
+    "result": ".ddx/executions/20260424T010741-235e307b/result.json",
+    "checks": ".ddx/executions/20260424T010741-235e307b/checks.json",
+    "usage": ".ddx/executions/20260424T010741-235e307b/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-a77fc237-20260424T010741-235e307b"
+  }
+}
