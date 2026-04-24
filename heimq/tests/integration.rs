@@ -2286,3 +2286,73 @@ async fn test_rdkafka_auto_commit_interval() {
         "Consumer B's first payload should be the message at the auto-committed offset"
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_multi_partition_roundtrip() {
+    use std::collections::HashSet;
+
+    let server = TestServer::start_with_partitions(true, 3);
+    let topic = unique_topic("rdkafka-multi-part-roundtrip");
+    let producer = server.rdkafka_producer();
+    let message_count: usize = 60;
+
+    // Produce N messages with varied keys to distribute across partitions.
+    let mut produced: HashSet<(String, String)> = HashSet::new();
+    let mut produced_partitions: HashSet<i32> = HashSet::new();
+    for i in 0..message_count {
+        let payload = format!("mp-val-{}", i);
+        let key = format!("mp-key-{:04}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+        let (partition, _offset) = producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+        produced_partitions.insert(partition);
+        produced.insert((key, payload));
+    }
+    assert_eq!(
+        produced.len(),
+        message_count,
+        "each produced (key, value) pair must be unique"
+    );
+    assert!(
+        produced_partitions.len() >= 3,
+        "expected produced messages to span all 3 partitions, got {:?}",
+        produced_partitions
+    );
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Consume via a single consumer subscribed to the topic.
+    let consumer = server.rdkafka_consumer(&unique_group("multi-part-roundtrip"));
+    consumer.subscribe(&[&topic]).expect("Failed to subscribe");
+
+    let mut consumed: HashSet<(String, String)> = HashSet::new();
+    let timeout = Duration::from_secs(30);
+    let start = std::time::Instant::now();
+
+    while consumed.len() < message_count && start.elapsed() < timeout {
+        if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+            let msg = result.expect("consumer poll error");
+            let key = msg
+                .key()
+                .map(|k| String::from_utf8_lossy(k).to_string())
+                .unwrap_or_default();
+            let payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .unwrap_or_default();
+            consumed.insert((key, payload));
+        }
+    }
+
+    let missing: Vec<_> = produced.difference(&consumed).collect();
+    let extra: Vec<_> = consumed.difference(&produced).collect();
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "consumed set must equal produced set. missing={:?} extra={:?}",
+        missing,
+        extra
+    );
+}
