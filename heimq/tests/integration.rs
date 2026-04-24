@@ -1008,6 +1008,172 @@ async fn test_rdkafka_group_multi_partition_delivery() {
     );
 }
 
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_group_rebalance_on_graceful_leave() {
+    use std::collections::HashSet;
+
+    let server = TestServer::start_with_partitions(true, 3);
+    let topic = unique_topic("cg-leave-graceful");
+    let group = unique_group("leave-graceful-group");
+    let producer = server.rdkafka_producer();
+
+    // Produce a handful of messages so the consumers have something to fetch
+    // during the initial assignment.
+    for i in 0..12 {
+        let payload = format!("msg-{}", i);
+        let key = format!("key-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+    }
+
+    let assigned_set = |c: &BaseConsumer| -> HashSet<i32> {
+        c.assignment()
+            .map(|tpl| tpl.elements().iter().map(|e| e.partition()).collect())
+            .unwrap_or_default()
+    };
+
+    let consumer1 = create_group_consumer(&server, &group, "30000");
+    let consumer2 = create_group_consumer(&server, &group, "30000");
+    consumer1
+        .subscribe(&[&topic])
+        .expect("Consumer 1 failed to subscribe");
+    consumer2
+        .subscribe(&[&topic])
+        .expect("Consumer 2 failed to subscribe");
+
+    // Drive both consumers long enough for the coordinator to process both
+    // JoinGroups and settle into an initial assignment. We do not require a
+    // strict split — the AC is about the state *after* consumer 2 leaves.
+    let settle_end = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < settle_end {
+        let _ = consumer1.poll(Duration::from_millis(100));
+        let _ = consumer2.poll(Duration::from_millis(100));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Consumer 2 leaves gracefully: unsubscribe() + drop() → LeaveGroup.
+    consumer2.unsubscribe();
+    drop(consumer2);
+
+    // Drive consumer1 until it owns every partition (0, 1, 2).
+    let expected: HashSet<i32> = (0..3).collect();
+    let rebalance_deadline = std::time::Instant::now() + Duration::from_secs(30);
+    loop {
+        let _ = consumer1.poll(Duration::from_millis(200));
+        let a1 = assigned_set(&consumer1);
+        if a1 == expected {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < rebalance_deadline,
+            "consumer1 did not take over all partitions after graceful leave: {:?}",
+            a1
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    let final_assignment = assigned_set(&consumer1);
+    assert_eq!(
+        final_assignment, expected,
+        "after graceful leave, surviving member must own all partitions; got {:?}",
+        final_assignment
+    );
+}
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_group_rebalance_on_session_timeout() {
+    use std::collections::HashSet;
+
+    let server = TestServer::start_with_partitions(true, 3);
+    let topic = unique_topic("cg-leave-timeout");
+    let group = unique_group("leave-timeout-group");
+    let producer = server.rdkafka_producer();
+
+    for i in 0..12 {
+        let payload = format!("msg-{}", i);
+        let key = format!("key-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+    }
+
+    let assigned_set = |c: &BaseConsumer| -> HashSet<i32> {
+        c.assignment()
+            .map(|tpl| tpl.elements().iter().map(|e| e.partition()).collect())
+            .unwrap_or_default()
+    };
+
+    // Consumer 1: normal long-lived settings.
+    let consumer1 = create_group_consumer(&server, &group, "30000");
+
+    // Consumer 2: aggressively short session/poll windows so that once we stop
+    // polling it, librdkafka's watchdog concludes the member is dead and the
+    // coordinator rebalances the partitions onto the surviving member.
+    let consumer2: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &group)
+        .set("auto.offset.reset", "earliest")
+        .set("enable.auto.commit", "false")
+        .set("session.timeout.ms", "6000")
+        .set("heartbeat.interval.ms", "1000")
+        .set("max.poll.interval.ms", "6000")
+        .create()
+        .expect("Failed to create consumer 2");
+
+    consumer1
+        .subscribe(&[&topic])
+        .expect("Consumer 1 failed to subscribe");
+    consumer2
+        .subscribe(&[&topic])
+        .expect("Consumer 2 failed to subscribe");
+
+    // Drive both consumers long enough for both JoinGroups to complete and an
+    // initial assignment to settle, then stop pumping consumer 2.
+    let settle_end = std::time::Instant::now() + Duration::from_secs(5);
+    while std::time::Instant::now() < settle_end {
+        let _ = consumer1.poll(Duration::from_millis(100));
+        let _ = consumer2.poll(Duration::from_millis(100));
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+
+    // Stop polling consumer2 so the session/poll watchdog fires and the
+    // coordinator treats the member as gone. We keep the handle alive to
+    // avoid a graceful close (which would issue an immediate LeaveGroup).
+    let _dead_consumer = consumer2;
+
+    // While waiting, keep driving consumer1 so it observes the rebalance and
+    // rejoins with the full partition set.
+    let expected: HashSet<i32> = (0..3).collect();
+    let rebalance_deadline = std::time::Instant::now() + Duration::from_secs(45);
+    loop {
+        let _ = consumer1.poll(Duration::from_millis(200));
+        let a1 = assigned_set(&consumer1);
+        if a1 == expected {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < rebalance_deadline,
+            "consumer1 did not take over all partitions after session timeout: {:?}",
+            a1
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    let final_assignment = assigned_set(&consumer1);
+    assert_eq!(
+        final_assignment, expected,
+        "after session-timeout eviction, surviving member must own all partitions; got {:?}",
+        final_assignment
+    );
+}
+
 // ============================================================================
 // Legacy Protocol Edge Case Tests (kafka crate - Phase 3)
 // These tests verify edge cases using the pure Rust kafka crate (v0-v2 protocol)
