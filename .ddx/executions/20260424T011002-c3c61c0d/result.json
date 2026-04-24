@@ -1,0 +1,4 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Test cleanly covers both branches of the acceptance criteria: earliest consumer drains the pre-populated backlog, and a fresh-group latest consumer sees nothing from before it joined but catches subsequent produces. Uses a 3-second settle window to ensure C2's partition position is set to high-watermark before new produces, which is the right guard against a race."
+}

@@ -1,0 +1,18 @@
+---
+## Review: heimq-a77fc237 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | Test fn exists with required name | APPROVE | heimq/tests/integration.rs:1815 — `test_rdkafka_auto_offset_reset_earliest_vs_latest` defined with `#[ignore]` |
+| 2 | Pre-populates M messages before any consumer | APPROVE | integration.rs:1825-1834 — M=6 produced before either consumer is created |
+| 3 | C1 (G1, earliest) receives all M | APPROVE | integration.rs:1859-1869 — asserts count==M and order matches `pre_produced` |
+| 4 | C2 (G2, latest) receives zero existing | APPROVE | integration.rs:1874-1897 — explicit `auto.offset.reset=latest`, asserts `c2_early.is_empty()` after 3s settle |
+| 5 | C2 sees subsequent produces | APPROVE | integration.rs:1901-1939 — N=4 produced after C2 joins; asserts count and order |
+
+### Summary
+
+Test cleanly covers both branches of the acceptance criteria: earliest consumer drains the pre-populated backlog, and a fresh-group latest consumer sees nothing from before it joined but catches subsequent produces. Uses a 3-second settle window to ensure C2's partition position is set to high-watermark before new produces, which is the right guard against a race.
