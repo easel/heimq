@@ -1,0 +1,4 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Clean trait extraction. `OffsetStore` trait and `OffsetStoreCapabilities` are declared in `heimq/src/storage/offset_store.rs`; the former concrete struct is renamed `MemoryOffsetStore` and implements the trait in `heimq/src/consumer_group/offset_store.rs`. Handlers now take `\u0026Arc\u003cdyn OffsetStore\u003e` directly (offset_commit.rs:19, offset_fetch.rs:18), with the router resolving via `consumer_groups.offset_store()` (protocol/router.rs:174-193). `ConsumerGroupManager::with_offset_store` provides the injection seam for future Postgres backends, keeping the bead's out-of-scope boundary intact."
+}
