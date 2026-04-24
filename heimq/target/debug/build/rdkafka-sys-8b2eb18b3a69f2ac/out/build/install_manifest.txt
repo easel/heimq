@@ -1,0 +1,13 @@
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/cmake/RdKafka/RdKafkaConfig.cmake
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/cmake/RdKafka/RdKafkaConfigVersion.cmake
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/cmake/RdKafka/FindLZ4.cmake
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/cmake/RdKafka/RdKafkaTargets.cmake
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/cmake/RdKafka/RdKafkaTargets-debug.cmake
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/share/licenses/librdkafka/LICENSES.txt
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/pkgconfig/rdkafka-static.pc
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/librdkafka.a
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/include/librdkafka/rdkafka.h
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/include/librdkafka/rdkafka_mock.h
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/pkgconfig/rdkafka++-static.pc
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/lib/librdkafka++.a
+/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/include/librdkafka/rdkafkacpp.h

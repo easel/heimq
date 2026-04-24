@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/cmake_install.cmake",
+		"/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/src/cmake_install.cmake",
+		"/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/src-cpp/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
