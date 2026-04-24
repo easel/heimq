@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T005459-04bf1b1b",
+  "bead_id": "heimq-f1e42e32",
+  "base_rev": "57428a84512f277034274229289f4a9dd536fbcf",
+  "created_at": "2026-04-24T00:55:03.611772206Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-f1e42e32",
+    "title": "e2e: rebalance on member leave (graceful + session timeout)",
+    "description": "Two scenarios in one test file: (1) member calls unsubscribe()/close() → LeaveGroup → remaining member takes over all partitions; (2) member stops heartbeating and session timeout expires → coordinator evicts member → remaining member takes over. Existing test_rdkafka_consumer_rebalance_on_new_member covers the join direction; this covers leave.\nIn-scope files:\n- tests/integration.rs (new fns test_rdkafka_group_rebalance_on_graceful_leave, test_rdkafka_group_rebalance_on_session_timeout)",
+    "acceptance": "`cargo test --test integration test_rdkafka_group_rebalance_on -- --ignored --nocapture` runs both tests and asserts final partition assignment maps entirely to the surviving member.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:group-correctness"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T00:54:59Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T00:54:59.67872117Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T005459-04bf1b1b",
+    "prompt": ".ddx/executions/20260424T005459-04bf1b1b/prompt.md",
+    "manifest": ".ddx/executions/20260424T005459-04bf1b1b/manifest.json",
+    "result": ".ddx/executions/20260424T005459-04bf1b1b/result.json",
+    "checks": ".ddx/executions/20260424T005459-04bf1b1b/checks.json",
+    "usage": ".ddx/executions/20260424T005459-04bf1b1b/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-f1e42e32-20260424T005459-04bf1b1b"
+  }
+}
