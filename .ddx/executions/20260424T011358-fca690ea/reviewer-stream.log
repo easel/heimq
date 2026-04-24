@@ -1,0 +1,18 @@
+---
+## Review: heimq-1597cf54 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | New fn test_rdkafka_auto_commit_interval in tests/integration.rs | APPROVE | heimq/tests/integration.rs:2068 — `async fn test_rdkafka_auto_commit_interval` added with `#[ignore]` matching repo convention |
+| 2 | Uses enable.auto.commit=true with explicit auto.commit.interval.ms (~200ms) | APPROVE | integration.rs:2098-2099 — `enable.auto.commit=true`, `auto.commit.interval.ms=200` |
+| 3 | Consumer reads K messages, waits > interval, closes | APPROVE | integration.rs:2115-2144 — consumes K=5, then polls for `INTERVAL_MS*10` before drop |
+| 4 | Fresh consumer in same group resumes after auto-committed offset | APPROVE | integration.rs:2163-2175 — new BaseConsumer in same `group`, OffsetFetch via `committed_offsets` |
+| 5 | Resume position within one batch of last consumed message | APPROVE | integration.rs:2196-2206 — asserts `committed_offset > last_consumed_offset` and `<= last_consumed_offset + 1` |
+
+### Summary
+
+The test cleanly exercises the auto-commit interval path using `enable.auto.offset.store=false` to make the committed offset deterministic (only the K'th message is stored). It verifies both the committed-offset bounds and resume semantics (first message offset + payload match), with `auto.offset.reset=latest` on Consumer B to guarantee resume came from the committed offset rather than a reset fallback.

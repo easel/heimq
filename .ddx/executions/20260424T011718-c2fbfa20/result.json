@@ -1,0 +1,4 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "The test cleanly exercises the auto-commit interval path using `enable.auto.offset.store=false` to make the committed offset deterministic (only the K'th message is stored). It verifies both the committed-offset bounds and resume semantics (first message offset + payload match), with `auto.offset.reset=latest` on Consumer B to guarantee resume came from the committed offset rather than a reset fallback."
+}
