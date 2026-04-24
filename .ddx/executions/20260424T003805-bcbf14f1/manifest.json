@@ -1,0 +1,84 @@
+{
+  "attempt_id": "20260424T003805-bcbf14f1",
+  "bead_id": "heimq-f17da917",
+  "base_rev": "bc9b5845b123abbddbf94887b17b9524c85073fa",
+  "created_at": "2026-04-24T00:38:40.038067465Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-f17da917",
+    "title": "e2e: single-group delivery integrity on multi-partition topic",
+    "description": "Create a multi-partition topic (\u003e=3 partitions), produce N messages (\u003e=300) with distinct keys, start a consumer group with \u003e=2 members, assert every produced message is consumed exactly once across the group and that no two members claim the same partition concurrently. Supersedes the earlier 'exactly-once' framing — Kafka groups do not guarantee exactly-once; assertion is no gaps + no duplicate ownership.\nIn-scope files:\n- tests/integration.rs (new #[tokio::test] fn test_rdkafka_group_multi_partition_delivery)\nOut of scope:\n- tests/contract.rs — contract layer is covered\n- Any src/ changes — this should work against current broker behavior",
+    "acceptance": "`cargo test --test integration test_rdkafka_group_multi_partition_delivery -- --ignored --nocapture` passes. Test asserts: (a) set of consumed (partition, offset) pairs == set of produced, (b) no partition assigned to two members at the same time during steady state.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:group-correctness"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T00:38:05Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "tier=cheap harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-24T00:37:37.219406093Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=standard harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-24T00:37:37.345453475Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=smart harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-24T00:37:37.474746939Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"cheap\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"standard\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-24T00:37:37.47941377Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=3 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "ddx",
+          "body": "execute-loop: all tiers exhausted — no viable provider found",
+          "created_at": "2026-04-24T00:37:37.487393224Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-04-24T00:38:05.325310572Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T003805-bcbf14f1",
+    "prompt": ".ddx/executions/20260424T003805-bcbf14f1/prompt.md",
+    "manifest": ".ddx/executions/20260424T003805-bcbf14f1/manifest.json",
+    "result": ".ddx/executions/20260424T003805-bcbf14f1/result.json",
+    "checks": ".ddx/executions/20260424T003805-bcbf14f1/checks.json",
+    "usage": ".ddx/executions/20260424T003805-bcbf14f1/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-f17da917-20260424T003805-bcbf14f1"
+  }
+}
