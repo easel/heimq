@@ -2064,3 +2064,225 @@ async fn test_rdkafka_manual_commit_offset_roundtrip() {
         ),
     }
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_auto_commit_interval() {
+    // Exercise the enable.auto.commit=true code path with an explicit
+    // auto.commit.interval.ms. Consumer A reads K messages, waits longer than
+    // the interval (so the background auto-commit thread commits the offset),
+    // then drops. A fresh Consumer B in the same group must resume after the
+    // auto-committed offset — within one batch of the last consumed message.
+    let server = TestServer::start();
+    let topic = unique_topic("auto-commit-interval");
+    let group = unique_group("auto-commit-interval-group");
+    let producer = server.rdkafka_producer();
+
+    const K: usize = 5;
+    const TOTAL: usize = 10;
+    const INTERVAL_MS: u64 = 200;
+
+    for i in 0..TOTAL {
+        let payload = format!("ac-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Consumer A: enable.auto.commit=true, consume K messages, wait > interval
+    // so the background commit runs, then drop.
+    let last_consumed_offset: i64;
+    let partition: i32;
+    {
+        // enable.auto.offset.store=false so we fully control which offset is
+        // stored for commit. We consume K messages, then explicitly store the
+        // offset of the K'th message. The background auto-commit thread then
+        // commits the stored offset on the configured interval.
+        let consumer_a: BaseConsumer = ClientConfig::new()
+            .set("bootstrap.servers", &server.bootstrap_servers())
+            .set("group.id", &group)
+            .set("auto.offset.reset", "earliest")
+            .set("enable.auto.commit", "true")
+            .set("auto.commit.interval.ms", &INTERVAL_MS.to_string())
+            .set("enable.auto.offset.store", "false")
+            .create()
+            .expect("Failed to create auto-commit consumer A");
+        consumer_a
+            .subscribe(&[&topic])
+            .expect("Consumer A failed to subscribe");
+
+        let mut received = 0usize;
+        let mut last_partition: Option<i32> = None;
+        let mut last_offset: Option<i64> = None;
+        let timeout = Duration::from_secs(10);
+        let start = std::time::Instant::now();
+
+        while received < K && start.elapsed() < timeout {
+            if let Some(result) = consumer_a.poll(Duration::from_millis(100)) {
+                match result {
+                    Ok(msg) => {
+                        received += 1;
+                        last_partition = Some(msg.partition());
+                        last_offset = Some(msg.offset());
+                        if received == K {
+                            // Store only the K'th message's offset. librdkafka's
+                            // store_offset records the offset of the last message
+                            // returned; the auto-commit thread will then commit
+                            // (offset + 1) as the "next to consume" offset.
+                            consumer_a
+                                .store_offset_from_message(&msg)
+                                .expect("store_offset_from_message failed");
+                        }
+                    }
+                    Err(e) => panic!("Consumer A error: {:?}", e),
+                }
+            }
+        }
+
+        assert_eq!(
+            received, K,
+            "Consumer A should consume exactly {} messages",
+            K
+        );
+
+        partition = last_partition.expect("must have seen a partition");
+        last_consumed_offset = last_offset.expect("must have seen an offset");
+
+        // Wait well beyond auto.commit.interval.ms so the background auto-commit
+        // thread runs at least once and commits the stored offset. Continue to
+        // poll so librdkafka can service callbacks, but any further messages
+        // returned here are NOT stored (enable.auto.offset.store=false), so the
+        // committed offset remains pinned to the K'th message.
+        let wait_deadline =
+            std::time::Instant::now() + Duration::from_millis(INTERVAL_MS * 10);
+        while std::time::Instant::now() < wait_deadline {
+            let _ = consumer_a.poll(Duration::from_millis(50));
+        }
+
+        // Consumer A drops here (leaves group). The final auto-commit should
+        // already have happened during the wait loop above.
+    }
+
+    // Give the broker a moment to process the group-leave / final commit.
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Consumer B: fresh consumer in the same group, auto.offset.reset=latest
+    // so that if the auto-committed offset were absent/ignored, B would reset
+    // to latest and consume zero of the remaining messages.
+    let consumer_b: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &group)
+        .set("auto.offset.reset", "latest")
+        .set("enable.auto.commit", "false")
+        .create()
+        .expect("Failed to create consumer B");
+    consumer_b
+        .subscribe(&[&topic])
+        .expect("Consumer B failed to subscribe");
+
+    // First, assert OffsetFetch returns an auto-committed offset.
+    let mut query_tpl = TopicPartitionList::new();
+    query_tpl
+        .add_partition_offset(&topic, partition, rdkafka::Offset::Invalid)
+        .expect("Failed to add query partition");
+    let committed = consumer_b
+        .committed_offsets(query_tpl, Duration::from_secs(5))
+        .expect("Consumer B committed_offsets() failed");
+    let entry = committed
+        .find_partition(&topic, partition)
+        .expect("Consumer B should find committed entry for partition");
+
+    let committed_offset = match entry.offset() {
+        rdkafka::Offset::Offset(o) => o,
+        other => panic!(
+            "auto-commit should have produced a numeric committed offset, got {:?}",
+            other
+        ),
+    };
+
+    // The auto-committed offset is the "next to consume" offset. It must be
+    // within one batch of the last message consumed by A. Concretely: it must
+    // be > last_consumed_offset (A did consume that message and stored it) and
+    // it must be <= last_consumed_offset + 1 (A stopped polling after K, so at
+    // most one batch past the last consumed message could have been stored).
+    assert!(
+        committed_offset > last_consumed_offset,
+        "auto-committed offset ({}) must be past the last consumed message offset ({})",
+        committed_offset,
+        last_consumed_offset
+    );
+    assert!(
+        committed_offset <= last_consumed_offset + 1,
+        "auto-committed offset ({}) must be within one batch of the last consumed offset ({})",
+        committed_offset,
+        last_consumed_offset
+    );
+
+    // Now verify resume semantics: consume whatever remains and check the
+    // first payload matches the message at committed_offset.
+    let expected_tail = TOTAL - (committed_offset as usize);
+    let mut payloads: Vec<String> = Vec::new();
+    let mut first_offset: Option<i64> = None;
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+
+    while payloads.len() < expected_tail && start.elapsed() < timeout {
+        if let Some(result) = consumer_b.poll(Duration::from_millis(100)) {
+            match result {
+                Ok(msg) => {
+                    if first_offset.is_none() {
+                        first_offset = Some(msg.offset());
+                    }
+                    let payload = msg
+                        .payload()
+                        .map(|p| String::from_utf8_lossy(p).into_owned())
+                        .unwrap_or_default();
+                    payloads.push(payload);
+                }
+                Err(e) => panic!("Consumer B error: {:?}", e),
+            }
+        }
+    }
+
+    // Drain briefly to catch any stragglers.
+    let drain_deadline = std::time::Instant::now() + Duration::from_millis(500);
+    while std::time::Instant::now() < drain_deadline {
+        if let Some(result) = consumer_b.poll(Duration::from_millis(100)) {
+            if let Ok(msg) = result {
+                if first_offset.is_none() {
+                    first_offset = Some(msg.offset());
+                }
+                let payload = msg
+                    .payload()
+                    .map(|p| String::from_utf8_lossy(p).into_owned())
+                    .unwrap_or_default();
+                payloads.push(payload);
+            }
+        }
+    }
+
+    assert_eq!(
+        payloads.len(),
+        expected_tail,
+        "Consumer B should resume from the auto-committed offset and see the {} remaining messages, got {}: {:?}",
+        expected_tail,
+        payloads.len(),
+        payloads
+    );
+
+    assert_eq!(
+        first_offset,
+        Some(committed_offset),
+        "Consumer B's first message offset must equal the auto-committed offset"
+    );
+
+    let expected_first = format!("ac-{}", committed_offset);
+    assert_eq!(
+        payloads[0], expected_first,
+        "Consumer B's first payload should be the message at the auto-committed offset"
+    );
+}
