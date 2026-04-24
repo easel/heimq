@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T010511-44c454f6",
+  "bead_id": "heimq-990ad721",
+  "base_rev": "6c6540926cfe1af6877ae9133453998fa9926423",
+  "created_at": "2026-04-24T01:05:15.614996749Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-990ad721",
+    "title": "e2e: multiple independent consumer groups on same topic",
+    "description": "Produce N messages to topic T. Two consumer groups G1 and G2 each subscribe to T independently. Assert each group receives the full message set, and that committing in G1 does not affect G2's position (committed offsets are group-scoped, not topic-scoped).\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_independent_consumer_groups)",
+    "acceptance": "`cargo test --test integration test_rdkafka_independent_consumer_groups -- --ignored --nocapture` passes. Assertions: both groups consume all N messages; after G1 commits offset k, G2's OffsetFetch for the same topic/partition is unaffected.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:group-correctness"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:05:11Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:05:11.469996254Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T010511-44c454f6",
+    "prompt": ".ddx/executions/20260424T010511-44c454f6/prompt.md",
+    "manifest": ".ddx/executions/20260424T010511-44c454f6/manifest.json",
+    "result": ".ddx/executions/20260424T010511-44c454f6/result.json",
+    "checks": ".ddx/executions/20260424T010511-44c454f6/checks.json",
+    "usage": ".ddx/executions/20260424T010511-44c454f6/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-990ad721-20260424T010511-44c454f6"
+  }
+}
