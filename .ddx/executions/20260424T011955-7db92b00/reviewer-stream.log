@@ -1,0 +1,19 @@
+---
+## Review: heimq-6f69c0d3 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | New fn `test_rdkafka_per_partition_ordering` in tests/integration.rs | APPROVE | heimq/tests/integration.rs:2361 — `#[tokio::test] #[ignore] async fn test_rdkafka_per_partition_ordering` |
+| 2 | Multiple concurrent producers, multi-partition topic, monotonic seq per (producer_id, key) | APPROVE | heimq/tests/integration.rs:2367-2400 — 4 producers × 6 keys × 15 seqs across 3 partitions; tagged `p{pid}\|k{key}\|s{seq}` |
+| 3 | Consumer reads all partitions | APPROVE | heimq/tests/integration.rs:2435-2452 — subscribes to topic and polls until `expected_total` messages drained |
+| 4 | Asserts strictly increasing offsets per partition | APPROVE | heimq/tests/integration.rs:2479-2487 — `window[0] < window[1]` over per-partition offsets; also asserts ≥2 partitions seen |
+| 5 | Asserts per-key (per-producer) sequences are monotonic | APPROVE | heimq/tests/integration.rs:2507-2534 — strict monotonic check plus start=0, end=per_key_count-1 invariants |
+| 6 | `cargo test --test integration test_rdkafka_per_partition_ordering -- --ignored --nocapture` runnable | APPROVE | Test name and `#[ignore]` attribute match the command exactly |
+
+### Summary
+
+Implementation cleanly satisfies every AC item: the new test exercises concurrent production across 4 producers into a 3-partition topic, tags each message with `(producer_id, key, seq)`, then explicitly asserts both strictly-increasing per-partition offsets and monotonic per-`(producer_id, key)` sequences. Nice additional guards (single-partition-per-key sanity check, at-least-two-partitions-covered, start/end sequence bounds) strengthen the test without exceeding scope.
