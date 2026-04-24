@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T011358-fca690ea",
+  "bead_id": "heimq-1597cf54",
+  "base_rev": "fb448cc517defd9358b10cc98eb17659772de2f9",
+  "created_at": "2026-04-24T01:14:02.339244106Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-1597cf54",
+    "title": "e2e: auto-commit with configured interval",
+    "description": "Exercise the enable.auto.commit=true code path with an explicit auto.commit.interval.ms (e.g. 200ms). Consumer reads K messages, waits \u003einterval, closes; fresh consumer in same group should resume after the auto-committed offset. Complements the manual-commit test above.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_auto_commit_interval)",
+    "acceptance": "`cargo test --test integration test_rdkafka_auto_commit_interval -- --ignored --nocapture` passes and asserts resume position matches auto-committed offset (within one batch of the last consumed message).",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:offsets"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:13:58Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:13:58.345017796Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T011358-fca690ea",
+    "prompt": ".ddx/executions/20260424T011358-fca690ea/prompt.md",
+    "manifest": ".ddx/executions/20260424T011358-fca690ea/manifest.json",
+    "result": ".ddx/executions/20260424T011358-fca690ea/result.json",
+    "checks": ".ddx/executions/20260424T011358-fca690ea/checks.json",
+    "usage": ".ddx/executions/20260424T011358-fca690ea/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-1597cf54-20260424T011358-fca690ea"
+  }
+}
