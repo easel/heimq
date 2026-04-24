@@ -1686,3 +1686,127 @@ async fn test_rdkafka_group_resume_from_committed() {
         "Consumer B should consume through the last produced message"
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_independent_consumer_groups() {
+    // Two consumer groups subscribing to the same topic must each receive the
+    // full message set independently, and committing in one group must not
+    // affect the other group's committed offsets (offsets are scoped per group,
+    // not per topic).
+    let server = TestServer::start();
+    let topic = unique_topic("indep-groups");
+    let group1 = unique_group("g1");
+    let group2 = unique_group("g2");
+    let producer = server.rdkafka_producer();
+
+    const N: usize = 8;
+
+    let mut produced: Vec<String> = Vec::with_capacity(N);
+    for i in 0..N {
+        let payload = format!("indep-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+        produced.push(payload);
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Helper: consume exactly `n` messages from a fresh consumer in `group`.
+    fn consume_n(
+        consumer: &BaseConsumer,
+        n: usize,
+    ) -> Vec<(String, i32, i64)> {
+        let mut out: Vec<(String, i32, i64)> = Vec::with_capacity(n);
+        let timeout = Duration::from_secs(10);
+        let start = std::time::Instant::now();
+        while out.len() < n && start.elapsed() < timeout {
+            if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+                match result {
+                    Ok(msg) => {
+                        let payload = msg
+                            .payload()
+                            .map(|p| String::from_utf8_lossy(p).into_owned())
+                            .unwrap_or_default();
+                        out.push((payload, msg.partition(), msg.offset()));
+                    }
+                    Err(e) => panic!("consume error: {:?}", e),
+                }
+            }
+        }
+        out
+    }
+
+    // Group 1: consume all N messages.
+    let consumer_g1 = server.rdkafka_consumer(&group1);
+    consumer_g1.subscribe(&[&topic]).expect("G1 failed to subscribe");
+    let g1_msgs = consume_n(&consumer_g1, N);
+    assert_eq!(
+        g1_msgs.len(),
+        N,
+        "G1 should receive all {} messages, got {}: {:?}",
+        N,
+        g1_msgs.len(),
+        g1_msgs
+    );
+    let g1_payloads: Vec<String> = g1_msgs.iter().map(|(p, _, _)| p.clone()).collect();
+    assert_eq!(g1_payloads, produced, "G1 should see full produced set in order");
+
+    // G1 commits a partial offset (commit after 4th message).
+    const G1_COMMIT_AFTER: usize = 4;
+    let (_, partition, offset) = g1_msgs[G1_COMMIT_AFTER - 1].clone();
+    let mut g1_tpl = TopicPartitionList::new();
+    g1_tpl
+        .add_partition_offset(&topic, partition, rdkafka::Offset::Offset(offset + 1))
+        .expect("G1 failed to add partition offset");
+    consumer_g1
+        .commit(&g1_tpl, CommitMode::Sync)
+        .expect("G1 failed to commit");
+
+    // Group 2: subscribe independently and verify it still sees all N messages,
+    // unaffected by G1's commit.
+    let consumer_g2 = server.rdkafka_consumer(&group2);
+    consumer_g2.subscribe(&[&topic]).expect("G2 failed to subscribe");
+    let g2_msgs = consume_n(&consumer_g2, N);
+    assert_eq!(
+        g2_msgs.len(),
+        N,
+        "G2 should receive all {} messages independently of G1, got {}: {:?}",
+        N,
+        g2_msgs.len(),
+        g2_msgs
+    );
+    let g2_payloads: Vec<String> = g2_msgs.iter().map(|(p, _, _)| p.clone()).collect();
+    assert_eq!(g2_payloads, produced, "G2 should see full produced set in order");
+
+    // Verify committed offsets are group-scoped: G2's committed offset for the
+    // same topic/partition must NOT reflect G1's commit.
+    let g1_committed = consumer_g1
+        .committed(Duration::from_secs(5))
+        .expect("G1 failed to fetch committed");
+    let g1_committed_offset = g1_committed
+        .find_partition(&topic, partition)
+        .map(|e| e.offset());
+    assert_eq!(
+        g1_committed_offset,
+        Some(rdkafka::Offset::Offset(offset + 1)),
+        "G1 committed offset should equal the committed position, got {:?}",
+        g1_committed_offset
+    );
+
+    let g2_committed = consumer_g2
+        .committed(Duration::from_secs(5))
+        .expect("G2 failed to fetch committed");
+    let g2_committed_offset = g2_committed
+        .find_partition(&topic, partition)
+        .map(|e| e.offset());
+    assert!(
+        !matches!(g2_committed_offset, Some(rdkafka::Offset::Offset(o)) if o == offset + 1),
+        "G2 committed offset must be independent of G1's commit; got {:?} (G1 committed {:?})",
+        g2_committed_offset,
+        rdkafka::Offset::Offset(offset + 1)
+    );
+}
