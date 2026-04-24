@@ -1,0 +1,18 @@
+---
+## Review: heimq-9d72b499 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | Same key K produced twice maps to same partition | APPROVE | heimq/tests/integration.rs:2584-2588 — asserts `partition_a1 == partition_a2` |
+| 2 | Second distinct key K' observed (same or different partition) | APPROVE | heimq/tests/integration.rs:2590-2594 — produces `key_b` and records its partition |
+| 3 | Multi-partition topic (>=4 partitions) | APPROVE | heimq/tests/integration.rs:2568 — `TestServer::start_with_partitions(true, 4)` |
+| 4 | Test name `test_rdkafka_keyed_partitioner_determinism` in tests/integration.rs | APPROVE | heimq/tests/integration.rs:2568 |
+| 5 | Runnable via `cargo test ... -- --ignored --nocapture` | APPROVE | heimq/tests/integration.rs:2566 — `#[ignore]` attribute set |
+
+### Summary
+
+Implementation cleanly satisfies the acceptance criteria: uses a 4-partition topic, produces key A twice asserting equal delivery-report partitions, and produces a distinct key B to demonstrate determinism-not-distribution. The `#[ignore]` gating matches the repo convention for rdkafka e2e tests.

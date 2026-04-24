@@ -1,0 +1,4 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Implementation cleanly satisfies the acceptance criteria: uses a 4-partition topic, produces key A twice asserting equal delivery-report partitions, and produces a distinct key B to demonstrate determinism-not-distribution. The `#[ignore]` gating matches the repo convention for rdkafka e2e tests."
+}
