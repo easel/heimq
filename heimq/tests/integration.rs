@@ -1388,3 +1388,135 @@ fn test_legacy_keyed_messages_produce() {
     let topics = client.topics();
     assert!(topics.names().any(|n| n == topic), "Topic should exist");
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_group_resume_from_committed() {
+    // A new consumer joining a group with a previously committed offset must
+    // resume from that offset, not from auto.offset.reset. The second consumer
+    // uses auto.offset.reset=latest so that, if the committed offset were
+    // ignored, it would see zero messages (all produce happens before it joins).
+    // Passing this test proves resume-from-committed semantics, independent of
+    // the fetch-committed API exercised by test_rdkafka_consumer_group_manual_offset_fetch.
+    let server = TestServer::start();
+    let topic = unique_topic("cg-resume");
+    let group = unique_group("resume-group");
+    let producer = server.rdkafka_producer();
+
+    const TOTAL: usize = 10;
+    const COMMIT_AFTER: usize = 4;
+
+    for i in 0..TOTAL {
+        let payload = format!("resume-test-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Consumer A: consume COMMIT_AFTER messages, commit the last one, then drop.
+    {
+        let consumer = server.rdkafka_consumer(&group);
+        consumer.subscribe(&[&topic]).expect("A failed to subscribe");
+
+        let mut received = 0;
+        let timeout = Duration::from_secs(10);
+        let start = std::time::Instant::now();
+
+        while received < COMMIT_AFTER && start.elapsed() < timeout {
+            if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+                match result {
+                    Ok(msg) => {
+                        received += 1;
+                        if received == COMMIT_AFTER {
+                            consumer
+                                .commit_message(&msg, CommitMode::Sync)
+                                .expect("A failed to commit");
+                        }
+                    }
+                    Err(e) => panic!("A error: {:?}", e),
+                }
+            }
+        }
+
+        assert_eq!(
+            received, COMMIT_AFTER,
+            "Consumer A should receive exactly {} messages before committing",
+            COMMIT_AFTER
+        );
+    }
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Consumer B: same group.id, auto.offset.reset=latest. If the server does
+    // not honor the committed offset, B would reset to latest and see nothing.
+    let consumer_b: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &group)
+        .set("auto.offset.reset", "latest")
+        .set("enable.auto.commit", "false")
+        .create()
+        .expect("Failed to create consumer B");
+    consumer_b
+        .subscribe(&[&topic])
+        .expect("B failed to subscribe");
+
+    let expected_tail = TOTAL - COMMIT_AFTER;
+    let mut payloads: Vec<String> = Vec::new();
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+
+    while payloads.len() < expected_tail && start.elapsed() < timeout {
+        if let Some(result) = consumer_b.poll(Duration::from_millis(100)) {
+            match result {
+                Ok(msg) => {
+                    let payload = msg
+                        .payload()
+                        .map(|p| String::from_utf8_lossy(p).into_owned())
+                        .unwrap_or_default();
+                    payloads.push(payload);
+                }
+                Err(e) => panic!("B error: {:?}", e),
+            }
+        }
+    }
+
+    // Drain briefly to catch any extra messages beyond the expected tail.
+    let drain_deadline = std::time::Instant::now() + Duration::from_millis(500);
+    while std::time::Instant::now() < drain_deadline {
+        if let Some(result) = consumer_b.poll(Duration::from_millis(100)) {
+            if let Ok(msg) = result {
+                let payload = msg
+                    .payload()
+                    .map(|p| String::from_utf8_lossy(p).into_owned())
+                    .unwrap_or_default();
+                payloads.push(payload);
+            }
+        }
+    }
+
+    assert_eq!(
+        payloads.len(),
+        expected_tail,
+        "Consumer B should resume from committed offset and see only the {} uncommitted tail messages, got {}: {:?}",
+        expected_tail,
+        payloads.len(),
+        payloads
+    );
+
+    let expected_first = format!("resume-test-{}", COMMIT_AFTER);
+    assert_eq!(
+        payloads[0], expected_first,
+        "Consumer B should start at the message immediately after the committed offset"
+    );
+
+    let expected_last = format!("resume-test-{}", TOTAL - 1);
+    assert_eq!(
+        payloads.last().unwrap(),
+        &expected_last,
+        "Consumer B should consume through the last produced message"
+    );
+}
