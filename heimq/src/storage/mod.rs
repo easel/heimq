@@ -3,10 +3,14 @@
 //! Designed for speed over durability. Uses a simple segment-based log
 //! structure with optional persistence.
 
+mod capabilities;
 mod partition;
 mod segment;
 mod topic;
 
+pub use capabilities::{
+    AtomicAppendScope, BackendCapabilities, CompressionCodec, Durability, RetentionMode,
+};
 pub use partition::Partition;
 pub use segment::Segment;
 pub use topic::Topic;
