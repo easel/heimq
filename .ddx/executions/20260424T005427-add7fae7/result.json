@@ -1,0 +1,4 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "The test faithfully implements resume-from-committed semantics: producer sends 10 messages, consumer A commits after 4 and drops, consumer B joins the same group with `auto.offset.reset=latest` and must see exactly messages 4..9. The `latest` reset combined with produce-before-B-subscribes is a clean isolation of resume semantics from reset behavior, and the drain loop guards against over-delivery. Assertions pin first payload, last payload, and count."
+}

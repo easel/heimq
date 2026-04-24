@@ -1,0 +1,17 @@
+---
+## Review: heimq-65cdaf14 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | New fn test_rdkafka_group_resume_from_committed in tests/integration.rs | APPROVE | heimq/tests/integration.rs:1392 — `async fn test_rdkafka_group_resume_from_committed` with `#[ignore]` |
+| 2 | Second consumer sees only tail after commit point | APPROVE | heimq/tests/integration.rs:1505-1511 — asserts `payloads.len() == expected_tail` (TOTAL-COMMIT_AFTER) |
+| 3 | auto.offset.reset=latest so reset isn't the explanation | APPROVE | heimq/tests/integration.rs:1450 — `set("auto.offset.reset", "latest")` on consumer B, with produce completing before B subscribes |
+| 4 | Distinct from manual_offset_fetch test (resume, not fetch API) | APPROVE | Test exercises subscribe/poll resume path; never calls `committed()` fetch API |
+
+### Summary
+
+The test faithfully implements resume-from-committed semantics: producer sends 10 messages, consumer A commits after 4 and drops, consumer B joins the same group with `auto.offset.reset=latest` and must see exactly messages 4..9. The `latest` reset combined with produce-before-B-subscribes is a clean isolation of resume semantics from reset behavior, and the drain loop guards against over-delivery. Assertions pin first payload, last payload, and count.
