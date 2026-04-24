@@ -889,6 +889,125 @@ async fn test_rdkafka_consumer_seek_to_beginning() {
     }
 }
 
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_group_multi_partition_delivery() {
+    use std::collections::HashSet;
+
+    let server = TestServer::start_with_partitions(true, 3);
+    let topic = unique_topic("cg-multi-part-delivery");
+    let group = unique_group("multi-part-delivery");
+    let producer = server.rdkafka_producer();
+    let message_count: usize = 300;
+
+    // Produce N messages with distinct keys; record (partition, offset) for each.
+    let mut produced: HashSet<(i32, i64)> = HashSet::new();
+    for i in 0..message_count {
+        let payload = format!("val-{}", i);
+        let key = format!("key-{:06}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+        let (partition, offset) = producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+        produced.insert((partition, offset));
+    }
+    assert_eq!(
+        produced.len(),
+        message_count,
+        "each produced message must have a unique (partition, offset)"
+    );
+    let distinct_partitions: HashSet<i32> = produced.iter().map(|(p, _)| *p).collect();
+    assert!(
+        distinct_partitions.len() >= 3,
+        "expected messages to span all 3 partitions, got {:?}",
+        distinct_partitions
+    );
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let assigned_set = |c: &BaseConsumer| -> HashSet<(String, i32)> {
+        c.assignment()
+            .map(|tpl| {
+                tpl.elements()
+                    .iter()
+                    .map(|e| (e.topic().to_string(), e.partition()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    // Two consumers in the same group. Subscribe both before polling so that
+    // the group has two members at the time of the initial JoinGroup.
+    let consumer1 = create_group_consumer(&server, &group, "30000");
+    let consumer2 = create_group_consumer(&server, &group, "30000");
+    consumer1
+        .subscribe(&[&topic])
+        .expect("Consumer 1 failed to subscribe");
+    consumer2
+        .subscribe(&[&topic])
+        .expect("Consumer 2 failed to subscribe");
+
+    let mut consumed: HashSet<(i32, i64)> = HashSet::new();
+    let mut c1_partitions: HashSet<i32> = HashSet::new();
+    let mut c2_partitions: HashSet<i32> = HashSet::new();
+    let timeout = Duration::from_secs(120);
+    let start = std::time::Instant::now();
+
+    while consumed.len() < message_count && start.elapsed() < timeout {
+        // Drain consumer1 non-blocking.
+        while let Some(result) = consumer1.poll(Duration::from_millis(10)) {
+            let msg = result.expect("consumer1 poll error");
+            consumed.insert((msg.partition(), msg.offset()));
+            c1_partitions.insert(msg.partition());
+        }
+        // Drain consumer2 non-blocking.
+        while let Some(result) = consumer2.poll(Duration::from_millis(10)) {
+            let msg = result.expect("consumer2 poll error");
+            consumed.insert((msg.partition(), msg.offset()));
+            c2_partitions.insert(msg.partition());
+        }
+
+        // Steady-state assertion: no partition assigned to both members at once.
+        let a1 = assigned_set(&consumer1);
+        let a2 = assigned_set(&consumer2);
+        if !a1.is_empty() && !a2.is_empty() {
+            let overlap: Vec<_> = a1.intersection(&a2).collect();
+            assert!(
+                overlap.is_empty(),
+                "Partition assigned to both members concurrently: c1={:?} c2={:?} overlap={:?}",
+                a1,
+                a2,
+                overlap
+            );
+        }
+
+        if consumed.len() < message_count {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    }
+
+    let missing: Vec<_> = produced.difference(&consumed).collect();
+    let extra: Vec<_> = consumed.difference(&produced).collect();
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "consumed set must equal produced set. missing={:?} extra={:?}",
+        missing,
+        extra
+    );
+
+    // Final assertion: the set of partitions each member consumed must not
+    // overlap — no partition can have been owned by both members at any point
+    // during the test (the in-loop check enforces this at each sampled
+    // assignment snapshot as well).
+    let cross = c1_partitions.intersection(&c2_partitions).count();
+    assert_eq!(
+        cross, 0,
+        "partitions must not be consumed by both members: c1={:?} c2={:?}",
+        c1_partitions, c2_partitions
+    );
+}
+
 // ============================================================================
 // Legacy Protocol Edge Case Tests (kafka crate - Phase 3)
 // These tests verify edge cases using the pure Rust kafka crate (v0-v2 protocol)
