@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T005125-b9e66757",
+  "bead_id": "heimq-65cdaf14",
+  "base_rev": "504cbb16e343aaabc3949eb259867c4b8e5e9161",
+  "created_at": "2026-04-24T00:51:30.069280219Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-65cdaf14",
+    "title": "e2e: consumer resume from committed offset after restart",
+    "description": "Produce N messages; consumer A in group G commits offset mid-stream, then drops; a new consumer B joins group G with the same group.id, auto.offset.reset=latest (so reset is not the explanation), and should consume only the uncommitted tail. Distinct from test_rdkafka_consumer_group_manual_offset_fetch which tests the fetch API, not resume semantics.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_group_resume_from_committed)",
+    "acceptance": "`cargo test --test integration test_rdkafka_group_resume_from_committed -- --ignored --nocapture` passes and asserts the second consumer sees only the tail after the commit point.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:group-correctness"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T00:51:25Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T00:51:25.868172561Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T005125-b9e66757",
+    "prompt": ".ddx/executions/20260424T005125-b9e66757/prompt.md",
+    "manifest": ".ddx/executions/20260424T005125-b9e66757/manifest.json",
+    "result": ".ddx/executions/20260424T005125-b9e66757/result.json",
+    "checks": ".ddx/executions/20260424T005125-b9e66757/checks.json",
+    "usage": ".ddx/executions/20260424T005125-b9e66757/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-65cdaf14-20260424T005125-b9e66757"
+  }
+}
