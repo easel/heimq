@@ -147,7 +147,7 @@ src/CMakeFiles/rdkafka.dir/rdkafka.c.o: \
  /usr/include/aarch64-linux-gnu/bits/xopen_lim.h \
  /usr/include/aarch64-linux-gnu/bits/uio_lim.h \
  /home/erik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rdkafka-sys-4.10.0+2.12.1/librdkafka/src/tinycthread.h \
- /Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/generated/dummy/../config.h \
+ /tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/generated/dummy/../config.h \
  /usr/include/threads.h \
  /home/erik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rdkafka-sys-4.10.0+2.12.1/librdkafka/src/tinycthread_extra.h \
  /usr/include/pthread.h /usr/include/sched.h \

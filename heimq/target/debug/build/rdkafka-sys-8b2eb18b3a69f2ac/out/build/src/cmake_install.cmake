@@ -2,7 +2,7 @@
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out")
+  set(CMAKE_INSTALL_PREFIX "/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -43,11 +43,11 @@ if(NOT DEFINED CMAKE_OBJDUMP)
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig" TYPE FILE FILES "/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/generated/rdkafka-static.pc")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig" TYPE FILE FILES "/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/generated/rdkafka-static.pc")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
-  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/src/librdkafka.a")
+  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/src/librdkafka.a")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
@@ -60,6 +60,6 @@ endif()
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/src/install_local_manifest.txt"
+  file(WRITE "/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/src/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

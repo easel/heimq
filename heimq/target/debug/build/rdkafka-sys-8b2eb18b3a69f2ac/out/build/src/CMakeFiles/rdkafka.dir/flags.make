@@ -4,7 +4,7 @@
 # compile C with /usr/bin/cc
 C_DEFINES = -DLIBRDKAFKA_STATICLIB
 
-C_INCLUDES = -I/home/erik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rdkafka-sys-4.10.0+2.12.1/librdkafka/src -I/Users/erik/Projects/heimq/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/generated/dummy
+C_INCLUDES = -I/home/erik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rdkafka-sys-4.10.0+2.12.1/librdkafka/src -I/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/rdkafka-sys-8b2eb18b3a69f2ac/out/build/generated/dummy
 
 C_FLAGS =  -ffunction-sections -fdata-sections -fPIC -w -g -fPIC
 

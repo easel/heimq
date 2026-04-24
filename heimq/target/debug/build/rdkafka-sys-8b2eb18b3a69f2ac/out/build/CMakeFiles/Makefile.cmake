@@ -7,9 +7,6 @@ set(CMAKE_DEPENDS_GENERATOR "Unix Makefiles")
 # The top level Makefile was generated from the following files:
 set(CMAKE_MAKEFILE_DEPENDS
   "CMakeCache.txt"
-  "CMakeFiles/4.3.1/CMakeCCompiler.cmake"
-  "CMakeFiles/4.3.1/CMakeCXXCompiler.cmake"
-  "CMakeFiles/4.3.1/CMakeSystem.cmake"
   "/home/erik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rdkafka-sys-4.10.0+2.12.1/librdkafka/CMakeLists.txt"
   "/home/erik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rdkafka-sys-4.10.0+2.12.1/librdkafka/packaging/cmake/Config.cmake.in"
   "/home/erik/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/rdkafka-sys-4.10.0+2.12.1/librdkafka/packaging/cmake/Modules/FindZSTD.cmake"
@@ -156,6 +153,9 @@ set(CMAKE_MAKEFILE_DEPENDS
   "/home/linuxbrew/.linuxbrew/share/cmake/Modules/Platform/UnixPaths.cmake"
   "/home/linuxbrew/.linuxbrew/share/cmake/Modules/SelectLibraryConfigurations.cmake"
   "/home/linuxbrew/.linuxbrew/share/cmake/Modules/WriteBasicConfigVersionFile.cmake"
+  "CMakeFiles/4.3.1/CMakeCCompiler.cmake"
+  "CMakeFiles/4.3.1/CMakeCXXCompiler.cmake"
+  "CMakeFiles/4.3.1/CMakeSystem.cmake"
   )
 
 # The corresponding makefile is:

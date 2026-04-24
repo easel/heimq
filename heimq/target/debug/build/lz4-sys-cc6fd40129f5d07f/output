@@ -1,4 +1,4 @@
-OUT_DIR = Some(/Users/erik/Projects/heimq/heimq/target/debug/build/lz4-sys-cc6fd40129f5d07f/out)
+OUT_DIR = Some(/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/lz4-sys-cc6fd40129f5d07f/out)
 TARGET = Some(aarch64-unknown-linux-gnu)
 CARGO_ENCODED_RUSTFLAGS = Some()
 HOST = Some(aarch64-unknown-linux-gnu)
@@ -45,6 +45,6 @@ ARFLAGS_aarch64_unknown_linux_gnu = None
 cargo:rerun-if-env-changed=ARFLAGS_aarch64-unknown-linux-gnu
 ARFLAGS_aarch64-unknown-linux-gnu = None
 cargo:rustc-link-lib=static=lz4
-cargo:rustc-link-search=native=/Users/erik/Projects/heimq/heimq/target/debug/build/lz4-sys-cc6fd40129f5d07f/out
-cargo:root=/Users/erik/Projects/heimq/heimq/target/debug/build/lz4-sys-cc6fd40129f5d07f/out
-cargo:include=/Users/erik/Projects/heimq/heimq/target/debug/build/lz4-sys-cc6fd40129f5d07f/out/include
+cargo:rustc-link-search=native=/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/lz4-sys-cc6fd40129f5d07f/out
+cargo:root=/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/lz4-sys-cc6fd40129f5d07f/out
+cargo:include=/tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260424T020456-be39bf0c/heimq/target/debug/build/lz4-sys-cc6fd40129f5d07f/out/include
