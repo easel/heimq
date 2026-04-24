@@ -1,0 +1,16 @@
+---
+## Review: heimq-20daf864 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | `cargo test --workspace` green | APPROVE | result.json: `outcome=task_succeeded`, `exit_code=0`. Traits + Memory* impls compile cleanly; handlers/server updated to `Arc<dyn LogBackend>` (heimq/src/server.rs:18, heimq/src/handler/produce.rs:17) |
+| 2 | `cargo llvm-cov --fail-under-lines 100` passes | APPROVE | Commit gate exit_code=0; no dead-code introduced — Memory* types retain inherent APIs used by existing tests (heimq/src/storage/partition.rs:46,91,96) |
+| 3 | `scripts/kcat-stress.sh` still green | APPROVE | Zero behavior change: `append`/`fetch` delegate to the same `append_raw`/`fetch` paths (heimq/src/storage/partition.rs:106-122); `MemoryLog::append` preserves auto-create semantics (heimq/src/storage/memory.rs:47-55) |
+
+### Summary
+
+The refactor cleanly introduces `LogBackend` / `TopicLog` / `PartitionLog` traits with the specified method shapes (including `FetchWait::{Immediate, LongPoll}` and `TopicConfig`), renames the in-memory types to `Memory*`, and threads `Arc<dyn LogBackend>` through the server, router, and all handlers. Legacy inherent methods are kept so existing tests continue to work — matching the "zero behavior change" requirement.
