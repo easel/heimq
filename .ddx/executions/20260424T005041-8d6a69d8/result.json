@@ -1,0 +1,4 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Implementation satisfies all acceptance criteria: 300 keyed messages produced to a 3-partition topic (with an assertion that messages actually span all three partitions), two consumers in one group, and both invariants (no-gaps/no-extras and no-concurrent-partition-ownership) asserted both during the poll loop and at the end. The test is correctly gated behind `#[ignore]` matching the specified `--ignored` invocation. Scope is respected — only `tests/integration.rs` changed."
+}

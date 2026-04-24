@@ -1,0 +1,16 @@
+---
+## Review: heimq-f17da917 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | Consumed (partition, offset) set equals produced | APPROVE | heimq/tests/integration.rs:997-1003 — `missing`/`extra` diff asserted empty against produced set of 300 |
+| 2 | No partition owned by two members concurrently | APPROVE | heimq/tests/integration.rs:975-985 (in-loop assignment overlap check) and 1008-1013 (final c1∩c2 partition-set check) |
+| 3 | Test runs under `--ignored` target name | APPROVE | heimq/tests/integration.rs:892-893 — `#[tokio::test]` + `#[ignore = "..."]` on `test_rdkafka_group_multi_partition_delivery` |
+
+### Summary
+
+Implementation satisfies all acceptance criteria: 300 keyed messages produced to a 3-partition topic (with an assertion that messages actually span all three partitions), two consumers in one group, and both invariants (no-gaps/no-extras and no-concurrent-partition-ownership) asserted both during the poll loop and at the end. The test is correctly gated behind `#[ignore]` matching the specified `--ignored` invocation. Scope is respected — only `tests/integration.rs` changed.
