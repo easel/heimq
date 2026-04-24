@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260424T012836-8274d170",
+  "bead_id": "heimq-9e9f257c",
+  "base_rev": "00aa32492717751ab664a099f79b39864b82f942",
+  "created_at": "2026-04-24T01:28:40.779253662Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-9e9f257c",
+    "title": "Add BackendCapabilities descriptor struct",
+    "description": "Introduce a BackendCapabilities struct exposing what a backend can do: durability (None|Snapshot|WalFsync), atomic_append scope (Partition|Topic|Cluster), survives_restart, compaction, transactions, idempotent_producer, timestamps support, headers, compression codecs, max message/batch/partitions, fetch_wait support, read_your_writes, retention modes, truncate, name, version. Also related enums.\n\nAt this step the struct is used by nothing — purely additive — but its shape is the contract future backends will implement. Struct lives in src/storage/capabilities.rs; re-exported from src/storage/mod.rs.\n\nIn-scope files:\n- src/storage/capabilities.rs (new)\n- src/storage/mod.rs (re-export)\nOut of scope:\n- Wiring into ApiVersions (separate bead)\n- Implementing the capability for the existing in-memory storage (separate bead after trait extraction)",
+    "acceptance": "`cargo test --lib storage::capabilities` passes with a basic test constructing a BackendCapabilities and asserting field defaults. `cargo build --release` passes.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:1-capabilities"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:28:36Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:28:36.753379104Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T012836-8274d170",
+    "prompt": ".ddx/executions/20260424T012836-8274d170/prompt.md",
+    "manifest": ".ddx/executions/20260424T012836-8274d170/manifest.json",
+    "result": ".ddx/executions/20260424T012836-8274d170/result.json",
+    "checks": ".ddx/executions/20260424T012836-8274d170/checks.json",
+    "usage": ".ddx/executions/20260424T012836-8274d170/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-9e9f257c-20260424T012836-8274d170"
+  }
+}
