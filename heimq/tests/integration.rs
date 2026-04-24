@@ -2356,3 +2356,209 @@ async fn test_rdkafka_multi_partition_roundtrip() {
         extra
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_per_partition_ordering() {
+    use std::collections::HashMap;
+
+    let server = TestServer::start_with_partitions(true, 3);
+    let topic = unique_topic("rdkafka-per-part-order");
+
+    let num_producers: usize = 4;
+    let num_keys: usize = 6;
+    let per_key_count: usize = 15;
+    let total_msgs: usize = num_producers * num_keys * per_key_count;
+
+    let producer_template = server.rdkafka_producer();
+    // Pre-create topic by producing one throwaway message to a dummy key, then
+    // kicking off the concurrent producers. Not strictly required but avoids
+    // races where the auto-create metadata refresh serializes the producers.
+    {
+        let warmup = FutureRecord::to(&topic).payload("warmup").key("warmup");
+        producer_template
+            .send(warmup, Duration::from_secs(5))
+            .await
+            .expect("Failed to warm up topic");
+    }
+
+    let mut handles = Vec::with_capacity(num_producers);
+    for producer_id in 0..num_producers {
+        let producer = producer_template.clone();
+        let topic = topic.clone();
+        handles.push(tokio::spawn(async move {
+            // Interleave keys so that different keys are produced concurrently,
+            // but per-key sequence is strictly increasing from each producer.
+            let mut results: Vec<(i32, i64, usize, usize, usize)> =
+                Vec::with_capacity(num_keys * per_key_count);
+            for seq in 0..per_key_count {
+                for key_idx in 0..num_keys {
+                    let key = format!("k-{:02}", key_idx);
+                    let payload = format!("p{}|k{}|s{}", producer_id, key_idx, seq);
+                    let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+                    let (partition, offset) = producer
+                        .send(record, Duration::from_secs(10))
+                        .await
+                        .expect("Failed to produce");
+                    results.push((partition, offset, producer_id, key_idx, seq));
+                }
+            }
+            results
+        }));
+    }
+
+    let mut produced: Vec<(i32, i64, usize, usize, usize)> = Vec::with_capacity(total_msgs);
+    for h in handles {
+        produced.extend(h.await.expect("producer task panicked"));
+    }
+    assert_eq!(
+        produced.len(),
+        total_msgs,
+        "expected {} produced messages, got {}",
+        total_msgs,
+        produced.len()
+    );
+
+    // Sanity: each key routes to exactly one partition.
+    let mut key_to_partition: HashMap<usize, i32> = HashMap::new();
+    for (partition, _offset, _pid, key_idx, _seq) in &produced {
+        match key_to_partition.get(key_idx) {
+            Some(p) => assert_eq!(
+                *p, *partition,
+                "key {} produced to multiple partitions: {} and {}",
+                key_idx, p, partition
+            ),
+            None => {
+                key_to_partition.insert(*key_idx, *partition);
+            }
+        }
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let consumer = server.rdkafka_consumer(&unique_group("per-part-order"));
+    consumer.subscribe(&[&topic]).expect("Failed to subscribe");
+
+    // Consume total_msgs + 1 (the warmup).
+    let expected_total = total_msgs + 1;
+    let mut consumed: Vec<(i32, i64, Option<(usize, usize, usize)>)> = Vec::with_capacity(expected_total);
+    let timeout = Duration::from_secs(60);
+    let start = std::time::Instant::now();
+
+    while consumed.len() < expected_total && start.elapsed() < timeout {
+        if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+            let msg = result.expect("consumer poll error");
+            let payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .unwrap_or_default();
+            let tag = parse_p_k_s(&payload);
+            consumed.push((msg.partition(), msg.offset(), tag));
+        }
+    }
+
+    assert_eq!(
+        consumed.len(),
+        expected_total,
+        "did not consume all messages in time: got {} of {}",
+        consumed.len(),
+        expected_total
+    );
+
+    // Assertion 1: within each partition, the consumed offsets are strictly
+    // increasing in the order they were delivered to this consumer.
+    let mut per_partition_offsets: HashMap<i32, Vec<i64>> = HashMap::new();
+    for (partition, offset, _tag) in &consumed {
+        per_partition_offsets
+            .entry(*partition)
+            .or_default()
+            .push(*offset);
+    }
+    let mut partitions_seen: Vec<i32> = per_partition_offsets.keys().copied().collect();
+    partitions_seen.sort();
+    println!(
+        "per_partition_ordering: partitions_seen={:?} counts={:?}",
+        partitions_seen,
+        partitions_seen
+            .iter()
+            .map(|p| (p, per_partition_offsets[p].len()))
+            .collect::<Vec<_>>()
+    );
+    assert!(
+        partitions_seen.len() >= 2,
+        "expected messages to span multiple partitions across {} keys, got partitions {:?}",
+        num_keys,
+        partitions_seen
+    );
+    for (partition, offsets) in &per_partition_offsets {
+        for window in offsets.windows(2) {
+            assert!(
+                window[0] < window[1],
+                "offsets within partition {} must be strictly increasing: {:?}",
+                partition,
+                offsets
+            );
+        }
+    }
+
+    // Assertion 2: for each (producer_id, key), the consumed sequence values
+    // are strictly monotonically increasing. Kafka only guarantees order
+    // within a partition, but all messages with the same key land in the same
+    // partition, so per-(producer,key) order must be preserved.
+    let mut per_pk_seq: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
+    for (_partition, _offset, tag) in &consumed {
+        if let Some((pid, key_idx, seq)) = tag {
+            per_pk_seq.entry((*pid, *key_idx)).or_default().push(*seq);
+        }
+    }
+    assert_eq!(
+        per_pk_seq.len(),
+        num_producers * num_keys,
+        "expected {} distinct (producer, key) pairs, got {}",
+        num_producers * num_keys,
+        per_pk_seq.len()
+    );
+    for ((pid, key_idx), seqs) in &per_pk_seq {
+        assert_eq!(
+            seqs.len(),
+            per_key_count,
+            "expected {} messages for (producer={}, key={}), got {}: {:?}",
+            per_key_count,
+            pid,
+            key_idx,
+            seqs.len(),
+            seqs
+        );
+        for window in seqs.windows(2) {
+            assert!(
+                window[0] < window[1],
+                "per-key sequence must be monotonic for (producer={}, key={}): {:?}",
+                pid,
+                key_idx,
+                seqs
+            );
+        }
+        assert_eq!(
+            seqs[0], 0,
+            "per-key sequence must start at 0 for (producer={}, key={}): {:?}",
+            pid, key_idx, seqs
+        );
+        assert_eq!(
+            *seqs.last().unwrap(),
+            per_key_count - 1,
+            "per-key sequence must end at {} for (producer={}, key={}): {:?}",
+            per_key_count - 1,
+            pid,
+            key_idx,
+            seqs
+        );
+    }
+}
+
+fn parse_p_k_s(payload: &str) -> Option<(usize, usize, usize)> {
+    let mut parts = payload.split('|');
+    let p = parts.next()?.strip_prefix('p')?.parse().ok()?;
+    let k = parts.next()?.strip_prefix('k')?.parse().ok()?;
+    let s = parts.next()?.strip_prefix('s')?.parse().ok()?;
+    Some((p, k, s))
+}
