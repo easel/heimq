@@ -1,0 +1,18 @@
+---
+## Review: heimq-6b53731e iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | New fn test_rdkafka_manual_commit_offset_roundtrip in tests/integration.rs | APPROVE | heimq/tests/integration.rs:1956 — `#[tokio::test] #[ignore] async fn test_rdkafka_manual_commit_offset_roundtrip` |
+| 2 | Consumer with auto.commit=false consumes K msgs then explicit commit | APPROVE | integration.rs:1985-2007 — polls K=5 msgs, `commit_message(.., Sync)` per msg, plus `commit(&tpl, Sync)` for next offset |
+| 3 | Fresh consumer in same group fetches via committed()/OffsetFetch | APPROVE | integration.rs:2039-2051 — new `consumer_b` in same `group`, `committed_offsets(query_tpl, ...)` |
+| 4 | Assert committed() == exact offset committed by prior consumer | APPROVE | integration.rs:2057-2063 — `assert_eq!(actual, committed_next_offset, ...)` |
+| 5 | Test passes under the stated cargo invocation | APPROVE | result.json — outcome `task_succeeded`, exit_code 0 |
+
+### Summary
+
+Implementation matches the acceptance criteria exactly: a single new ignored integration test exercises both `commit_message()` and `commit(TPL)` on a manual-commit consumer, then a fresh same-group consumer uses `committed_offsets()` (OffsetFetch) and asserts the numeric offset equals the one committed. Execution evidence records success.
