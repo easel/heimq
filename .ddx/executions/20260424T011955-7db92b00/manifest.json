@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T011955-7db92b00",
+  "bead_id": "heimq-6f69c0d3",
+  "base_rev": "9e850343c6ad1a2ad10275eb1a699a32c826dcb7",
+  "created_at": "2026-04-24T01:19:59.388595634Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-6f69c0d3",
+    "title": "e2e: per-partition ordering under concurrent produce",
+    "description": "Multiple producers writing concurrently to a multi-partition topic. Each producer tags messages with a monotonic sequence per (producer_id, key). Consumer reads all partitions. For each partition, assert the consumed offsets are strictly increasing and that per-key sequences are monotonic (Kafka only guarantees order within a partition, not across keys/partitions).\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_per_partition_ordering)",
+    "acceptance": "`cargo test --test integration test_rdkafka_per_partition_ordering -- --ignored --nocapture` passes and explicitly asserts monotonic offsets per partition.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:multi-partition"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:19:55Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:19:55.498641551Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T011955-7db92b00",
+    "prompt": ".ddx/executions/20260424T011955-7db92b00/prompt.md",
+    "manifest": ".ddx/executions/20260424T011955-7db92b00/manifest.json",
+    "result": ".ddx/executions/20260424T011955-7db92b00/result.json",
+    "checks": ".ddx/executions/20260424T011955-7db92b00/checks.json",
+    "usage": ".ddx/executions/20260424T011955-7db92b00/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-6f69c0d3-20260424T011955-7db92b00"
+  }
+}
