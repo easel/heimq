@@ -5,6 +5,7 @@
 
 mod capabilities;
 mod partition;
+mod record_batch_view;
 mod segment;
 mod topic;
 
@@ -12,6 +13,7 @@ pub use capabilities::{
     AtomicAppendScope, BackendCapabilities, CompressionCodec, Durability, RetentionMode,
 };
 pub use partition::Partition;
+pub use record_batch_view::{RecordBatchView, RecordView};
 pub use segment::Segment;
 pub use topic::Topic;
 
