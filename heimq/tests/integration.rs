@@ -2562,3 +2562,54 @@ fn parse_p_k_s(payload: &str) -> Option<(usize, usize, usize)> {
     let s = parts.next()?.strip_prefix('s')?.parse().ok()?;
     Some((p, k, s))
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_keyed_partitioner_determinism() {
+    let server = TestServer::start_with_partitions(true, 4);
+    let topic = unique_topic("rdkafka-keyed-partitioner-det");
+    let producer = server.rdkafka_producer();
+
+    let key_a = "deterministic-key-A";
+    let key_b = "deterministic-key-B";
+
+    let record_a1 = FutureRecord::to(&topic).payload("a-val-1").key(key_a);
+    let (partition_a1, _offset_a1) = producer
+        .send(record_a1, Duration::from_secs(5))
+        .await
+        .expect("Failed to produce key A (1)");
+
+    let record_a2 = FutureRecord::to(&topic).payload("a-val-2").key(key_a);
+    let (partition_a2, _offset_a2) = producer
+        .send(record_a2, Duration::from_secs(5))
+        .await
+        .expect("Failed to produce key A (2)");
+
+    assert_eq!(
+        partition_a1, partition_a2,
+        "same key must map to the same partition: first={} second={}",
+        partition_a1, partition_a2
+    );
+
+    let record_b = FutureRecord::to(&topic).payload("b-val-1").key(key_b);
+    let (partition_b, _offset_b) = producer
+        .send(record_b, Duration::from_secs(5))
+        .await
+        .expect("Failed to produce key B");
+
+    println!(
+        "keyed_partitioner_determinism: key_a -> partition {}, key_b -> partition {}",
+        partition_a1, partition_b
+    );
+
+    assert!(
+        (0..4).contains(&partition_a1),
+        "partition for key A out of expected range 0..4: {}",
+        partition_a1
+    );
+    assert!(
+        (0..4).contains(&partition_b),
+        "partition for key B out of expected range 0..4: {}",
+        partition_b
+    );
+}
