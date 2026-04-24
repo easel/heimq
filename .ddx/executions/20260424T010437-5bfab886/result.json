@@ -1,0 +1,4 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Both scenarios implemented in a single test file as specified, with clear assertions that the surviving member's final assignment equals the full partition set `{0,1,2}`. Timeouts and poll cadences are reasonable for the respective leave modes (30s for graceful, 45s for session-timeout eviction)."
+}

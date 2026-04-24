@@ -1,0 +1,16 @@
+---
+## Review: heimq-f1e42e32 iter 1
+
+### Verdict: APPROVE
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | Graceful leave: survivor owns all partitions | APPROVE | heimq/tests/integration.rs:1011 — `test_rdkafka_group_rebalance_on_graceful_leave` unsubscribes+drops consumer2, asserts consumer1 assignment equals `{0,1,2}` |
+| 2 | Session timeout eviction: survivor owns all | APPROVE | heimq/tests/integration.rs:1074 — `test_rdkafka_group_rebalance_on_session_timeout` uses 6s session timeout, stops polling consumer2, asserts consumer1 owns `{0,1,2}` |
+| 3 | Test filter matches both fns under --ignored | APPROVE | Both fns share prefix `test_rdkafka_group_rebalance_on_`, `#[ignore]` attribute present on both |
+
+### Summary
+
+Both scenarios implemented in a single test file as specified, with clear assertions that the surviving member's final assignment equals the full partition set `{0,1,2}`. Timeouts and poll cadences are reasonable for the respective leave modes (30s for graceful, 45s for session-timeout eviction).
