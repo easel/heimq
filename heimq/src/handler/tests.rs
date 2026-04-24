@@ -373,7 +373,7 @@ fn offset_commit_and_fetch_roundtrip() {
     request.topics = vec![topic];
 
     let body = encode_body(&request, 1);
-    let response = offset_commit::handle(1, &body, &consumer_groups).unwrap();
+    let response = offset_commit::handle(1, &body, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics[0].partitions[0].error_code, 0);
 
     let mut fetch_topic = OffsetFetchRequestTopic::default();
@@ -385,17 +385,17 @@ fn offset_commit_and_fetch_roundtrip() {
     fetch_request.topics = Some(vec![fetch_topic]);
 
     let body = encode_body(&fetch_request, 1);
-    let response = offset_fetch::handle(1, &body, &consumer_groups).unwrap();
+    let response = offset_fetch::handle(1, &body, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics[0].partitions[0].committed_offset, 5);
 
     let mut fetch_all = OffsetFetchRequest::default();
     fetch_all.group_id = GroupId(StrBytes::from_string("group".to_string()));
     fetch_all.topics = None;
     let body = encode_body(&fetch_all, 1);
-    let response = offset_fetch::handle(1, &body, &consumer_groups).unwrap();
+    let response = offset_fetch::handle(1, &body, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics[0].partitions[0].committed_offset, 5);
 
-    let response = offset_commit::handle(1, &[], &consumer_groups).unwrap();
+    let response = offset_commit::handle(1, &[], consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 }
 
@@ -1077,7 +1077,7 @@ fn offset_commit_truncated_and_optional_fields() {
     buf.put_i64(5);
     buf.put_i32(2);
     buf.put_i16(-1);
-    let response = offset_commit::handle(6, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(6, &buf, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics[0].partitions[0].error_code, 0);
 
     let mut buf = BytesMut::new();
@@ -1086,7 +1086,7 @@ fn offset_commit_truncated_and_optional_fields() {
     put_str(&mut buf, Some("member"));
     put_str(&mut buf, None);
     buf.put_i32(0);
-    let response = offset_commit::handle(7, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(7, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
@@ -1095,7 +1095,7 @@ fn offset_commit_truncated_and_optional_fields() {
     put_str(&mut buf, Some("member"));
     buf.put_i64(0);
     buf.put_i32(0);
-    let response = offset_commit::handle(2, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(2, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
@@ -1104,7 +1104,7 @@ fn offset_commit_truncated_and_optional_fields() {
     put_str(&mut buf, Some("member"));
     buf.put_i32(1);
     put_str(&mut buf, Some("topic"));
-    let response = offset_commit::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
@@ -1114,7 +1114,7 @@ fn offset_commit_truncated_and_optional_fields() {
     buf.put_i32(1);
     put_str(&mut buf, Some("topic"));
     buf.put_i32(1);
-    let response = offset_commit::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics.len(), 1);
 
     let mut buf = BytesMut::new();
@@ -1125,18 +1125,18 @@ fn offset_commit_truncated_and_optional_fields() {
     put_str(&mut buf, Some("topic"));
     buf.put_i32(1);
     buf.put_i32(0);
-    let response = offset_commit::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics.len(), 1);
 
     let mut buf = BytesMut::new();
     buf.put_i16(-1);
-    let response = offset_commit::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i16(4);
     buf.extend_from_slice(b"a");
-    let response = offset_commit::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
@@ -1147,7 +1147,7 @@ fn offset_commit_truncated_and_optional_fields() {
     buf.put_i32(0);
     buf.put_i64(5);
     buf.put_i16(-1);
-    let response = offset_commit::handle(0, &buf, &consumer_groups).unwrap();
+    let response = offset_commit::handle(0, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics[0].partitions[0].error_code == 0);
 }
 
@@ -1157,25 +1157,25 @@ fn offset_fetch_truncated_and_missing_offsets() {
     let consumer_groups = test_consumer_groups(config);
 
     let buf = BytesMut::new();
-    let response = offset_fetch::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_fetch::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i16(-1);
-    let response = offset_fetch::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_fetch::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i16(4);
     buf.extend_from_slice(b"a");
-    let response = offset_fetch::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_fetch::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("group"));
     buf.put_i32(1);
     put_str(&mut buf, Some("topic"));
-    let response = offset_fetch::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_fetch::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert!(response.topics.is_empty());
 
     let mut buf = BytesMut::new();
@@ -1183,7 +1183,7 @@ fn offset_fetch_truncated_and_missing_offsets() {
     buf.put_i32(1);
     put_str(&mut buf, Some("topic"));
     buf.put_i32(1);
-    let response = offset_fetch::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_fetch::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics.len(), 1);
 
     let mut buf = BytesMut::new();
@@ -1192,7 +1192,7 @@ fn offset_fetch_truncated_and_missing_offsets() {
     put_str(&mut buf, Some("topic"));
     buf.put_i32(1);
     buf.put_i32(0);
-    let response = offset_fetch::handle(1, &buf, &consumer_groups).unwrap();
+    let response = offset_fetch::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics[0].partitions[0].committed_offset, -1);
 }
 

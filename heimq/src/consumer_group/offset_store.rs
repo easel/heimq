@@ -1,40 +1,51 @@
-//! Offset storage for consumer groups
+//! In-memory implementation of the [`OffsetStore`] trait.
+//!
+//! `MemoryOffsetStore` is the default single-node backend: commits live in
+//! a `DashMap` and are lost on restart. Durable backends (Postgres, etc.)
+//! implement the same trait in separate modules.
 
+use crate::storage::{CommittedOffset, Durability, OffsetStore, OffsetStoreCapabilities};
 use dashmap::DashMap;
 use std::collections::HashMap;
 
 /// Key for offset storage: (group_id, topic, partition)
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct OffsetKey {
-    pub group_id: String,
-    pub topic: String,
-    pub partition: i32,
+struct OffsetKey {
+    group_id: String,
+    topic: String,
+    partition: i32,
 }
 
-/// Committed offset with metadata
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct CommittedOffset {
-    pub offset: i64,
-    pub leader_epoch: i32,
-    pub metadata: Option<String>,
-    pub commit_timestamp: i64,
-}
+const MEMORY_CAPABILITIES: OffsetStoreCapabilities = OffsetStoreCapabilities {
+    name: "in-memory",
+    version: "0.1.0",
+    durability: Durability::None,
+    survives_restart: false,
+};
 
-/// In-memory offset storage
-pub struct OffsetStore {
+/// In-memory offset storage backend.
+pub struct MemoryOffsetStore {
     offsets: DashMap<OffsetKey, CommittedOffset>,
+    capabilities: OffsetStoreCapabilities,
 }
 
-impl OffsetStore {
+impl MemoryOffsetStore {
     pub fn new() -> Self {
         Self {
             offsets: DashMap::new(),
+            capabilities: MEMORY_CAPABILITIES,
         }
     }
+}
 
-    /// Commit an offset
-    pub fn commit(
+impl Default for MemoryOffsetStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OffsetStore for MemoryOffsetStore {
+    fn commit(
         &self,
         group_id: &str,
         topic: &str,
@@ -59,13 +70,7 @@ impl OffsetStore {
         self.offsets.insert(key, committed);
     }
 
-    /// Fetch committed offset
-    pub fn fetch(
-        &self,
-        group_id: &str,
-        topic: &str,
-        partition: i32,
-    ) -> Option<CommittedOffset> {
+    fn fetch(&self, group_id: &str, topic: &str, partition: i32) -> Option<CommittedOffset> {
         let key = OffsetKey {
             group_id: group_id.to_string(),
             topic: topic.to_string(),
@@ -75,8 +80,7 @@ impl OffsetStore {
         self.offsets.get(&key).map(|e| e.clone())
     }
 
-    /// Fetch all offsets for a group
-    pub fn fetch_all_for_group(
+    fn fetch_all_for_group(
         &self,
         group_id: &str,
     ) -> HashMap<(String, i32), CommittedOffset> {
@@ -87,16 +91,12 @@ impl OffsetStore {
             .collect()
     }
 
-    /// Delete all offsets for a group
-    #[allow(dead_code)]
-    pub fn delete_group(&self, group_id: &str) {
+    fn delete_group(&self, group_id: &str) {
         self.offsets.retain(|k, _| k.group_id != group_id);
     }
-}
 
-impl Default for OffsetStore {
-    fn default() -> Self {
-        Self::new()
+    fn capabilities(&self) -> &OffsetStoreCapabilities {
+        &self.capabilities
     }
 }
 
@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_commit_and_fetch() {
-        let store = OffsetStore::new();
+        let store = MemoryOffsetStore::new();
         store.commit("group1", "topic1", 0, 100, 0, None);
 
         let offset = store.fetch("group1", "topic1", 0).unwrap();
@@ -115,13 +115,13 @@ mod tests {
 
     #[test]
     fn test_fetch_missing() {
-        let store = OffsetStore::new();
+        let store = MemoryOffsetStore::new();
         assert!(store.fetch("group1", "topic1", 0).is_none());
     }
 
     #[test]
     fn test_fetch_all_and_delete_group() {
-        let store = OffsetStore::new();
+        let store = MemoryOffsetStore::new();
         store.commit("group1", "topic1", 0, 10, 0, None);
         store.commit("group1", "topic2", 1, 20, 0, Some("meta".into()));
         store.commit("group2", "topic1", 0, 30, 0, None);
@@ -137,7 +137,24 @@ mod tests {
 
     #[test]
     fn test_default_store() {
-        let store = OffsetStore::default();
+        let store = MemoryOffsetStore::default();
         assert!(store.fetch("missing", "topic", 0).is_none());
+    }
+
+    #[test]
+    fn test_capabilities() {
+        let store = MemoryOffsetStore::new();
+        let caps = store.capabilities();
+        assert_eq!(caps.name, "in-memory");
+        assert_eq!(caps.durability, Durability::None);
+        assert!(!caps.survives_restart);
+    }
+
+    #[test]
+    fn test_trait_object() {
+        let store: std::sync::Arc<dyn OffsetStore> =
+            std::sync::Arc::new(MemoryOffsetStore::new());
+        store.commit("g", "t", 0, 5, 0, None);
+        assert_eq!(store.fetch("g", "t", 0).unwrap().offset, 5);
     }
 }

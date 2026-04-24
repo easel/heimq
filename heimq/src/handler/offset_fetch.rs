@@ -1,7 +1,7 @@
 //! OffsetFetch request handler (API Key 9)
 
-use crate::consumer_group::ConsumerGroupManager;
 use crate::error::Result;
+use crate::storage::OffsetStore;
 use bytes::Buf;
 use kafka_protocol::messages::offset_fetch_response::{
     OffsetFetchResponsePartition, OffsetFetchResponseTopic,
@@ -15,7 +15,7 @@ use std::sync::Arc;
 pub fn handle(
     _api_version: i16,
     body: &[u8],
-    consumer_groups: &Arc<ConsumerGroupManager>,
+    offset_store: &Arc<dyn OffsetStore>,
 ) -> Result<OffsetFetchResponse> {
     let mut response = OffsetFetchResponse::default();
     let mut cursor = Cursor::new(body);
@@ -28,8 +28,6 @@ pub fn handle(
         return Ok(response);
     }
     let topic_count = cursor.get_i32();
-
-    let offset_store = consumer_groups.offset_store();
 
     if topic_count < 0 {
         // Fetch all offsets for this group

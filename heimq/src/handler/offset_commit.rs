@@ -1,7 +1,7 @@
 //! OffsetCommit request handler (API Key 8)
 
-use crate::consumer_group::ConsumerGroupManager;
 use crate::error::Result;
+use crate::storage::OffsetStore;
 use bytes::Buf;
 use kafka_protocol::messages::offset_commit_response::{
     OffsetCommitResponsePartition, OffsetCommitResponseTopic,
@@ -16,7 +16,7 @@ use tracing::debug;
 pub fn handle(
     api_version: i16,
     body: &[u8],
-    consumer_groups: &Arc<ConsumerGroupManager>,
+    offset_store: &Arc<dyn OffsetStore>,
 ) -> Result<OffsetCommitResponse> {
     let mut response = OffsetCommitResponse::default();
     let mut cursor = Cursor::new(body);
@@ -53,8 +53,6 @@ pub fn handle(
         return Ok(response);
     }
     let topic_count = cursor.get_i32();
-
-    let offset_store = consumer_groups.offset_store();
 
     for _ in 0..topic_count {
         // topic name

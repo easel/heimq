@@ -171,14 +171,26 @@ impl Router {
     fn handle_offset_commit(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| offset_commit::handle(header.api_version, body, &self.consumer_groups)),
+            Box::new(|| {
+                offset_commit::handle(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.offset_store(),
+                )
+            }),
         )
     }
 
     fn handle_offset_fetch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| offset_fetch::handle(header.api_version, body, &self.consumer_groups)),
+            Box::new(|| {
+                offset_fetch::handle(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.offset_store(),
+                )
+            }),
         )
     }
 

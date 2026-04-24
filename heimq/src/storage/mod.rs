@@ -5,6 +5,7 @@
 
 mod capabilities;
 mod memory;
+mod offset_store;
 mod partition;
 mod record_batch_view;
 mod segment;
@@ -14,6 +15,7 @@ pub use capabilities::{
     AtomicAppendScope, BackendCapabilities, CompressionCodec, Durability, RetentionMode,
 };
 pub use memory::MemoryLog;
+pub use offset_store::{CommittedOffset, OffsetStore, OffsetStoreCapabilities};
 pub use partition::MemoryPartitionLog;
 pub use record_batch_view::{RecordBatchView, RecordView};
 pub use segment::Segment;
