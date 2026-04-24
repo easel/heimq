@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260424T012302-f9f305e2",
+  "bead_id": "heimq-9d72b499",
+  "base_rev": "feb0237b11b4561961e6eb71a7c8ec9f4b6dc885",
+  "created_at": "2026-04-24T01:23:06.252109441Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-9d72b499",
+    "title": "e2e: keyed-message partitioner determinism",
+    "description": "On a multi-partition topic (\u003e=4 partitions), produce the same key K twice and assert both messages land on the same partition (via ProducerRecord.partition reported in delivery report). Also produce a second distinct key K' and verify it can be observed landing on the same or different partition — what matters is determinism for a given key, not distribution.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_keyed_partitioner_determinism)",
+    "acceptance": "`cargo test --test integration test_rdkafka_keyed_partitioner_determinism -- --ignored --nocapture` passes and asserts same-key messages map to the same partition.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p0",
+      "topic:partition-selection"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-24T01:23:02Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "196235",
+      "execute-loop-heartbeat-at": "2026-04-24T01:23:02.161494758Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260424T012302-f9f305e2",
+    "prompt": ".ddx/executions/20260424T012302-f9f305e2/prompt.md",
+    "manifest": ".ddx/executions/20260424T012302-f9f305e2/manifest.json",
+    "result": ".ddx/executions/20260424T012302-f9f305e2/result.json",
+    "checks": ".ddx/executions/20260424T012302-f9f305e2/checks.json",
+    "usage": ".ddx/executions/20260424T012302-f9f305e2/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-9d72b499-20260424T012302-f9f305e2"
+  }
+}
