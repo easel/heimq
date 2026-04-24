@@ -1951,3 +1951,116 @@ async fn test_rdkafka_auto_offset_reset_earliest_vs_latest() {
         "C2 (latest) should see only the messages produced after it joined, in order"
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_manual_commit_offset_roundtrip() {
+    // Consumer A (enable.auto.commit=false, via rdkafka_consumer helper) consumes
+    // K messages, explicitly commits via commit_message() then commit(TPL), and
+    // drops. A fresh consumer B in the same group performs an OffsetFetch via
+    // committed() and must observe the exact offset that A committed.
+    let server = TestServer::start();
+    let topic = unique_topic("manual-commit-roundtrip");
+    let group = unique_group("manual-commit-roundtrip-group");
+    let producer = server.rdkafka_producer();
+
+    const K: usize = 5;
+    const TOTAL: usize = 8;
+    for i in 0..TOTAL {
+        let payload = format!("mc-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Consumer A: consume exactly K messages, explicit commits only.
+    let committed_next_offset: i64;
+    let partition: i32;
+    {
+        let consumer_a = server.rdkafka_consumer(&group);
+        consumer_a
+            .subscribe(&[&topic])
+            .expect("Consumer A failed to subscribe");
+
+        let mut received = 0usize;
+        let mut last_partition: Option<i32> = None;
+        let mut last_offset: Option<i64> = None;
+        let timeout = Duration::from_secs(10);
+        let start = std::time::Instant::now();
+
+        while received < K && start.elapsed() < timeout {
+            if let Some(result) = consumer_a.poll(Duration::from_millis(100)) {
+                match result {
+                    Ok(msg) => {
+                        received += 1;
+                        last_partition = Some(msg.partition());
+                        last_offset = Some(msg.offset());
+                        // Exercise commit_message() on every message (sync).
+                        consumer_a
+                            .commit_message(&msg, CommitMode::Sync)
+                            .expect("commit_message failed");
+                    }
+                    Err(e) => panic!("Consumer A error: {:?}", e),
+                }
+            }
+        }
+
+        assert_eq!(received, K, "Consumer A should consume exactly {} messages", K);
+
+        let p = last_partition.expect("must have seen a partition");
+        let o = last_offset.expect("must have seen an offset");
+
+        // Also exercise commit(TPL) to commit the "next" offset to consume.
+        // This is the canonical committed offset after processing message `o`.
+        let next = o + 1;
+        let mut tpl = TopicPartitionList::new();
+        tpl.add_partition_offset(&topic, p, rdkafka::Offset::Offset(next))
+            .expect("Failed to add partition offset");
+        consumer_a
+            .commit(&tpl, CommitMode::Sync)
+            .expect("commit(TPL) failed");
+
+        partition = p;
+        committed_next_offset = next;
+        // Consumer A drops here (leaves group).
+    }
+
+    // Consumer B: fresh consumer in the same group. OffsetFetch via
+    // committed_offsets() on an explicit TPL — this exercises the OffsetFetch
+    // RPC directly without requiring a rebalance/assignment to complete first.
+    let consumer_b = server.rdkafka_consumer(&group);
+    consumer_b
+        .subscribe(&[&topic])
+        .expect("Consumer B failed to subscribe");
+
+    let mut query_tpl = TopicPartitionList::new();
+    query_tpl
+        .add_partition_offset(&topic, partition, rdkafka::Offset::Invalid)
+        .expect("Failed to add query partition");
+    let committed = consumer_b
+        .committed_offsets(query_tpl, Duration::from_secs(5))
+        .expect("Consumer B committed_offsets() failed");
+
+    let entry = committed
+        .find_partition(&topic, partition)
+        .expect("Consumer B should find committed entry for partition");
+
+    match entry.offset() {
+        rdkafka::Offset::Offset(actual) => {
+            assert_eq!(
+                actual, committed_next_offset,
+                "Consumer B committed() must return the exact offset committed by Consumer A \
+                 (expected {}, got {})",
+                committed_next_offset, actual
+            );
+        }
+        other => panic!(
+            "Consumer B committed() returned non-numeric offset {:?}, expected Offset({})",
+            other, committed_next_offset
+        ),
+    }
+}
