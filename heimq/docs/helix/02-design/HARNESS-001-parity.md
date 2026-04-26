@@ -233,9 +233,15 @@ Redpanda container spec:
 
 heimq target:
 
-- Started in-process via `heimq::start_test_server()` on an ephemeral port
-  (reuses the test-support fixture already used in `tests/integration.rs`).
-- The `test-support` feature flag gates this entry point.
+- Started as a spawned subprocess via `heimq::test_support::TestServer::start()`
+  on an ephemeral port (reuses the subprocess fixture already used in
+  `tests/integration.rs`). Alternative constructors:
+  `TestServer::start_with_auto_create(bool)` and
+  `TestServer::start_with_partitions(bool, i32)`.
+- The subprocess is launched via `std::process::Command` using the
+  `CARGO_BIN_EXE_heimq` binary. Port allocation uses an atomic counter
+  starting at 19092. `Drop` kills the child process on teardown.
+- The `test-support` feature flag (combined with `cfg(any(test, feature = "test-support"))`) gates this module.
 
 ---
 
