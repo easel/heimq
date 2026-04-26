@@ -1,0 +1,49 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "New test_rdkafka_record_headers_roundtrip in tests/integration.rs produces a message with 3 headers (including binary bytes) via rdkafka, consumes it, and asserts header count, key order, and value equality plus payload — matches AC.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Test is #[ignore]'d per repo convention (rdkafka tests run via scripts/compatibility-test.sh); AC explicitly invokes with --ignored, so this is expected.",
+      "location": "heimq/tests/integration.rs:3439"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 651,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T040814-5fcc2ea0/manifest.json",
+          ".ddx/executions/20260426T040814-5fcc2ea0/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3219,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 5676,
+    "output_bytes": 576,
+    "elapsed_ms": 14572,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "New test_rdkafka_record_headers_roundtrip in tests/integration.rs produces a message with 3 headers (including binary bytes) via rdkafka, consumes it, and asserts header count, key order, and value equality plus payload — matches AC.",
+  "findings": [
+    { "severity": "info", "summary": "Test is #[ignore]'d per repo convention (rdkafka tests run via scripts/compatibility-test.sh); AC explicitly invokes with --ignored, so this is expected.", "location": "heimq/tests/integration.rs:3439" }
+  ]
+}
+```
