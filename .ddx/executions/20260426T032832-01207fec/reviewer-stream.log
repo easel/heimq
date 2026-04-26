@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Test fn test_rdkafka_fetch_long_poll added with both cases. Case A asserts 300ms<=poll_a<800ms on empty topic with fetch.min.bytes=1024/wait.max.ms=500; Case B asserts <300ms receive latency after a 2KB produce. Matches acceptance tolerances.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Case B uses 20ms poll granularity post-produce, which adds up to ~20ms jitter to poll_b — well within the 300ms budget but worth noting if the bound is later tightened.",
+      "location": "heimq/tests/integration.rs:2820"
+    },
+    {
+      "severity": "info",
+      "summary": "Both cases create a fresh topic and drain a single init message to position the consumer at end-of-log; this is a reasonable way to ensure 'empty-ish' state without relying on broker auto-create timing.",
+      "location": "heimq/tests/integration.rs:2705"
+    }
+  ]
+}
+```
