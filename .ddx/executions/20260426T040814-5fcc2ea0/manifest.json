@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260426T040814-5fcc2ea0",
+  "bead_id": "heimq-977d7b59",
+  "base_rev": "b830a14f39b62f53b0d93d3a62be6ba7cd6a1d6e",
+  "created_at": "2026-04-26T04:08:14.450962973Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-977d7b59",
+    "title": "e2e: record headers round-trip",
+    "description": "Producer attaches 2-3 headers (k/v byte arrays) to a message. Consumer reads the message and asserts all headers present with correct values and order.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_record_headers_roundtrip)",
+    "acceptance": "`cargo test --test integration test_rdkafka_record_headers_roundtrip -- --ignored --nocapture` passes with header equality assertion.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p2",
+      "topic:client-surface"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T04:08:14Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T04:08:14.354746948Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T040814-5fcc2ea0",
+    "prompt": ".ddx/executions/20260426T040814-5fcc2ea0/prompt.md",
+    "manifest": ".ddx/executions/20260426T040814-5fcc2ea0/manifest.json",
+    "result": ".ddx/executions/20260426T040814-5fcc2ea0/result.json",
+    "checks": ".ddx/executions/20260426T040814-5fcc2ea0/checks.json",
+    "usage": ".ddx/executions/20260426T040814-5fcc2ea0/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-977d7b59-20260426T040814-5fcc2ea0"
+  }
+}
