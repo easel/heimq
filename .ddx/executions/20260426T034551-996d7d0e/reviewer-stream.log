@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "New test_rdkafka_concurrent_producers spawns 4 producers x 500 msgs, verifies total count and payload uniqueness/integrity, gated with #[ignore]. Execution result reports success (exit 0).",
+  "findings": [
+    { "severity": "info", "summary": "Warmup message is included in expected count; acceptable but slightly couples assertion to setup detail.", "location": "heimq/tests/integration.rs:3243" }
+  ]
+}
+```
