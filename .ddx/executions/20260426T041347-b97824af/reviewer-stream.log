@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Both test_rdkafka_seek_to_end and test_rdkafka_seek_to_offset added in tests/integration.rs. Both match the test_rdkafka_seek_to prefix filter, are #[ignore]'d, and assert offsets/payloads consistent with the AC scenarios.",
+  "findings": [
+    { "severity": "info", "summary": "Seek-to-end test relies on a 500ms drain window to assert no pre-seek messages reappear; acceptable but timing-sensitive.", "location": "heimq/tests/integration.rs:940" }
+  ]
+}
+```
