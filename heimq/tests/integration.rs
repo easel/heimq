@@ -2957,3 +2957,111 @@ async fn test_rdkafka_produce_no_autocreate_errors() {
         elapsed, err
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_oversized_message() {
+    // heimq does NOT enforce a server-side message.max.bytes / max.message.bytes
+    // limit on the produce path (see src/handler/produce.rs and src/config.rs:
+    // there is no such config knob, and the produce handler does not bound
+    // payload size). The `BackendCapabilities::max_message_bytes` field exists
+    // but is purely informational and is not checked when accepting a Produce
+    // request.
+    //
+    // This test pins that contract: a payload well above the typical Kafka
+    // broker default (1 MiB) must round-trip without hanging or partial
+    // produce. If a future change introduces a server-enforced cap, this test
+    // should be updated to assert the boundary error (RecordTooLarge /
+    // MessageTooLarge) instead of a successful round-trip.
+    use std::time::Instant;
+
+    let server = TestServer::start();
+    let topic = unique_topic("oversized-message");
+
+    // 4 MiB payload -- 4x the conventional broker default of 1 MiB.
+    let oversized_len: usize = 4 * 1024 * 1024;
+    let payload: Vec<u8> = vec![b'x'; oversized_len];
+
+    // Bump the librdkafka client-side caps so the producer itself does not
+    // reject the message before it ever reaches heimq. We are testing the
+    // server's behavior, not librdkafka's defaults.
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("message.timeout.ms", "15000")
+        .set("message.max.bytes", "16777216") // 16 MiB
+        .set("queue.buffering.max.kbytes", "32768")
+        .create()
+        .expect("failed to create rdkafka producer");
+
+    let key = "oversized";
+    let start = Instant::now();
+    let result = producer
+        .send(
+            FutureRecord::<str, [u8]>::to(&topic)
+                .payload(&payload[..])
+                .key(key),
+            Duration::from_secs(20),
+        )
+        .await;
+    let produce_elapsed = start.elapsed();
+
+    assert!(
+        produce_elapsed < Duration::from_secs(20),
+        "oversized produce hung past message.timeout.ms ({:?})",
+        produce_elapsed
+    );
+
+    let (partition, offset) = result.unwrap_or_else(|(err, _msg)| {
+        panic!(
+            "expected oversized payload ({} bytes) to round-trip because heimq \
+             enforces no message.max.bytes, got delivery error: {:?} after {:?}",
+            oversized_len, err, produce_elapsed
+        )
+    });
+
+    println!(
+        "test_rdkafka_oversized_message: produced {} bytes to {}[{}]@{} in {:?}",
+        oversized_len, topic, partition, offset, produce_elapsed
+    );
+
+    // Allow the server a moment to commit before consuming.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Consume and verify the payload survived end-to-end intact.
+    let consumer: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &unique_group("oversized-msg"))
+        .set("auto.offset.reset", "earliest")
+        .set("enable.auto.commit", "false")
+        .set("fetch.message.max.bytes", "16777216")
+        .set("fetch.max.bytes", "16777216")
+        .set("receive.message.max.bytes", "16778240") // fetch.max.bytes + 1024
+        .create()
+        .expect("failed to create rdkafka consumer");
+    consumer.subscribe(&[&topic]).expect("subscribe failed");
+
+    let consume_deadline = Instant::now() + Duration::from_secs(15);
+    let mut received: Option<Vec<u8>> = None;
+    while Instant::now() < consume_deadline && received.is_none() {
+        if let Some(poll) = consumer.poll(Duration::from_millis(250)) {
+            let msg = poll.expect("consumer poll error");
+            received = msg.payload().map(|p| p.to_vec());
+        }
+    }
+
+    let got = received.unwrap_or_else(|| {
+        panic!(
+            "no oversized message received within timeout for topic {}",
+            topic
+        )
+    });
+    assert_eq!(
+        got.len(),
+        oversized_len,
+        "consumed payload size mismatch (heimq must not silently truncate)"
+    );
+    assert!(
+        got.iter().all(|b| *b == b'x'),
+        "consumed payload bytes mismatch (heimq must not silently corrupt)"
+    );
+}
