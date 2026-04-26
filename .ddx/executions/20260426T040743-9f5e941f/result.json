@@ -1,0 +1,54 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "stress-matrix.sh implements both rows with HEIMQ_STORAGE_* env vars, prints clear SKIPPED for the postgres row when POSTGRES_URL is unset, and a new optional CI workflow brings up a postgres service container. All AC items satisfied.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Files live under heimq/ subdir (heimq/scripts/, heimq/docs/) rather than the bead's repo-root paths; matches existing repo layout.",
+      "location": "heimq/scripts/stress-matrix.sh"
+    },
+    {
+      "severity": "info",
+      "summary": "CI job is continue-on-error so backend-matrix regressions surface but do not block the main gate — consistent with the 'optional' wording in AC.",
+      "location": ".github/workflows/stress-matrix.yml:18"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1185,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T040547-a01a840d/manifest.json",
+          ".ddx/executions/20260426T040547-a01a840d/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3715,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 6706,
+    "output_bytes": 793,
+    "elapsed_ms": 21723,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

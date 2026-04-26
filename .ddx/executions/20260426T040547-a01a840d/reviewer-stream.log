@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "stress-matrix.sh implements both rows with HEIMQ_STORAGE_* env vars, prints clear SKIPPED for the postgres row when POSTGRES_URL is unset, and a new optional CI workflow brings up a postgres service container. All AC items satisfied.",
+  "findings": [
+    { "severity": "info", "summary": "Files live under heimq/ subdir (heimq/scripts/, heimq/docs/) rather than the bead's repo-root paths; matches existing repo layout.", "location": "heimq/scripts/stress-matrix.sh" },
+    { "severity": "info", "summary": "CI job is continue-on-error so backend-matrix regressions surface but do not block the main gate — consistent with the 'optional' wording in AC.", "location": ".github/workflows/stress-matrix.yml:18" }
+  ]
+}
+```
