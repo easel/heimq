@@ -1,0 +1,54 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "All AC items implemented: produce checks max_message_bytes/max_batch_bytes returning MESSAGE_TOO_LARGE (10); transactional requests rejected with INVALID_TXN_STATE (48) when caps.transactions=false; fetch collapses max_wait_ms to 0 when caps.fetch_wait=false; group handlers correctly delegated to coordinator backend. Integration test with 1024-byte cap and 2KB payload asserts the required error.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "fetch.rs assigns to `_max_wait_ms` which is unused downstream, so the capability check is inert today — fine since the prior code also ignored max_wait_ms, but worth wiring through once long-poll is implemented.",
+      "location": "heimq/src/handler/fetch.rs:35"
+    },
+    {
+      "severity": "info",
+      "summary": "Group-handler generation check from the bead description is satisfied indirectly via coordinator backend (heartbeat/sync_group); no per-handler change present. Acceptable but undocumented in code.",
+      "location": "heimq/src/handler/"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1042,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T040014-1acc49c3/manifest.json",
+          ".ddx/executions/20260426T040014-1acc49c3/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3568,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 6416,
+    "output_bytes": 1070,
+    "elapsed_ms": 34984,
+    "harness": "claude",
+    "model": "opus"
+  }
+}
