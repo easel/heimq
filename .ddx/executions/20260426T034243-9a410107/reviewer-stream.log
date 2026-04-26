@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "test_rdkafka_auto_create_toggle exercises both TestServer configurations: auto_create=true asserts produce success and topic presence in load_metadata_all; auto_create=false asserts produce error and topic absence. Matches AC.",
+  "findings": [
+    { "severity": "info", "summary": "Uses load_metadata_all() rather than load_metadata(&[topic]) to avoid masking auto-create behavior — correct choice and documented inline.", "location": "heimq/tests/integration.rs:3012" },
+    { "severity": "info", "summary": "Off-branch accepts UnknownTopicOrPartition/UnknownTopic/MessageTimedOut, which is appropriately permissive for librdkafka's local error variants.", "location": "heimq/tests/integration.rs:3066" }
+  ]
+}
+```
