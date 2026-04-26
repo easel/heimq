@@ -3867,3 +3867,171 @@ async fn test_rdkafka_compression_codecs() {
         codecs
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_pause_resume_partitions() {
+    // Consumer assigned to 2 partitions. Pause partition 0, produce to both,
+    // poll, assert only partition 1 messages arrive. Resume partition 0, poll,
+    // assert partition 0 backlog drains.
+    let server = TestServer::start_with_partitions(true, 2);
+    let topic = unique_topic("rdkafka-pause-resume");
+    let group = unique_group("pause-resume-group");
+    let producer = server.rdkafka_producer();
+
+    let consumer = server.rdkafka_consumer(&group);
+    consumer.subscribe(&[&topic]).expect("Failed to subscribe");
+
+    // Drive the consumer until it has been assigned both partitions.
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    loop {
+        let _ = consumer.poll(Duration::from_millis(100));
+        let assignment = consumer.assignment().expect("Failed to get assignment");
+        let parts: Vec<i32> = assignment
+            .elements()
+            .iter()
+            .filter(|e| e.topic() == topic)
+            .map(|e| e.partition())
+            .collect();
+        if parts.contains(&0) && parts.contains(&1) {
+            break;
+        }
+        if start.elapsed() >= timeout {
+            panic!(
+                "Consumer did not get both partitions assigned in time, got: {:?}",
+                parts
+            );
+        }
+    }
+
+    // Pause partition 0.
+    let mut paused = TopicPartitionList::new();
+    paused
+        .add_partition_offset(&topic, 0, rdkafka::Offset::Invalid)
+        .expect("Failed to add partition 0 to pause TPL");
+    consumer.pause(&paused).expect("Failed to pause partition 0");
+
+    // Produce 5 messages to each partition.
+    const PER_PARTITION: usize = 5;
+    let mut p0_payloads: Vec<String> = Vec::new();
+    let mut p1_payloads: Vec<String> = Vec::new();
+    for i in 0..PER_PARTITION {
+        let p0 = format!("p0-{}", i);
+        let rec0 = FutureRecord::to(&topic)
+            .payload(&p0)
+            .key("k0")
+            .partition(0);
+        let (delivered_p, _) = producer
+            .send(rec0, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce to partition 0");
+        assert_eq!(delivered_p, 0, "message must land on partition 0");
+        p0_payloads.push(p0);
+
+        let p1 = format!("p1-{}", i);
+        let rec1 = FutureRecord::to(&topic)
+            .payload(&p1)
+            .key("k1")
+            .partition(1);
+        let (delivered_p, _) = producer
+            .send(rec1, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce to partition 1");
+        assert_eq!(delivered_p, 1, "message must land on partition 1");
+        p1_payloads.push(p1);
+    }
+
+    // Poll: only partition 1 messages should arrive while partition 0 is paused.
+    let mut got_p1: Vec<String> = Vec::new();
+    let phase_start = std::time::Instant::now();
+    while got_p1.len() < PER_PARTITION && phase_start.elapsed() < timeout {
+        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(100)) {
+            assert_ne!(
+                msg.partition(),
+                0,
+                "Paused partition 0 must not deliver messages, got offset {} payload {:?}",
+                msg.offset(),
+                msg.payload().map(|p| String::from_utf8_lossy(p).to_string())
+            );
+            assert_eq!(
+                msg.partition(),
+                1,
+                "Unexpected partition while paused: {}",
+                msg.partition()
+            );
+            let payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .expect("partition 1 message should have payload");
+            got_p1.push(payload);
+        }
+    }
+    assert_eq!(
+        got_p1.len(),
+        PER_PARTITION,
+        "Should receive all {} partition-1 messages while partition 0 is paused, got: {:?}",
+        PER_PARTITION,
+        got_p1
+    );
+    let mut expected_p1 = p1_payloads.clone();
+    let mut sorted_got_p1 = got_p1.clone();
+    expected_p1.sort();
+    sorted_got_p1.sort();
+    assert_eq!(
+        sorted_got_p1, expected_p1,
+        "Partition 1 payloads must match what was produced"
+    );
+
+    // Sanity: keep polling briefly to ensure no partition-0 leakage.
+    let leak_start = std::time::Instant::now();
+    while leak_start.elapsed() < Duration::from_millis(500) {
+        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(50)) {
+            panic!(
+                "Paused partition 0 leaked message: partition={} offset={}",
+                msg.partition(),
+                msg.offset()
+            );
+        }
+    }
+
+    // Resume partition 0.
+    let mut resume = TopicPartitionList::new();
+    resume
+        .add_partition_offset(&topic, 0, rdkafka::Offset::Invalid)
+        .expect("Failed to add partition 0 to resume TPL");
+    consumer.resume(&resume).expect("Failed to resume partition 0");
+
+    // Poll: partition 0 backlog should now drain.
+    let mut got_p0: Vec<String> = Vec::new();
+    let phase_start = std::time::Instant::now();
+    while got_p0.len() < PER_PARTITION && phase_start.elapsed() < timeout {
+        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(100)) {
+            assert_eq!(
+                msg.partition(),
+                0,
+                "After resume only partition 0 backlog should remain, got partition {}",
+                msg.partition()
+            );
+            let payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .expect("partition 0 message should have payload");
+            got_p0.push(payload);
+        }
+    }
+    assert_eq!(
+        got_p0.len(),
+        PER_PARTITION,
+        "Partition 0 backlog should drain after resume, got: {:?}",
+        got_p0
+    );
+    let mut expected_p0 = p0_payloads.clone();
+    let mut sorted_got_p0 = got_p0.clone();
+    expected_p0.sort();
+    sorted_got_p0.sort();
+    assert_eq!(
+        sorted_got_p0, expected_p0,
+        "Partition 0 payloads must match what was produced before pause"
+    );
+}
