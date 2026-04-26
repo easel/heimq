@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260426T032832-01207fec",
+  "bead_id": "heimq-4ab3d5d7",
+  "base_rev": "caa19c97bc7c249b653bce6276ea1081df9fa744",
+  "created_at": "2026-04-26T03:28:32.349011956Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-4ab3d5d7",
+    "title": "e2e: long-poll fetch respects fetch.min.bytes + fetch.max.wait.ms",
+    "description": "Consumer with fetch.min.bytes=1024 and fetch.max.wait.ms=500 polls an empty-ish topic. Case A: no new data — poll returns after ~500ms with empty batch (not 0ms, not hung). Case B: producer writes enough bytes mid-wait — poll returns immediately after threshold reached.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_fetch_long_poll)",
+    "acceptance": "`cargo test --test integration test_rdkafka_fetch_long_poll -- --ignored --nocapture` passes. Both timing assertions hold within a reasonable tolerance (e.g. 300ms \u003c poll_a \u003c 800ms; poll_b \u003c 300ms after produce).",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p1",
+      "topic:fetch-wait"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:28:32Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T03:28:32.267200864Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T032832-01207fec",
+    "prompt": ".ddx/executions/20260426T032832-01207fec/prompt.md",
+    "manifest": ".ddx/executions/20260426T032832-01207fec/manifest.json",
+    "result": ".ddx/executions/20260426T032832-01207fec/result.json",
+    "checks": ".ddx/executions/20260426T032832-01207fec/checks.json",
+    "usage": ".ddx/executions/20260426T032832-01207fec/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-4ab3d5d7-20260426T032832-01207fec"
+  }
+}
