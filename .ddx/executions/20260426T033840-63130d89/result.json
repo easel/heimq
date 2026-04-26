@@ -1,0 +1,49 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Test uses TestServer::start_with_auto_create(false), sends to a fresh topic, asserts non-hang and a Kafka error (UnknownTopicOrPartition/UnknownTopic/MessageTimedOut). Meets acceptance; ignored attribute matches existing rdkafka test convention.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Accepting MessageTimedOut is broad but consistent with bead's 'or equivalent' wording for librdkafka local fallback when metadata refuses the topic.",
+      "location": "heimq/tests/integration.rs:2949"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 855,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T033629-990972fd/manifest.json",
+          ".ddx/executions/20260426T033629-990972fd/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3424,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 6085,
+    "output_bytes": 581,
+    "elapsed_ms": 19004,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

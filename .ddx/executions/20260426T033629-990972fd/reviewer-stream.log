@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Test uses TestServer::start_with_auto_create(false), sends to a fresh topic, asserts non-hang and a Kafka error (UnknownTopicOrPartition/UnknownTopic/MessageTimedOut). Meets acceptance; ignored attribute matches existing rdkafka test convention.",
+  "findings": [
+    { "severity": "info", "summary": "Accepting MessageTimedOut is broad but consistent with bead's 'or equivalent' wording for librdkafka local fallback when metadata refuses the topic.", "location": "heimq/tests/integration.rs:2949" }
+  ]
+}
+```
