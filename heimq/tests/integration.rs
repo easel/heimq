@@ -2960,6 +2960,133 @@ async fn test_rdkafka_produce_no_autocreate_errors() {
 
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_auto_create_toggle() {
+    use heimq::test_support::unique_topic;
+    use std::time::Instant;
+
+    // Pins end-to-end behavior of HEIMQ_AUTO_CREATE_TOPICS:
+    //   * auto_create=true  -> first produce to a fresh topic succeeds AND the
+    //                          topic appears in a subsequent Metadata request.
+    //   * auto_create=false -> the same produce fails AND the topic is absent
+    //                          from a subsequent Metadata request.
+    //
+    // Both branches are exercised in this single test so the toggle's contract
+    // is asserted in lockstep against a single TestServer configuration each.
+
+    // ---- Branch 1: auto_create_topics = true ------------------------------
+    let server_on = TestServer::start_with_auto_create(true);
+    let topic_on = unique_topic("auto-create-toggle-on");
+
+    let producer_on: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &server_on.bootstrap_servers())
+        .set("message.timeout.ms", "5000")
+        .create()
+        .expect("failed to create rdkafka producer (auto_create=true)");
+
+    let on_start = Instant::now();
+    let on_result = producer_on
+        .send(
+            FutureRecord::<str, str>::to(&topic_on).payload("hello-on"),
+            Duration::from_secs(10),
+        )
+        .await;
+    let on_elapsed = on_start.elapsed();
+
+    let (on_partition, on_offset) = on_result.unwrap_or_else(|(err, _msg)| {
+        panic!(
+            "expected first produce to succeed with auto_create_topics=true \
+             (topic={}, elapsed={:?}), got delivery error: {:?}",
+            topic_on, on_elapsed, err
+        )
+    });
+
+    // Use the legacy KafkaClient to issue a Metadata-all request. We deliberately
+    // avoid load_metadata(&[topic]) here because requesting a specific topic
+    // would itself auto-create when the toggle is enabled, masking what the
+    // produce path did.
+    let mut admin_on = KafkaClient::new(server_on.hosts());
+    admin_on
+        .load_metadata_all()
+        .expect("metadata-all request failed (auto_create=true)");
+    let topics_on: Vec<String> = admin_on.topics().names().map(|n| n.to_string()).collect();
+    assert!(
+        topics_on.iter().any(|n| n == &topic_on),
+        "auto_create_topics=true: topic {} should be present in Metadata after \
+         produce; got: {:?}",
+        topic_on,
+        topics_on
+    );
+
+    println!(
+        "test_rdkafka_auto_create_toggle[on]: produced {}[{}]@{} in {:?}, metadata OK",
+        topic_on, on_partition, on_offset, on_elapsed
+    );
+
+    // ---- Branch 2: auto_create_topics = false -----------------------------
+    let server_off = TestServer::start_with_auto_create(false);
+    let topic_off = unique_topic("auto-create-toggle-off");
+
+    let producer_off: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &server_off.bootstrap_servers())
+        .set("message.timeout.ms", "5000")
+        .create()
+        .expect("failed to create rdkafka producer (auto_create=false)");
+
+    let off_start = Instant::now();
+    let off_result = producer_off
+        .send(
+            FutureRecord::<str, str>::to(&topic_off).payload("hello-off"),
+            Duration::from_secs(15),
+        )
+        .await;
+    let off_elapsed = off_start.elapsed();
+
+    assert!(
+        off_elapsed < Duration::from_secs(15),
+        "produce hung past message.timeout.ms with auto_create_topics=false ({:?})",
+        off_elapsed
+    );
+
+    let (off_err, _off_msg) = off_result.expect_err(&format!(
+        "expected produce to fail with auto_create_topics=false (topic={}, \
+         elapsed={:?}), got Ok",
+        topic_off, off_elapsed
+    ));
+
+    // Accept either the broker-side UNKNOWN_TOPIC_OR_PARTITION or librdkafka's
+    // local equivalents (UnknownTopic / MessageTimedOut after metadata refusal).
+    let off_err_str = format!("{:?}", off_err);
+    let acceptable = off_err_str.contains("UnknownTopicOrPartition")
+        || off_err_str.contains("UnknownTopic")
+        || off_err_str.contains("MessageTimedOut");
+    assert!(
+        acceptable,
+        "auto_create_topics=false: expected a Kafka error indicating the topic \
+         is missing, got {:?}",
+        off_err
+    );
+
+    let mut admin_off = KafkaClient::new(server_off.hosts());
+    admin_off
+        .load_metadata_all()
+        .expect("metadata-all request failed (auto_create=false)");
+    let topics_off: Vec<String> = admin_off.topics().names().map(|n| n.to_string()).collect();
+    assert!(
+        !topics_off.iter().any(|n| n == &topic_off),
+        "auto_create_topics=false: topic {} must NOT appear in Metadata after \
+         a failed produce; got: {:?}",
+        topic_off,
+        topics_off
+    );
+
+    println!(
+        "test_rdkafka_auto_create_toggle[off]: produce err={:?} in {:?}, metadata OK",
+        off_err, off_elapsed
+    );
+}
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_oversized_message() {
     // heimq does NOT enforce a server-side message.max.bytes / max.message.bytes
     // limit on the produce path (see src/handler/produce.rs and src/config.rs:
