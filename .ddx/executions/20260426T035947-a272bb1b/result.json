@@ -1,0 +1,54 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "compute_supported_apis intersects static SUPPORTED_APIS with per-API capability gates (Log/OffsetStore/GroupCoordinator/Always), wired through Router and Server. Tests cover memory default, missing group/offset backends, and compaction=false non-leakage.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Backend presence is detected via name != \"unknown\" sentinel rather than an explicit availability flag; works today but is brittle if a real backend ever reports name \"unknown\".",
+      "location": "heimq/src/protocol/mod.rs:90"
+    },
+    {
+      "severity": "info",
+      "summary": "Router::new still recomputes advertised_apis per call; only Server uses with_advertised_apis. Minor duplication but acceptable for tests.",
+      "location": "heimq/src/protocol/router.rs:28"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1265,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T035326-1afb8e0b/manifest.json",
+          ".ddx/executions/20260426T035326-1afb8e0b/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3792,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 6863,
+    "output_bytes": 846,
+    "elapsed_ms": 16950,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

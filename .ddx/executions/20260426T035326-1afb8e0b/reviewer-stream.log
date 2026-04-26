@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "compute_supported_apis intersects static SUPPORTED_APIS with per-API capability gates (Log/OffsetStore/GroupCoordinator/Always), wired through Router and Server. Tests cover memory default, missing group/offset backends, and compaction=false non-leakage.",
+  "findings": [
+    { "severity": "info", "summary": "Backend presence is detected via name != \"unknown\" sentinel rather than an explicit availability flag; works today but is brittle if a real backend ever reports name \"unknown\".", "location": "heimq/src/protocol/mod.rs:90" },
+    { "severity": "info", "summary": "Router::new still recomputes advertised_apis per call; only Server uses with_advertised_apis. Minor duplication but acceptable for tests.", "location": "heimq/src/protocol/router.rs:28" }
+  ]
+}
+```
