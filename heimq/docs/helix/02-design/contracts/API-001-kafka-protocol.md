@@ -1,7 +1,7 @@
 # API Contract: Kafka Wire Protocol [heimq]
 
 **Contract ID**: API-001
-**Features**: FEAT-001 (Wire-Protocol Compatibility), FEAT-002 (Core Kafka Semantics)
+**Features**: FEAT-001 (Wire-Protocol Compatibility), FEAT-002 (Core Kafka Semantics), FEAT-006 (Flexible-Version Protocol)
 **Type**: Protocol (Kafka TCP Wire)
 **Status**: Draft
 **Version**: 0.2.0
@@ -180,7 +180,7 @@ zero diffs at flexible versions vs Redpanda.
 ## Feature Traceability
 
 - **PRD**: `docs/helix/01-frame/prd.md` (P0 #1 wire compat, #2 groups, #3 idempotent producers, #4 transactions, #5 parity, #6 benchmarks, #7 ecosystem).
-- **Feature specs**: FEAT-001 (wire protocol), FEAT-002 (groups + transactions + idempotency), FEAT-003 (differential parity), FEAT-004 (benchmark conformance), FEAT-005 (ecosystem integrations).
+- **Feature specs**: FEAT-001 (wire protocol), FEAT-002 (groups + transactions + idempotency), FEAT-003 (differential parity), FEAT-004 (benchmark conformance), FEAT-005 (ecosystem integrations), FEAT-006 (flexible-version protocol).
 - **Implementation**: `src/handler/*.rs`, `src/protocol/*`, `src/storage/*`; transaction coordinator and producer-id manager TBD under FEAT-002.
 - **Tests**: `tests/contract.rs`, `tests/integration.rs`, `src/handler/tests.rs`, `src/protocol/router.rs`, storage module unit/property tests; planned `tests/contract/transactions.rs`, `tests/parity/`, `tests/ecosystem/`, `scripts/bench/`.
 - **Related Doc**: `docs/helix/03-test/test-plan/test-plan.md`.
