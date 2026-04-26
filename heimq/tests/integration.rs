@@ -3436,3 +3436,95 @@ async fn test_rdkafka_produce_consume_soak() {
         );
     }
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_record_headers_roundtrip() {
+    use rdkafka::message::{Header, Headers, OwnedHeaders};
+
+    let server = TestServer::start();
+    let topic = "rdkafka-record-headers-roundtrip";
+    let producer = server.rdkafka_producer();
+
+    let expected_headers: Vec<(&str, &[u8])> = vec![
+        ("trace-id", b"abc-123" as &[u8]),
+        ("content-type", b"application/octet-stream"),
+        ("x-binary", &[0u8, 1, 2, 0xff]),
+    ];
+
+    let mut owned = OwnedHeaders::new();
+    for (k, v) in &expected_headers {
+        owned = owned.insert(Header {
+            key: k,
+            value: Some(*v),
+        });
+    }
+
+    let payload = b"headers-roundtrip-payload";
+    let key = "headers-key";
+    let record = FutureRecord::to(topic)
+        .payload(payload as &[u8])
+        .key(key)
+        .headers(owned);
+
+    producer
+        .send(record, Duration::from_secs(5))
+        .await
+        .expect("Failed to produce message with headers");
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let consumer = server.rdkafka_consumer("headers-roundtrip-group");
+    consumer.subscribe(&[topic]).expect("Failed to subscribe");
+
+    let timeout = Duration::from_secs(5);
+    let start = std::time::Instant::now();
+    let mut consumed = None;
+
+    while consumed.is_none() && start.elapsed() < timeout {
+        if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+            let msg = result.expect("consumer poll error");
+            let payload_bytes = msg.payload().map(|p| p.to_vec());
+            let headers = msg.headers().map(|h| {
+                (0..h.count())
+                    .map(|i| {
+                        let h = h.get(i);
+                        (h.key.to_string(), h.value.map(|v| v.to_vec()))
+                    })
+                    .collect::<Vec<_>>()
+            });
+            consumed = Some((payload_bytes, headers));
+        }
+    }
+
+    let (payload_bytes, headers) = consumed.expect("did not receive message within timeout");
+    assert_eq!(
+        payload_bytes.as_deref(),
+        Some(payload as &[u8]),
+        "payload mismatch"
+    );
+
+    let headers = headers.expect("consumed message had no headers");
+    assert_eq!(
+        headers.len(),
+        expected_headers.len(),
+        "header count mismatch: got {:?}",
+        headers
+    );
+
+    for (i, (expected_key, expected_value)) in expected_headers.iter().enumerate() {
+        let (got_key, got_value) = &headers[i];
+        assert_eq!(
+            got_key, expected_key,
+            "header[{}] key mismatch: got {:?}",
+            i, headers
+        );
+        assert_eq!(
+            got_value.as_deref(),
+            Some(*expected_value),
+            "header[{}] value mismatch: got {:?}",
+            i,
+            headers
+        );
+    }
+}
