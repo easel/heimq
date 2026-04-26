@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260426T033401-38d0e687",
+  "bead_id": "heimq-979c6bea",
+  "base_rev": "6ba6375f27253501e524f97add8138b32bf33897",
+  "created_at": "2026-04-26T03:34:01.156969285Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-979c6bea",
+    "title": "e2e: empty-topic consume timeout",
+    "description": "Consumer subscribes to an empty topic, polls with a short timeout (e.g. 500ms), expects a clean None/timeout result — not an error, not a hang. Catches broken long-poll responses where broker returns malformed empty FetchResponse.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_empty_topic_poll_timeout)",
+    "acceptance": "`cargo test --test integration test_rdkafka_empty_topic_poll_timeout -- --ignored --nocapture` passes and asserts poll() returns None (no error) within the configured timeout.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p1",
+      "topic:fetch-wait"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:34:01Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T03:34:01.068084571Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T033401-38d0e687",
+    "prompt": ".ddx/executions/20260426T033401-38d0e687/prompt.md",
+    "manifest": ".ddx/executions/20260426T033401-38d0e687/manifest.json",
+    "result": ".ddx/executions/20260426T033401-38d0e687/result.json",
+    "checks": ".ddx/executions/20260426T033401-38d0e687/checks.json",
+    "usage": ".ddx/executions/20260426T033401-38d0e687/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-979c6bea-20260426T033401-38d0e687"
+  }
+}
