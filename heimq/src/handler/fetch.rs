@@ -32,7 +32,13 @@ pub fn handle(
     if cursor.remaining() < 4 {
         return Ok(response);
     }
-    let _max_wait_ms = cursor.get_i32();
+    let max_wait_ms = cursor.get_i32();
+    // Backends that don't advertise long-poll support degrade to immediate.
+    let _max_wait_ms = if storage.capabilities().fetch_wait {
+        max_wait_ms
+    } else {
+        0
+    };
 
     // min_bytes (INT32)
     if cursor.remaining() < 4 {

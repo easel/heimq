@@ -28,15 +28,26 @@ pub struct MemoryLog {
 impl MemoryLog {
     /// Create a new in-memory backend.
     pub fn new(config: Arc<Config>) -> Self {
+        Self::with_capabilities(
+            config,
+            BackendCapabilities {
+                name: "in-memory",
+                ..BackendCapabilities::minimal()
+            },
+        )
+    }
+
+    /// Create a new in-memory backend with caller-supplied capabilities.
+    ///
+    /// Used in tests to exercise call-time rejection paths (e.g. forcing a
+    /// small `max_message_bytes` so oversized produce requests are rejected).
+    pub fn with_capabilities(config: Arc<Config>, capabilities: BackendCapabilities) -> Self {
         info!("Initializing in-memory storage backend");
         Self {
             topics: DashMap::new(),
             config,
             total_messages: AtomicI64::new(0),
-            capabilities: BackendCapabilities {
-                name: "in-memory",
-                ..BackendCapabilities::minimal()
-            },
+            capabilities,
         }
     }
 

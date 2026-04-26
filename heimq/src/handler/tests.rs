@@ -1197,6 +1197,71 @@ fn offset_fetch_truncated_and_missing_offsets() {
 }
 
 #[test]
+fn produce_oversize_batch_rejected_with_message_too_large() {
+    use crate::storage::{BackendCapabilities, LogBackend, MemoryLog};
+    use kafka_protocol::messages::TransactionalId;
+
+    let caps = BackendCapabilities {
+        name: "in-memory",
+        max_message_bytes: 1024,
+        max_batch_bytes: 1024,
+        ..BackendCapabilities::minimal()
+    };
+    let storage: Arc<dyn LogBackend> =
+        Arc::new(MemoryLog::with_capabilities(test_config(true), caps));
+    storage.create_topic("oversize", 1).unwrap();
+
+    let big_value: Vec<u8> = vec![b'x'; 2048];
+    let mut record = new_record(0);
+    record.value = Some(big_value.into());
+    let batch = encode_record_batch(&[record]);
+    assert!(batch.len() > 1024, "expected batch > 1KB, got {}", batch.len());
+
+    let mut partition = PartitionProduceData::default();
+    partition.index = 0;
+    partition.records = Some(batch);
+
+    let mut topic = TopicProduceData::default();
+    topic.name = TopicName(StrBytes::from_string("oversize".to_string()));
+    topic.partition_data = vec![partition];
+
+    let mut request = ProduceRequest::default();
+    request.acks = 1;
+    request.timeout_ms = 1000;
+    request.topic_data = vec![topic];
+
+    let body = encode_body(&request, 2);
+    let response = produce::handle(2, &body, &storage).unwrap();
+    assert_eq!(
+        response.responses[0].partition_responses[0].error_code,
+        10,
+        "expected MESSAGE_TOO_LARGE (10)"
+    );
+    assert_eq!(response.responses[0].partition_responses[0].base_offset, -1);
+
+    // Transactional produce against a backend with transactions=false is rejected.
+    let mut tx_partition = PartitionProduceData::default();
+    tx_partition.index = 0;
+    tx_partition.records = Some(encode_record_batch(&[new_record(0)]));
+    let mut tx_topic = TopicProduceData::default();
+    tx_topic.name = TopicName(StrBytes::from_string("oversize".to_string()));
+    tx_topic.partition_data = vec![tx_partition];
+    let mut tx_request = ProduceRequest::default();
+    tx_request.transactional_id =
+        Some(TransactionalId(StrBytes::from_string("txn-1".to_string())));
+    tx_request.acks = -1;
+    tx_request.timeout_ms = 1000;
+    tx_request.topic_data = vec![tx_topic];
+    let body = encode_body(&tx_request, 3);
+    let response = produce::handle(3, &body, &storage).unwrap();
+    assert_eq!(
+        response.responses[0].partition_responses[0].error_code,
+        48,
+        "expected INVALID_TXN_STATE (48) for transactional produce against non-tx backend"
+    );
+}
+
+#[test]
 fn produce_appends_records() {
     init_tracing();
     let storage = test_storage(true);

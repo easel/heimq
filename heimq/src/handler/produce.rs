@@ -30,6 +30,12 @@ pub fn handle(
 
     let mut response = ProduceResponse::default();
 
+    let caps = storage.capabilities();
+    let transactional_attempted = request.transactional_id.is_some();
+    let transactions_unsupported = transactional_attempted && !caps.transactions;
+    let max_message_bytes = caps.max_message_bytes;
+    let max_batch_bytes = caps.max_batch_bytes;
+
     for topic_data in request.topic_data {
         let topic_name = topic_data.name.0.to_string();
         debug!(topic = %topic_name, partitions = topic_data.partition_data.len(), "Processing topic");
@@ -42,8 +48,30 @@ pub fn handle(
             let mut partition_response = PartitionProduceResponse::default();
             partition_response.index = partition;
 
+            if transactions_unsupported {
+                warn!(topic = %topic_name, partition, "Rejecting transactional produce: backend does not support transactions");
+                partition_response.error_code = 48; // INVALID_TXN_STATE
+                partition_response.base_offset = -1;
+                topic_response.partition_responses.push(partition_response);
+                continue;
+            }
+
             if let Some(records) = partition_data.records {
                 if !records.is_empty() {
+                    if records.len() > max_batch_bytes || records.len() > max_message_bytes {
+                        warn!(
+                            topic = %topic_name,
+                            partition,
+                            len = records.len(),
+                            max_message_bytes,
+                            max_batch_bytes,
+                            "Rejecting oversized produce batch"
+                        );
+                        partition_response.error_code = 10; // MESSAGE_TOO_LARGE
+                        partition_response.base_offset = -1;
+                        topic_response.partition_responses.push(partition_response);
+                        continue;
+                    }
                     // Append to storage
                     match storage.append(&topic_name, partition, &records) {
                         Ok((base_offset, count)) => {
