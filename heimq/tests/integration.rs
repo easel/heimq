@@ -2833,3 +2833,71 @@ async fn test_rdkafka_fetch_long_poll() {
 
     println!("test_rdkafka_fetch_long_poll: poll_a={:?}, poll_b={:?}", poll_a, poll_b);
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_empty_topic_poll_timeout() {
+    use std::time::Instant;
+
+    let server = TestServer::start();
+    let producer = server.rdkafka_producer();
+
+    let topic = unique_topic("empty-poll-timeout");
+    let group = unique_group("empty-poll-timeout");
+
+    // Ensure the topic exists by producing then draining a single init message,
+    // so that the consumer is genuinely polling an existing-but-empty log
+    // (this exercises the broker's empty FetchResponse path, not topic-creation).
+    producer
+        .send(
+            FutureRecord::<str, str>::to(&topic).payload("init"),
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("failed to produce init");
+
+    let consumer: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &group)
+        .set("auto.offset.reset", "earliest")
+        .set("enable.auto.commit", "false")
+        .create()
+        .expect("failed to create consumer");
+    consumer.subscribe(&[&topic]).expect("failed to subscribe");
+
+    // Drain the init message so the consumer position sits at end-of-log.
+    let drain_deadline = Instant::now() + Duration::from_secs(5);
+    let mut drained = false;
+    while Instant::now() < drain_deadline && !drained {
+        if let Some(Ok(_)) = consumer.poll(Duration::from_millis(200)) {
+            drained = true;
+        }
+    }
+    assert!(drained, "failed to drain init message before measurement");
+
+    // Short-timeout poll on a now-empty topic. A well-behaved broker returns
+    // an empty FetchResponse and librdkafka surfaces it as None. A malformed
+    // empty FetchResponse would surface as Some(Err(_)); a hung response
+    // would push elapsed well past the timeout.
+    let timeout = Duration::from_millis(500);
+    let start = Instant::now();
+    let result = consumer.poll(timeout);
+    let elapsed = start.elapsed();
+
+    assert!(
+        result.is_none(),
+        "expected None on empty topic poll, got {:?}",
+        result
+    );
+    assert!(
+        elapsed < Duration::from_millis(2000),
+        "poll hung past timeout ({:?}); expected to return within ~{:?}",
+        elapsed,
+        timeout
+    );
+
+    println!(
+        "test_rdkafka_empty_topic_poll_timeout: elapsed={:?} (timeout={:?})",
+        elapsed, timeout
+    );
+}
