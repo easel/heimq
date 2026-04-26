@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Test asserts all three invariants: count equality, (partition,offset) uniqueness, and strictly monotonic per-partition offsets. 3 partitions enforced, 30s budget, #[ignore] gates --ignored execution as required.",
+  "findings": [
+    { "severity": "info", "summary": "Uses 3,000 messages instead of the 10k example; bead phrasing 'e.g. 10k' permits this and keeps the run inside the 30s CI budget on debug builds.", "location": "heimq/tests/integration.rs:3300" },
+    { "severity": "info", "summary": "Monotonicity is checked in delivery order, which for a single consumer on rdkafka equals broker offset order per partition; acceptable for the AC.", "location": "heimq/tests/integration.rs:3410" }
+  ]
+}
+```
