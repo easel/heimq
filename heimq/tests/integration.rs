@@ -3528,3 +3528,141 @@ async fn test_rdkafka_record_headers_roundtrip() {
         );
     }
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_compression_codecs() {
+    // For each compression codec supported by librdkafka, produce a batch of
+    // messages with that codec and verify a consumer reads back the exact
+    // payloads. heimq stores compressed RecordBatch payloads opaquely, so this
+    // exercises the broker's RecordBatch decode/passthrough behavior for
+    // gzip / snappy / lz4 / zstd.
+    let server = TestServer::start();
+
+    let codecs = ["gzip", "snappy", "lz4", "zstd"];
+    let mut exercised = 0usize;
+    let mut unsupported: Vec<(&str, String)> = Vec::new();
+
+    for codec in codecs {
+        let topic = format!("rdkafka-compression-{}", codec);
+        let producer: FutureProducer = match ClientConfig::new()
+            .set("bootstrap.servers", &server.bootstrap_servers())
+            .set("message.timeout.ms", "10000")
+            .set("compression.type", codec)
+            // Force a real batch so the codec actually engages.
+            .set("batch.num.messages", "100")
+            .set("linger.ms", "50")
+            .create()
+        {
+            Ok(p) => p,
+            Err(e) => {
+                // librdkafka was built without support for this codec. Per the
+                // bead AC, document and assert a clear, actionable error
+                // rather than allow silent corruption.
+                let msg = format!("{:?}", e);
+                assert!(
+                    msg.to_lowercase().contains(codec)
+                        || msg.to_lowercase().contains("compression")
+                        || msg.to_lowercase().contains("not available"),
+                    "codec {} producer creation failed but error did not clearly identify the codec/compression: {}",
+                    codec,
+                    msg
+                );
+                eprintln!(
+                    "compression codec {} unsupported by librdkafka build: {}",
+                    codec, msg
+                );
+                unsupported.push((codec, msg));
+                continue;
+            }
+        };
+
+        let message_count: usize = 25;
+        let expected: Vec<(String, String)> = (0..message_count)
+            .map(|i| (format!("key-{}-{}", codec, i), format!("payload-{}-{:08}", codec, i)))
+            .collect();
+
+        let mut send_results = Vec::with_capacity(message_count);
+        for (key, payload) in &expected {
+            let record = FutureRecord::to(&topic).payload(payload).key(key);
+            send_results.push(producer.send(record, Duration::from_secs(10)).await);
+        }
+
+        // If librdkafka rejects the codec at produce time, fail loudly with
+        // the codec name so silent corruption is impossible.
+        for (idx, res) in send_results.into_iter().enumerate() {
+            res.unwrap_or_else(|(e, _)| {
+                panic!(
+                    "codec {} produce failed for message {}: {:?}",
+                    codec, idx, e
+                )
+            });
+        }
+
+        tokio::time::sleep(Duration::from_millis(300)).await;
+
+        let consumer = server.rdkafka_consumer(&format!("compression-{}-group", codec));
+        consumer
+            .subscribe(&[&topic])
+            .unwrap_or_else(|e| panic!("subscribe for codec {}: {:?}", codec, e));
+
+        let mut received: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
+        let timeout = Duration::from_secs(15);
+        let start = std::time::Instant::now();
+
+        while received.len() < message_count && start.elapsed() < timeout {
+            if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+                let msg = result
+                    .unwrap_or_else(|e| panic!("codec {} consume error: {:?}", codec, e));
+                let payload = msg
+                    .payload()
+                    .unwrap_or_else(|| panic!("codec {} message had no payload", codec))
+                    .to_vec();
+                let key = msg
+                    .key()
+                    .unwrap_or_else(|| panic!("codec {} message had no key", codec))
+                    .to_vec();
+                received.push((key, payload));
+            }
+        }
+
+        assert_eq!(
+            received.len(),
+            message_count,
+            "codec {}: expected {} messages, got {}",
+            codec,
+            message_count,
+            received.len()
+        );
+
+        for (i, (expected_key, expected_payload)) in expected.iter().enumerate() {
+            let (got_key, got_payload) = &received[i];
+            assert_eq!(
+                got_key.as_slice(),
+                expected_key.as_bytes(),
+                "codec {} message {} key mismatch",
+                codec,
+                i
+            );
+            assert_eq!(
+                got_payload.as_slice(),
+                expected_payload.as_bytes(),
+                "codec {} message {} payload mismatch (silent corruption?)",
+                codec,
+                i
+            );
+        }
+
+        exercised += 1;
+    }
+
+    eprintln!(
+        "compression round-trip: exercised {} codec(s); unsupported by build: {:?}",
+        exercised, unsupported
+    );
+    assert!(
+        exercised > 0,
+        "no compression codecs were exercised — librdkafka build supports none of {:?}",
+        codecs
+    );
+}
