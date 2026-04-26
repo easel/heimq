@@ -2901,3 +2901,59 @@ async fn test_rdkafka_empty_topic_poll_timeout() {
         elapsed, timeout
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_produce_no_autocreate_errors() {
+    use std::time::Instant;
+
+    // Server with auto_create_topics disabled: producing to a topic that does
+    // not exist must surface a Kafka error on the delivery report rather than
+    // hanging or silently succeeding.
+    let server = TestServer::start_with_auto_create(false);
+
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("message.timeout.ms", "5000")
+        .create()
+        .expect("failed to create rdkafka producer");
+
+    let topic = unique_topic("no-autocreate-missing");
+
+    let start = Instant::now();
+    let result = producer
+        .send(
+            FutureRecord::<str, str>::to(&topic).payload("should-fail"),
+            Duration::from_secs(15),
+        )
+        .await;
+    let elapsed = start.elapsed();
+
+    assert!(
+        elapsed < Duration::from_secs(15),
+        "delivery hung past message.timeout.ms ({:?})",
+        elapsed
+    );
+
+    let (err, _msg) = result.expect_err(&format!(
+        "expected delivery error for missing topic with auto-create disabled, got Ok in {:?}",
+        elapsed
+    ));
+
+    // Surface the broker error (UNKNOWN_TOPIC_OR_PARTITION) or librdkafka's
+    // local equivalent (UnknownTopic / MessageTimedOut after metadata refusal).
+    let err_str = format!("{:?}", err);
+    let acceptable = err_str.contains("UnknownTopicOrPartition")
+        || err_str.contains("UnknownTopic")
+        || err_str.contains("MessageTimedOut");
+    assert!(
+        acceptable,
+        "expected a Kafka error code indicating missing topic, got {:?}",
+        err
+    );
+
+    println!(
+        "test_rdkafka_produce_no_autocreate_errors: elapsed={:?} err={:?}",
+        elapsed, err
+    );
+}
