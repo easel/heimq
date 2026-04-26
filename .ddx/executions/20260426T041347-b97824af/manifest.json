@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260426T041347-b97824af",
+  "bead_id": "heimq-cd222bbb",
+  "base_rev": "9e13707eb53e0f5c7c0909205d0b1438c1e524dd",
+  "created_at": "2026-04-26T04:13:47.825080085Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-cd222bbb",
+    "title": "e2e: seek to end and seek to arbitrary offset",
+    "description": "Complements existing test_rdkafka_consumer_seek_to_beginning. Two scenarios: (1) seek to end — subsequent poll sees only new messages produced after the seek; (2) seek to a specific mid-range offset — consumer sees messages from that offset forward.\nIn-scope files:\n- tests/integration.rs (new fns test_rdkafka_seek_to_end, test_rdkafka_seek_to_offset)",
+    "acceptance": "`cargo test --test integration test_rdkafka_seek_to -- --ignored --nocapture` runs both and asserts consumed offsets match expectation.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p2",
+      "topic:client-surface"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T04:13:47Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T04:13:47.733254183Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T041347-b97824af",
+    "prompt": ".ddx/executions/20260426T041347-b97824af/prompt.md",
+    "manifest": ".ddx/executions/20260426T041347-b97824af/manifest.json",
+    "result": ".ddx/executions/20260426T041347-b97824af/result.json",
+    "checks": ".ddx/executions/20260426T041347-b97824af/checks.json",
+    "usage": ".ddx/executions/20260426T041347-b97824af/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-cd222bbb-20260426T041347-b97824af"
+  }
+}
