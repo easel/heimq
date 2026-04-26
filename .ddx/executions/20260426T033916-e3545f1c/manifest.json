@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260426T033916-e3545f1c",
+  "bead_id": "heimq-cd905f86",
+  "base_rev": "e9bc88c7e66ed56bf620ed28bffc979557da7f62",
+  "created_at": "2026-04-26T03:39:16.674565256Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-cd905f86",
+    "title": "e2e: oversized message vs message.max.bytes",
+    "description": "Producer attempts to send a message larger than the broker's configured max. Assert a bounded, observable failure (error on delivery report or client-side rejection), not a hang or partial produce. If heimq has no enforced max, document that — if it does enforce one, assert the boundary behavior.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_oversized_message)\n- src/config.rs (only if a max-size config knob needs reading; do not add one)",
+    "acceptance": "`cargo test --test integration test_rdkafka_oversized_message -- --ignored --nocapture` passes. If heimq enforces no limit, test documents that and asserts the large payload round-trips.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p1",
+      "topic:error-paths"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:39:16Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T03:39:16.591588623Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T033916-e3545f1c",
+    "prompt": ".ddx/executions/20260426T033916-e3545f1c/prompt.md",
+    "manifest": ".ddx/executions/20260426T033916-e3545f1c/manifest.json",
+    "result": ".ddx/executions/20260426T033916-e3545f1c/result.json",
+    "checks": ".ddx/executions/20260426T033916-e3545f1c/checks.json",
+    "usage": ".ddx/executions/20260426T033916-e3545f1c/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-cd905f86-20260426T033916-e3545f1c"
+  }
+}
