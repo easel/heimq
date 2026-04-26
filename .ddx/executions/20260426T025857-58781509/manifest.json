@@ -1,0 +1,88 @@
+{
+  "attempt_id": "20260426T025857-58781509",
+  "bead_id": "heimq-04def9c7",
+  "base_rev": "caa5be836a49a7894877d49210a8ede4f83ceb1d",
+  "created_at": "2026-04-26T02:58:57.40994435Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-04def9c7",
+    "title": "Extract OffsetStore trait",
+    "description": "Commit offsets are today stored inside ConsumerGroupManager state. Extract an OffsetStore trait:\n\n- commit(group, topic, partition, offset, metadata)\n- fetch(group, topic, partition) -\u003e Option\u003cCommittedOffset\u003e\n- delete_group(group)\n- capabilities()\n\nCurrent implementation becomes MemoryOffsetStore. OffsetCommit/OffsetFetch handlers take Arc\u003cdyn OffsetStore\u003e.\n\nIn-scope files:\n- src/storage/offset_store.rs (new trait + memory impl)\n- src/consumer_group/offset_store.rs (refactor: concrete struct implements new trait)\n- src/handler/offset_commit.rs, src/handler/offset_fetch.rs (take Arc\u003cdyn OffsetStore\u003e)\n- src/server.rs (construction)\nOut of scope:\n- Postgres impl (separate bead)\n- GroupCoordinatorBackend (separate bead)",
+    "acceptance": "`cargo test --workspace` passes. kcat stress script passes. Offset commit/fetch unit tests remain green.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:4-offset-trait"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T02:58:57Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-24T02:07:14.612806792Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260424T020456-be39bf0c\",\"harness\":\"claude\",\"input_tokens\":21,\"output_tokens\":4760,\"total_tokens\":4781,\"cost_usd\":0.609821,\"duration_ms\":112035,\"exit_code\":0}",
+          "created_at": "2026-04-24T02:07:14.622840495Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=4781 cost_usd=0.6098"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"\",\"resolved_provider\":\"claude\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-04-24T02:08:02.940236388Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "`src/storage/offset_store.rs` was not created — new trait + `MemoryOffsetStore` impl missing.\n`src/consumer_group/offset_store.rs` was not refactored to implement the new trait.\n`src/handler/offset_commit.rs` and `src/handler/offset_fetch.rs` still use the concrete type rather than `Arc\u003cdyn OffsetStore\u003e`.\n`src/server.rs` was not updated for the new construction.\nThe commit bundles `heimq/target/**` build artifacts that should not be checked in; whoever re-runs this bead should also ensure `target/` stays out of the commit.",
+          "created_at": "2026-04-24T02:08:26.692510162Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "",
+          "body": "",
+          "created_at": "2026-04-24T02:08:26.701840366Z",
+          "kind": "reopen",
+          "source": "",
+          "summary": "review: BLOCK"
+        },
+        {
+          "actor": "ddx",
+          "body": "post-merge review: BLOCK (flagged for human)\n`src/storage/offset_store.rs` was not created — new trait + `MemoryOffsetStore` impl missing.\n`src/consumer_group/offset_store.rs` was not refactored to implement the new trait.\n`src/handler/offset_commit.rs` and `src/handler/offset_fetch.rs` still use the concrete type rather than `Arc\u003cdyn OffsetStore\u003e`.\n`src/server.rs` was not updated for the new construction.\nThe commit bundles `heimq/target/**` build artifacts that should not be checked in; whoever re-runs this bead should also ensure `target/` stays out of the commit.\nresult_rev=23eafba4c437887435538797770449a3b3f3c497\nbase_rev=d40f24df8c9662f9a613bdb796a3e6c3543e2d6c",
+          "created_at": "2026-04-24T02:08:26.707123905Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-04-26T02:58:57.322156189Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T025857-58781509",
+    "prompt": ".ddx/executions/20260426T025857-58781509/prompt.md",
+    "manifest": ".ddx/executions/20260426T025857-58781509/manifest.json",
+    "result": ".ddx/executions/20260426T025857-58781509/result.json",
+    "checks": ".ddx/executions/20260426T025857-58781509/checks.json",
+    "usage": ".ddx/executions/20260426T025857-58781509/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-04def9c7-20260426T025857-58781509"
+  }
+}
