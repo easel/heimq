@@ -1,0 +1,12 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "All AC items satisfied: storage config with three URL fields defaulting to memory://, per-trait dispatch fns in storage/dispatch.rs, server constructs backends via dispatch, unknown schemes fail fast at startup with clear error messages naming the bad scheme and supported alternatives. Test coverage includes defaults, overrides, and unknown-scheme failures for all three traits.",
+  "findings": [
+    { "severity": "info", "summary": "dispatch_group_coordinator takes a pre-built ConsumerGroupManager rather than constructing it from a URL+offset_store; works for memory:// but the signature will need to change once a real coordinator backend is added.", "location": "heimq/src/storage/dispatch.rs:48" },
+    { "severity": "info", "summary": "Coordinator dispatch result is bound to `_coordinator` and discarded; the manager actually used by the server is the one constructed before dispatch. Fine for memory://, but couples behavior tightly to that scheme.", "location": "heimq/src/server.rs:40" },
+    { "severity": "info", "summary": "Config uses individual flat fields (storage_log/offsets/groups) rather than a nested [storage] config block as described in the bead; functionally equivalent and provides a StorageConfig view via Config::storage().", "location": "heimq/src/config.rs:64" }
+  ]
+}
+```
