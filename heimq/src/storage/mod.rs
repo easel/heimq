@@ -8,6 +8,8 @@ mod dispatch;
 mod memory;
 mod offset_store;
 mod partition;
+#[cfg(feature = "backend-postgres")]
+mod postgres_offsets;
 mod record_batch_view;
 mod segment;
 mod topic;
@@ -19,6 +21,8 @@ pub use dispatch::{dispatch_group_coordinator, dispatch_log_backend, dispatch_of
 pub use memory::MemoryLog;
 pub use offset_store::{CommittedOffset, OffsetStore, OffsetStoreCapabilities};
 pub use partition::MemoryPartitionLog;
+#[cfg(feature = "backend-postgres")]
+pub use postgres_offsets::PostgresOffsetStore;
 pub use record_batch_view::{RecordBatchView, RecordView};
 pub use segment::Segment;
 pub use topic::MemoryTopicLog;

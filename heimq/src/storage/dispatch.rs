@@ -40,9 +40,19 @@ pub fn dispatch_offset_store(url: &str) -> Result<Arc<dyn OffsetStore>> {
     let scheme = parse_scheme(url)?;
     match scheme {
         "memory" => Ok(Arc::new(MemoryOffsetStore::new())),
+        #[cfg(feature = "backend-postgres")]
+        "postgres" | "postgresql" => {
+            crate::storage::PostgresOffsetStore::connect(url)
+        }
         other => Err(HeimqError::Config(format!(
-            "unsupported offset-store scheme `{}://` in URL `{}` (supported: memory://)",
-            other, url
+            "unsupported offset-store scheme `{}://` in URL `{}` (supported: memory://{})",
+            other,
+            url,
+            if cfg!(feature = "backend-postgres") {
+                ", postgres://"
+            } else {
+                ""
+            }
         ))),
     }
 }

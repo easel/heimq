@@ -55,6 +55,9 @@ memmap2 = "0.9"
 metrics = "0.24"
 metrics-exporter-prometheus = "0.16"
 
+# Optional Postgres durable backend (feature: backend-postgres)
+postgres = { version = "0.19", optional = true }
+
 [dev-dependencies]
 # Test utilities
 tokio-test = "0.4"
@@ -71,6 +74,7 @@ kafka = { version = "0.10", default-features = false, features = ["gzip", "snapp
 [features]
 default = []
 test-support = []
+backend-postgres = ["dep:postgres"]
 
 [dev-dependencies.heimq]
 path = "."
