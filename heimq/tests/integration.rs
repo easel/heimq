@@ -891,6 +891,207 @@ async fn test_rdkafka_consumer_seek_to_beginning() {
 
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_seek_to_end() {
+    let server = TestServer::start();
+    let topic = unique_topic("cg-seek-end");
+    let group = unique_group("seek-end-group");
+    let producer = server.rdkafka_producer();
+
+    // Produce initial batch of messages.
+    for i in 0..10 {
+        let payload = format!("initial-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let consumer = server.rdkafka_consumer(&group);
+    consumer.subscribe(&[&topic]).expect("Failed to subscribe");
+
+    // Drain all initial messages so the consumer has an assignment.
+    let mut received = 0;
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while received < 10 && start.elapsed() < timeout {
+        if let Some(Ok(_)) = consumer.poll(Duration::from_millis(100)) {
+            received += 1;
+        }
+    }
+    assert_eq!(received, 10, "Should receive all 10 initial messages");
+
+    // Seek every assigned partition to End.
+    let assignment = consumer.assignment().expect("Failed to get assignment");
+    assert!(
+        !assignment.elements().is_empty(),
+        "Consumer should have an assignment after polling"
+    );
+    for elem in assignment.elements() {
+        consumer
+            .seek(
+                elem.topic(),
+                elem.partition(),
+                rdkafka::Offset::End,
+                Duration::from_secs(5),
+            )
+            .expect("Failed to seek to end");
+    }
+
+    // No old messages should be re-delivered.
+    let drain_start = std::time::Instant::now();
+    while drain_start.elapsed() < Duration::from_millis(500) {
+        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(50)) {
+            panic!(
+                "Unexpected message after seek to end: partition={} offset={}",
+                msg.partition(),
+                msg.offset()
+            );
+        }
+    }
+
+    // Produce new messages after the seek; consumer must see only these.
+    let mut new_payloads: Vec<String> = Vec::new();
+    for i in 0..5 {
+        let payload = format!("after-seek-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce post-seek");
+        new_payloads.push(payload);
+    }
+
+    let mut got: Vec<String> = Vec::new();
+    let start = std::time::Instant::now();
+    while got.len() < new_payloads.len() && start.elapsed() < timeout {
+        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(100)) {
+            let payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .expect("message should have payload");
+            assert!(
+                payload.starts_with("after-seek-"),
+                "Should not receive pre-seek message: {}",
+                payload
+            );
+            // All post-seek offsets must be >= 10 (the pre-seek high watermark).
+            assert!(
+                msg.offset() >= 10,
+                "Post-seek offset must be >= 10, got {}",
+                msg.offset()
+            );
+            got.push(payload);
+        }
+    }
+    assert_eq!(
+        got.len(),
+        new_payloads.len(),
+        "Should receive exactly the {} post-seek messages",
+        new_payloads.len()
+    );
+}
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_seek_to_offset() {
+    let server = TestServer::start();
+    let topic = unique_topic("cg-seek-offset");
+    let group = unique_group("seek-offset-group");
+    let producer = server.rdkafka_producer();
+
+    // Produce 10 messages and record the offset assigned to each payload.
+    let mut produced: Vec<(i64, String)> = Vec::new();
+    for i in 0..10 {
+        let payload = format!("offset-{}", i);
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        let (_partition, offset) = producer
+            .send(record, Duration::from_secs(5))
+            .await
+            .expect("Failed to produce");
+        produced.push((offset, payload));
+    }
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let consumer = server.rdkafka_consumer(&group);
+    consumer.subscribe(&[&topic]).expect("Failed to subscribe");
+
+    // Drain everything so the consumer has an assignment.
+    let mut received = 0;
+    let timeout = Duration::from_secs(10);
+    let start = std::time::Instant::now();
+    while received < produced.len() && start.elapsed() < timeout {
+        if let Some(Ok(_)) = consumer.poll(Duration::from_millis(100)) {
+            received += 1;
+        }
+    }
+    assert_eq!(received, produced.len(), "Should receive all initial messages");
+
+    // Pick a mid-range offset (the 5th produced message).
+    let target_idx = 5;
+    let target_offset = produced[target_idx].0;
+    let expected_payloads: Vec<String> =
+        produced[target_idx..].iter().map(|(_, p)| p.clone()).collect();
+
+    let assignment = consumer.assignment().expect("Failed to get assignment");
+    assert!(
+        !assignment.elements().is_empty(),
+        "Consumer should have an assignment after polling"
+    );
+    for elem in assignment.elements() {
+        consumer
+            .seek(
+                elem.topic(),
+                elem.partition(),
+                rdkafka::Offset::Offset(target_offset),
+                Duration::from_secs(5),
+            )
+            .expect("Failed to seek to specific offset");
+    }
+
+    // Should receive exactly messages from target_offset forward.
+    let mut got: Vec<(i64, String)> = Vec::new();
+    let start = std::time::Instant::now();
+    while got.len() < expected_payloads.len() && start.elapsed() < timeout {
+        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(100)) {
+            let payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .expect("message should have payload");
+            assert!(
+                msg.offset() >= target_offset,
+                "Offset {} must be >= seek target {}",
+                msg.offset(),
+                target_offset
+            );
+            got.push((msg.offset(), payload));
+        }
+    }
+
+    assert_eq!(
+        got.len(),
+        expected_payloads.len(),
+        "Should receive {} messages from offset {}",
+        expected_payloads.len(),
+        target_offset
+    );
+    let got_payloads: Vec<String> = got.iter().map(|(_, p)| p.clone()).collect();
+    assert_eq!(
+        got_payloads, expected_payloads,
+        "Payloads from seek offset must match produced tail"
+    );
+    assert_eq!(
+        got.first().map(|(o, _)| *o),
+        Some(target_offset),
+        "First consumed offset after seek must equal seek target"
+    );
+}
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_group_multi_partition_delivery() {
     use std::collections::HashSet;
 
