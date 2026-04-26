@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "test_rdkafka_oversized_message added; documents that heimq enforces no server-side max.message.bytes (verified: max_message_bytes in capabilities.rs is informational, not checked in produce path), produces 4 MiB payload, asserts no hang and full round-trip integrity.",
+  "findings": [
+    { "severity": "info", "summary": "Test correctly bumps client-side caps (message.max.bytes, receive.message.max.bytes) to isolate server behavior from librdkafka defaults.", "location": "heimq/tests/integration.rs:2989" },
+    { "severity": "info", "summary": "Hang-detection via elapsed-time assertion satisfies the 'not a hang' acceptance requirement.", "location": "heimq/tests/integration.rs:3013" }
+  ]
+}
+```
