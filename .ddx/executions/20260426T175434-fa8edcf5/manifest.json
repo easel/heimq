@@ -1,0 +1,39 @@
+{
+  "attempt_id": "20260426T175434-fa8edcf5",
+  "bead_id": "heimq-20730055",
+  "base_rev": "9925a52ae372ea424f895cfe702eb8aed7c0d6b8",
+  "created_at": "2026-04-26T17:54:34.373470376Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-20730055",
+    "title": "chore(process): retro on review-gate weakness — closed beads shipped with red contract test",
+    "description": "Two closed beads (heimq-20daf864 LogBackend trait extraction, heimq-04def9c7 OffsetStore trait extraction) had 'cargo test --workspace passes' in acceptance criteria but shipped while tests/contract.rs::contract_api_versions_matches_supported_range was red (stale ListOffsets max-version assertion vs commit 331b93b). The reviewer/closer did not actually run the AC command, or ran it and accepted a red result. Document the gap, decide on a tightening action (e.g. CI-enforced full-workspace test gate before close, or tracker-side close-hook running the AC command). Out of scope: re-opening the affected beads — the underlying code work was correct; only the test-side drift remained, which is being fixed in a separate execution bead.",
+    "acceptance": "Retro outcome documented (decision recorded as ADR or tracked process change). Either CI gate or close-time hook proposed.",
+    "parent": "heimq-5afe6552",
+    "labels": [
+      "helix",
+      "phase:iterate",
+      "kind:retro",
+      "area:process"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T17:54:34Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "discovered-from": "heimq-5afe6552",
+      "execute-loop-heartbeat-at": "2026-04-26T17:54:34.254721627Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T175434-fa8edcf5",
+    "prompt": ".ddx/executions/20260426T175434-fa8edcf5/prompt.md",
+    "manifest": ".ddx/executions/20260426T175434-fa8edcf5/manifest.json",
+    "result": ".ddx/executions/20260426T175434-fa8edcf5/result.json",
+    "checks": ".ddx/executions/20260426T175434-fa8edcf5/checks.json",
+    "usage": ".ddx/executions/20260426T175434-fa8edcf5/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-20730055-20260426T175434-fa8edcf5"
+  }
+}
