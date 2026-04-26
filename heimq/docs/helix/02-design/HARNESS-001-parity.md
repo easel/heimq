@@ -248,9 +248,24 @@ heimq target:
 ## CI Integration
 
 A GitHub Actions job `parity` is added in a follow-on issue (FEAT-003 build
-phase). It runs on pull requests that touch `src/protocol/` or `src/handler/`:
+phase). It runs on pull requests that touch `heimq/src/protocol/`,
+`heimq/src/handler/`, or `heimq/tests/parity/`:
 
 ```yaml
+name: parity
+
+on:
+  pull_request:
+    paths:
+      - 'heimq/src/protocol/**'
+      - 'heimq/src/handler/**'
+      - 'heimq/tests/parity/**'
+      - 'heimq/Cargo.toml'
+
+defaults:
+  run:
+    working-directory: heimq
+
 jobs:
   parity:
     runs-on: ubuntu-latest
