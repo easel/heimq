@@ -1,0 +1,59 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "All AC items met: backend-postgres feature gates a new PostgresOffsetStore with idempotent schema init, postgres://+postgresql:// dispatch, WalFsync/survives_restart capabilities, and an integration test that commits via OffsetCommit, restarts the server, and asserts survival — skipping cleanly when HEIMQ_PG_TEST_URL is unset.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Uses the synchronous `postgres` crate behind a parking_lot Mutex; commit/fetch will block the async runtime thread on every call. Acceptable for trait surface but may warrant a follow-up to switch to tokio-postgres or spawn_blocking.",
+      "location": "heimq/src/storage/postgres_offsets.rs:60"
+    },
+    {
+      "severity": "info",
+      "summary": "leader_epoch is silently dropped on commit and always returned as 0 on fetch — the schema has no column for it. Not required by AC, but worth a follow-up since Kafka clients may rely on it.",
+      "location": "heimq/src/storage/postgres_offsets.rs:90"
+    },
+    {
+      "severity": "info",
+      "summary": "Integration test creates a unique schema per run but never DROPs it — Postgres test instances will accumulate `heimq_test_*` schemas over time.",
+      "location": "heimq/tests/postgres_offsets.rs:155"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1664,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T031958-15d6ae2a/manifest.json",
+          ".ddx/executions/20260426T031958-15d6ae2a/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 4211,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 7681,
+    "output_bytes": 1289,
+    "elapsed_ms": 27476,
+    "harness": "claude",
+    "model": "opus"
+  }
+}
