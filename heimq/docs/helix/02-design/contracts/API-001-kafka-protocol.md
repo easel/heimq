@@ -28,8 +28,8 @@
 ### Version Policy
 
 - **Flexible-version boundary**: Each API's `max_version` is held strictly below the Kafka flexible-version boundary for that API. Flexible versions introduce compact strings, varints, and tagged fields, which heimq's legacy-layout handlers do not parse. Per-API boundaries (first flexible version): Produce v9, Fetch v12, ListOffsets v6, Metadata v9, OffsetCommit v8, OffsetFetch v6, FindCoordinator v3, JoinGroup v6, Heartbeat v4, LeaveGroup v4, SyncGroup v4, ApiVersions v3, CreateTopics v5, DeleteTopics v4.
-- The authoritative version table is `SUPPORTED_APIS` in `src/protocol/mod.rs`; the matrix below mirrors it. Any change to advertised versions must update both.
-- The supported version range for each API is reported via ApiVersions.
+- The static version table is `SUPPORTED_APIS` in `src/protocol/mod.rs`; the matrix below mirrors it. Any change to advertised versions must update both.
+- **Capability-derived advertisement**: The ApiVersions response is not a verbatim copy of `SUPPORTED_APIS`. At runtime, `compute_supported_apis` (`src/protocol/mod.rs`) intersects the static table with the per-API `CapabilityGate` against each backend's descriptor (`BackendCapabilities`, `OffsetStoreCapabilities`, `GroupCoordinatorCapabilities`). APIs whose required backend is absent (e.g. no group coordinator) are filtered out before the response is encoded, so heimq advertises only what its currently configured backends can actually serve. Gating is per-API, not a global meet — a backend that lacks compaction does not lose unrelated APIs.
 
 ## Support Matrix (Kafka API Keys)
 
@@ -133,7 +133,7 @@ Reason codes (Exclusions):
 ## Contract Validation
 
 ### Required Contract Tests (per supported API)
-1. **ApiVersions**: version negotiation reflects `SUPPORTED_APIS`.
+1. **ApiVersions**: version negotiation reflects `compute_supported_apis(SUPPORTED_APIS, backend capabilities)` — i.e. the static table intersected with the per-API capability gates of the configured backends. Unit tests in `src/protocol/mod.rs` pin the intersection behaviour (memory default advertises full set; missing group coordinator drops only group APIs; missing offset store drops only offset APIs; capability flags do not leak across APIs).
 2. **Metadata**: topic discovery, auto-create behavior, error for disabled auto-create.
 3. **Produce**: empty batch, keyed/unkeyed, large batch, partition error codes.
 4. **Fetch**: offsets, high watermark, empty responses, max_bytes enforcement.
