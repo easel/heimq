@@ -173,6 +173,34 @@ FindCoordinator (10), JoinGroup (11), Heartbeat (12), LeaveGroup
 - [ ] Seek to end, seek to arbitrary offset.
 - [ ] Pause / resume on assigned partitions.
 
+### Phase 6: Backend Matrix (P0)
+
+Scope: run the existing `scripts/kcat-stress.sh` workload against each
+sensible combination of pluggable storage backends (log / offsets /
+groups), to assert that observable broker behavior is consistent
+regardless of which backend is wired in.
+
+Driver: `scripts/stress-matrix.sh` loops over the configured
+combinations, exporting `HEIMQ_STORAGE_LOG`, `HEIMQ_STORAGE_OFFSETS`,
+and `HEIMQ_STORAGE_GROUPS` per iteration and invoking
+`kcat-stress.sh` at moderate volume (default 5 topics x 10k msgs).
+
+Initial combinations:
+
+| Row          | log    | offsets  | groups | Notes |
+| ---          | ---    | ---      | ---    | ---   |
+| memory-only  | memory | memory   | memory | default, no external deps |
+| pg-offsets   | memory | postgres | memory | durability slice for committed offsets |
+
+Skip behavior: rows that require Postgres are skipped (with a clear
+`SKIPPED` line, not `FAIL`) when `POSTGRES_URL` is unset, so the
+matrix stays green in environments without a Postgres instance.
+
+CI: an optional `stress-matrix` job (see
+`.github/workflows/stress-matrix.yml`) brings up a Postgres service
+container, exports `POSTGRES_URL`, and runs `stress-matrix.sh`. The
+job is `continue-on-error` so it does not block the main test gate.
+
 #### Dropped from earlier draft
 - `acks=0/1/all` — on a single-node in-memory broker, `acks=1` and `all` collapse to the same path; `acks=0` is not meaningfully observable from rdkafka. Not worth a dedicated test.
 - Batching / `linger.ms` / `batch.size` — client-side behavior; broker decode is already exercised by large-batch contract and soak tests.

@@ -1,0 +1,53 @@
+name: stress-matrix
+
+# Optional backend-matrix job: runs scripts/stress-matrix.sh against a
+# Postgres service container so the postgres-backed offset row is
+# exercised in CI. This job is allowed to fail (continue-on-error) so
+# it does not block the main test gate; it surfaces backend-parity
+# regressions without becoming a hard blocker.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  stress-matrix:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: heimq
+          POSTGRES_PASSWORD: heimq
+          POSTGRES_DB: heimq
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U heimq"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      POSTGRES_URL: postgres://heimq:heimq@127.0.0.1:5432/heimq
+    defaults:
+      run:
+        working-directory: heimq
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: heimq
+
+      - name: Install kcat
+        run: sudo apt-get update && sudo apt-get install -y kcat
+
+      - name: Run backend matrix
+        run: ./scripts/stress-matrix.sh
