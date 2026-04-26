@@ -223,9 +223,9 @@ pub enum BrokerKind { Heimq, Redpanda }
 
 Redpanda container spec:
 
-- Image: `docker.redpanda.com/redpandadata/redpanda:latest` (pinned to a
-  digest in `tests/parity/redpanda-image.lock` to prevent flake from
-  upstream changes).
+- Image: `docker.redpanda.com/redpandadata/redpanda:v25.1.1` (specific
+  version tag; bump via a dependency-update PR when a new Redpanda release
+  is validated).
 - Exposed port: `9092` (mapped to ephemeral host port by testcontainers).
 - Start command: `redpanda start --smp 1 --memory 512M --overprovisioned
   --kafka-addr 0.0.0.0:9092 --advertise-kafka-addr localhost:<port>`
