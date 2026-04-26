@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260426T035326-1afb8e0b",
+  "bead_id": "heimq-24c6cd00",
+  "base_rev": "b9d09f679ea8ef59b792f1625fc855a0fa85b3c8",
+  "created_at": "2026-04-26T03:53:26.137832049Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-24c6cd00",
+    "title": "Derive ApiVersions response from backend capabilities",
+    "description": "Today SUPPORTED_APIS in src/protocol/mod.rs is static. Now that each backend exposes capabilities, compute the effective advertised ApiVersions at startup by intersecting static protocol support with backend caps (e.g. don't advertise InitProducerId if no backend has transactions; don't advertise OffsetCommit if offsets backend isn't writable).\n\nPer codex review: intersection is per-API, not one global meet — GroupCoordinatorBackend capabilities must not constrain plain Produce/Fetch.\n\nIn-scope files:\n- src/protocol/mod.rs (SUPPORTED_APIS becomes a computation, or a wrapper that filters)\n- src/handler/api_versions.rs (reads computed set)\n- src/server.rs (composes on startup)\nDepends on: capability descriptor, all three trait extractions",
+    "acceptance": "`cargo test` green. A manual test (or integration test) with a backend that declares compaction=false verifies no compaction-specific APIs leak into ApiVersions. Existing ApiVersions contract tests still pass for the memory default.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:7-apiversions-from-caps"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:53:26Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T03:53:26.051600876Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T035326-1afb8e0b",
+    "prompt": ".ddx/executions/20260426T035326-1afb8e0b/prompt.md",
+    "manifest": ".ddx/executions/20260426T035326-1afb8e0b/manifest.json",
+    "result": ".ddx/executions/20260426T035326-1afb8e0b/result.json",
+    "checks": ".ddx/executions/20260426T035326-1afb8e0b/checks.json",
+    "usage": ".ddx/executions/20260426T035326-1afb8e0b/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-24c6cd00-20260426T035326-1afb8e0b"
+  }
+}
