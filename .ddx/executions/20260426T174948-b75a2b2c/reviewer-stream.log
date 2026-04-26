@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "tests/contract.rs now imports heimq::protocol::SUPPORTED_APIS and asserts the full advertised set equals SUPPORTED_APIS (sorted), eliminating both the hardcoded drift and the fail-fast masking. Matches AC: derives from SUPPORTED_APIS and asserts the full computed set.",
+  "findings": [
+    { "severity": "info", "summary": "Equality between SUPPORTED_APIS and the memory-backend computed set is independently guaranteed by the unit test at src/protocol/mod.rs:159-160, so asserting directly against SUPPORTED_APIS is safe.", "location": "heimq/tests/contract.rs:183" }
+  ]
+}
+```

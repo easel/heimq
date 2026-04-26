@@ -1,0 +1,49 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "tests/contract.rs now imports heimq::protocol::SUPPORTED_APIS and asserts the full advertised set equals SUPPORTED_APIS (sorted), eliminating both the hardcoded drift and the fail-fast masking. Matches AC: derives from SUPPORTED_APIS and asserts the full computed set.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Equality between SUPPORTED_APIS and the memory-backend computed set is independently guaranteed by the unit test at src/protocol/mod.rs:159-160, so asserting directly against SUPPORTED_APIS is safe.",
+      "location": "heimq/tests/contract.rs:183"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1087,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T174948-b75a2b2c/manifest.json",
+          ".ddx/executions/20260426T174948-b75a2b2c/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3679,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 6572,
+    "output_bytes": 650,
+    "elapsed_ms": 31649,
+    "harness": "claude",
+    "model": "opus"
+  }
+}
