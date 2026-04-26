@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260426T041553-cb86080d",
+  "bead_id": "heimq-0c5afc66",
+  "base_rev": "c0539e9bd30f4c3456f7614016e7ac805a6f3787",
+  "created_at": "2026-04-26T04:15:53.784967781Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-0c5afc66",
+    "title": "e2e: pause/resume on assigned partitions",
+    "description": "Consumer assigned to 2 partitions. Pause partition 0, produce to both, poll, assert only partition 1 messages arrive. Resume partition 0, poll, assert partition 0 backlog drains.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_pause_resume_partitions)",
+    "acceptance": "`cargo test --test integration test_rdkafka_pause_resume_partitions -- --ignored --nocapture` passes with both paused-then-resumed assertions.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p2",
+      "topic:client-surface"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T04:15:53Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T04:15:53.693611836Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T041553-cb86080d",
+    "prompt": ".ddx/executions/20260426T041553-cb86080d/prompt.md",
+    "manifest": ".ddx/executions/20260426T041553-cb86080d/manifest.json",
+    "result": ".ddx/executions/20260426T041553-cb86080d/result.json",
+    "checks": ".ddx/executions/20260426T041553-cb86080d/checks.json",
+    "usage": ".ddx/executions/20260426T041553-cb86080d/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-0c5afc66-20260426T041553-cb86080d"
+  }
+}
