@@ -1,0 +1,49 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Added test_rdkafka_empty_topic_poll_timeout in tests/integration.rs that subscribes to an empty topic, polls with 500ms timeout, asserts None result and elapsed under 2s — meets acceptance criteria.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Test is correctly gated behind --ignored as required by AC; drains an init message first to ensure existing-but-empty log path is exercised.",
+      "location": "heimq/tests/integration.rs:2837"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 772,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T033401-38d0e687/manifest.json",
+          ".ddx/executions/20260426T033401-38d0e687/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3348,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 5926,
+    "output_bytes": 528,
+    "elapsed_ms": 14768,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

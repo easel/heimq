@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Added test_rdkafka_empty_topic_poll_timeout in tests/integration.rs that subscribes to an empty topic, polls with 500ms timeout, asserts None result and elapsed under 2s — meets acceptance criteria.",
+  "findings": [
+    { "severity": "info", "summary": "Test is correctly gated behind --ignored as required by AC; drains an init message first to ensure existing-but-empty log path is exercised.", "location": "heimq/tests/integration.rs:2837" }
+  ]
+}
+```
