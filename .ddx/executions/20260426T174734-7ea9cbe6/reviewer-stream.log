@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Table values for ListOffsets (0-5), OffsetFetch (0-5), FindCoordinator (0-2), JoinGroup (0-5), Heartbeat (0-3), LeaveGroup (0-3), SyncGroup (0-3), ApiVersions (0-2), CreateTopics (0-4), DeleteTopics (0-3) match SUPPORTED_APIS in src/protocol/mod.rs exactly. Backwards Compatibility section explicitly states the non-flexible-version policy.",
+  "findings": [
+    { "severity": "info", "summary": "Flexible-version note exists at line 145 but does not include an explicit cross-reference link to src/protocol/mod.rs SUPPORTED_APIS comment as suggested in the bead description (acceptance criteria do not require it).", "location": "heimq/docs/helix/02-design/contracts/API-001-kafka-protocol.md:145" }
+  ]
+}
+```
