@@ -27,7 +27,8 @@
 
 ### Version Policy
 
-- API versions are limited to pre-flexible versions to avoid compact encodings.
+- **Flexible-version boundary**: Each API's `max_version` is held strictly below the Kafka flexible-version boundary for that API. Flexible versions introduce compact strings, varints, and tagged fields, which heimq's legacy-layout handlers do not parse. Per-API boundaries (first flexible version): Produce v9, Fetch v12, ListOffsets v6, Metadata v9, OffsetCommit v8, OffsetFetch v6, FindCoordinator v3, JoinGroup v6, Heartbeat v4, LeaveGroup v4, SyncGroup v4, ApiVersions v3, CreateTopics v5, DeleteTopics v4.
+- The authoritative version table is `SUPPORTED_APIS` in `src/protocol/mod.rs`; the matrix below mirrors it. Any change to advertised versions must update both.
 - The supported version range for each API is reported via ApiVersions.
 
 ## Support Matrix (Kafka API Keys)
@@ -49,21 +50,21 @@ Reason codes (Exclusions):
 | --- | --- | --- | --- | --- | --- |
 | 0 | Produce | Supported | 0-8 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory append only |
 | 1 | Fetch | Supported | 0-11 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory read only |
-| 2 | ListOffsets | Supported | 0-7 | `src/handler/tests.rs`; `tests/contract.rs` | Timestamp lookups simplified |
+| 2 | ListOffsets | Supported | 0-5 | `src/handler/tests.rs`; `tests/contract.rs` | Timestamp lookups simplified |
 | 3 | Metadata | Supported | 0-8 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | Single broker only |
 | 8 | OffsetCommit | Supported | 0-7 | `src/handler/tests.rs`; `tests/contract.rs` | In-memory offsets |
-| 9 | OffsetFetch | Supported | 0-7 | `src/handler/tests.rs`; `tests/contract.rs` | In-memory offsets |
-| 10 | FindCoordinator | Supported | 0-3 | `src/handler/tests.rs` | Single coordinator (self) |
-| 11 | JoinGroup | Supported | 0-8 | `src/handler/tests.rs` | Simplified group state |
-| 12 | Heartbeat | Supported | 0-4 | `src/handler/tests.rs` | Simplified liveness |
-| 13 | LeaveGroup | Supported | 0-4 | `src/handler/tests.rs` | Member removal only |
-| 14 | SyncGroup | Supported | 0-4 | `src/handler/tests.rs` | Simplified assignment |
+| 9 | OffsetFetch | Supported | 0-5 | `src/handler/tests.rs`; `tests/contract.rs` | In-memory offsets |
+| 10 | FindCoordinator | Supported | 0-2 | `src/handler/tests.rs` | Single coordinator (self) |
+| 11 | JoinGroup | Supported | 0-5 | `src/handler/tests.rs` | Simplified group state |
+| 12 | Heartbeat | Supported | 0-3 | `src/handler/tests.rs` | Simplified liveness |
+| 13 | LeaveGroup | Supported | 0-3 | `src/handler/tests.rs` | Member removal only |
+| 14 | SyncGroup | Supported | 0-3 | `src/handler/tests.rs` | Simplified assignment |
 | 15 | DescribeGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
 | 16 | ListGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
 | 17 | SaslHandshake | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
-| 18 | ApiVersions | Supported | 0-3 | `src/handler/tests.rs`; `tests/contract.rs`; `src/protocol/router.rs` | Version negotiation only |
-| 19 | CreateTopics | Supported | 0-6 | `src/handler/tests.rs`; `tests/contract.rs` | No config validation |
-| 20 | DeleteTopics | Supported | 0-5 | `src/handler/tests.rs`; `tests/contract.rs` | Best-effort delete |
+| 18 | ApiVersions | Supported | 0-2 | `src/handler/tests.rs`; `tests/contract.rs`; `src/protocol/router.rs` | Version negotiation only |
+| 19 | CreateTopics | Supported | 0-4 | `src/handler/tests.rs`; `tests/contract.rs` | No config validation |
+| 20 | DeleteTopics | Supported | 0-3 | `src/handler/tests.rs`; `tests/contract.rs` | Best-effort delete |
 | 21 | DeleteRecords | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
 | 22 | InitProducerId | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
 | 23 | OffsetForLeaderEpoch | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
