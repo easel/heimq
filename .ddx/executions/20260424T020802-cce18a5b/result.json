@@ -1,0 +1,4 @@
+{
+  "verdict": "BLOCK",
+  "rationale": "`src/storage/offset_store.rs` was not created — new trait + `MemoryOffsetStore` impl missing.\n`src/consumer_group/offset_store.rs` was not refactored to implement the new trait.\n`src/handler/offset_commit.rs` and `src/handler/offset_fetch.rs` still use the concrete type rather than `Arc\u003cdyn OffsetStore\u003e`.\n`src/server.rs` was not updated for the new construction.\nThe commit bundles `heimq/target/**` build artifacts that should not be checked in; whoever re-runs this bead should also ensure `target/` stays out of the commit."
+}

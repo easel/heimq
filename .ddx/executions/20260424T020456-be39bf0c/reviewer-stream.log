@@ -1,0 +1,23 @@
+## Review: heimq-04def9c7 iter 1
+
+### Verdict: BLOCK
+
+### AC Grades
+
+| # | Item | Grade | Evidence |
+|---|------|-------|----------|
+| 1 | `cargo test --workspace` passes | BLOCK | No source changes to evaluate; only build artifacts and execution manifests committed |
+| 2 | kcat stress script passes | BLOCK | No evidence in diff |
+| 3 | Offset commit/fetch unit tests remain green | BLOCK | No test or impl changes present |
+
+### Summary
+
+The execution commit (9362ca3) and evidence commit (23eafba) contain only `.ddx/executions/...` metadata and `heimq/target/...` build artifacts — zero `.rs` source changes. None of the in-scope files (`src/storage/offset_store.rs`, `src/consumer_group/offset_store.rs`, handlers, `src/server.rs`) were created or modified, so the `OffsetStore` trait was not extracted.
+
+### Findings
+
+- `src/storage/offset_store.rs` was not created — new trait + `MemoryOffsetStore` impl missing.
+- `src/consumer_group/offset_store.rs` was not refactored to implement the new trait.
+- `src/handler/offset_commit.rs` and `src/handler/offset_fetch.rs` still use the concrete type rather than `Arc<dyn OffsetStore>`.
+- `src/server.rs` was not updated for the new construction.
+- The commit bundles `heimq/target/**` build artifacts that should not be checked in; whoever re-runs this bead should also ensure `target/` stays out of the commit.
