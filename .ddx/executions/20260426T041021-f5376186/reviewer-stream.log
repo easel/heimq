@@ -1,0 +1,19 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "test_rdkafka_compression_codecs parameterizes over gzip/snappy/lz4/zstd, asserts key+payload round-trip equality, and handles librdkafka-unsupported codecs with codec-identifying errors plus an exercised>0 guard. Matches AC.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Received messages are compared positionally against the produced order; this relies on single-partition FIFO ordering for the auto-created topic. Holds in practice but could be made explicit by sorting by key if topic defaults ever change.",
+      "location": "heimq/tests/integration.rs:3621"
+    },
+    {
+      "severity": "info",
+      "summary": "Unsupported-codec branch only triggers on producer creation failure; if librdkafka instead fails at first send, the test panics rather than recording it as 'unsupported'. Acceptable since the panic still clearly identifies the codec.",
+      "location": "heimq/tests/integration.rs:3576"
+    }
+  ]
+}
+```
