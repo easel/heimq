@@ -1,0 +1,54 @@
+{
+  "verdict": "BLOCK",
+  "rationale": "Diff contains only execution manifest/result metadata. No review findings document or epic closure recommendation is present in the changed files, so acceptance criteria cannot be evaluated as met.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "Acceptance requires findings recorded and epic heimq-2136e295 closure recommendation; diff only adds .ddx execution manifest/result JSON with no review content or recommendation.",
+      "location": ".ddx/executions/20260426T174235-d7e9e9fc/result.json"
+    },
+    {
+      "severity": "warn",
+      "summary": "Prior commit cb900ee references recording the review, but no review artifact is included in this diff to verify against acceptance criteria.",
+      "location": ".ddx/executions/20260426T174235-d7e9e9fc/manifest.json"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 557,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T174235-d7e9e9fc/manifest.json",
+          ".ddx/executions/20260426T174235-d7e9e9fc/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3077,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 5440,
+    "output_bytes": 836,
+    "elapsed_ms": 9098,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

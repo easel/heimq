@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "Diff contains only execution manifest/result metadata. No review findings document or epic closure recommendation is present in the changed files, so acceptance criteria cannot be evaluated as met.",
+  "findings": [
+    { "severity": "block", "summary": "Acceptance requires findings recorded and epic heimq-2136e295 closure recommendation; diff only adds .ddx execution manifest/result JSON with no review content or recommendation.", "location": ".ddx/executions/20260426T174235-d7e9e9fc/result.json" },
+    { "severity": "warn", "summary": "Prior commit cb900ee references recording the review, but no review artifact is included in this diff to verify against acceptance criteria.", "location": ".ddx/executions/20260426T174235-d7e9e9fc/manifest.json" }
+  ]
+}
+```
