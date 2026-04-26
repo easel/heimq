@@ -1,0 +1,39 @@
+{
+  "attempt_id": "20260426T175204-e868a0fd",
+  "bead_id": "heimq-0bde4555",
+  "base_rev": "88c6155da49ca4f515693d8054faab2d2baf73ef",
+  "created_at": "2026-04-26T17:52:04.716803494Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-0bde4555",
+    "title": "docs(test): mark Phase 5 checkboxes complete in test-plan",
+    "description": "test-plan.md Phase 5 (lines 126-174) lists 22 unchecked rdkafka e2e items. All corresponding child beads under epic heimq-700e47b2 are closed (single-group integrity, restart resume, leave/join rebalance, multi-group, auto.offset.reset, manual commit, auto-commit interval, multi-partition roundtrip, ordering, partitioner determinism, explicit partition, long-poll fetch, empty-topic timeout, autocreate=false, oversized message, autocreate end-to-end, concurrent producers, soak, headers, compression, seek, pause/resume). Flip checkboxes to [x] and add a brief note linking to closed bead IDs or commits.",
+    "acceptance": "All Phase 5 boxes [x] in test-plan.md. Phase 6 backend-matrix completion captured (scripts/stress-matrix.sh exists).",
+    "parent": "heimq-013aaa35",
+    "labels": [
+      "helix",
+      "phase:test",
+      "kind:docs",
+      "area:tests"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T17:52:04Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "discovered-from": "heimq-013aaa35",
+      "execute-loop-heartbeat-at": "2026-04-26T17:52:04.612220723Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T175204-e868a0fd",
+    "prompt": ".ddx/executions/20260426T175204-e868a0fd/prompt.md",
+    "manifest": ".ddx/executions/20260426T175204-e868a0fd/manifest.json",
+    "result": ".ddx/executions/20260426T175204-e868a0fd/result.json",
+    "checks": ".ddx/executions/20260426T175204-e868a0fd/checks.json",
+    "usage": ".ddx/executions/20260426T175204-e868a0fd/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-0bde4555-20260426T175204-e868a0fd"
+  }
+}
