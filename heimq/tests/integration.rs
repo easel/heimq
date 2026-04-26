@@ -3192,3 +3192,103 @@ async fn test_rdkafka_oversized_message() {
         "consumed payload bytes mismatch (heimq must not silently corrupt)"
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_concurrent_producers() {
+    use std::collections::HashSet;
+
+    let server = TestServer::start();
+    let topic = unique_topic("rdkafka-concurrent-producers");
+
+    let num_producers: usize = 4;
+    let per_producer: usize = 500;
+    let total: usize = num_producers * per_producer;
+
+    let producer_template = server.rdkafka_producer();
+    // Pre-create the topic so the concurrent producers don't all race the
+    // metadata auto-create path on first send.
+    {
+        let warmup = FutureRecord::to(&topic).payload("warmup").key("warmup");
+        producer_template
+            .send(warmup, Duration::from_secs(5))
+            .await
+            .expect("Failed to warm up topic");
+    }
+
+    let mut handles = Vec::with_capacity(num_producers);
+    for producer_id in 0..num_producers {
+        let producer = producer_template.clone();
+        let topic = topic.clone();
+        handles.push(tokio::spawn(async move {
+            for i in 0..per_producer {
+                let payload = format!("p{}-m{}", producer_id, i);
+                let key = format!("p{}-k{}", producer_id, i);
+                let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+                producer
+                    .send(record, Duration::from_secs(10))
+                    .await
+                    .unwrap_or_else(|e| {
+                        panic!("producer {} failed to produce msg {}: {:?}", producer_id, i, e)
+                    });
+            }
+        }));
+    }
+
+    for h in handles {
+        h.await.expect("producer task panicked");
+    }
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    let consumer = server.rdkafka_consumer(&unique_group("concurrent-producers"));
+    consumer.subscribe(&[&topic]).expect("Failed to subscribe");
+
+    // total + 1 to account for the warmup message produced above.
+    let expected = total + 1;
+    let mut received_payloads: Vec<String> = Vec::with_capacity(expected);
+    let timeout = Duration::from_secs(60);
+    let start = std::time::Instant::now();
+
+    while received_payloads.len() < expected && start.elapsed() < timeout {
+        if let Some(result) = consumer.poll(Duration::from_millis(250)) {
+            let msg = result.expect("consumer poll error");
+            let payload = msg
+                .payload()
+                .map(|p| String::from_utf8_lossy(p).to_string())
+                .expect("message missing payload");
+            received_payloads.push(payload);
+        }
+    }
+
+    assert_eq!(
+        received_payloads.len(),
+        expected,
+        "expected {} messages (including warmup), got {}",
+        expected,
+        received_payloads.len()
+    );
+
+    let mut unique: HashSet<&str> = HashSet::new();
+    for p in &received_payloads {
+        unique.insert(p.as_str());
+    }
+    assert_eq!(
+        unique.len(),
+        expected,
+        "expected {} unique payloads, got {} (duplicates indicate corruption)",
+        expected,
+        unique.len()
+    );
+
+    for producer_id in 0..num_producers {
+        for i in 0..per_producer {
+            let expected_payload = format!("p{}-m{}", producer_id, i);
+            assert!(
+                unique.contains(expected_payload.as_str()),
+                "missing payload {} after concurrent produce",
+                expected_payload
+            );
+        }
+    }
+}
