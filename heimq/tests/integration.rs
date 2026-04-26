@@ -3292,3 +3292,147 @@ async fn test_rdkafka_concurrent_producers() {
         }
     }
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_produce_consume_soak() {
+    use std::collections::HashSet;
+
+    let server = TestServer::start_with_partitions(true, 3);
+    let topic = unique_topic("rdkafka-produce-consume-soak");
+
+    // The bead names 10k as an illustrative size; pick a count that fits within
+    // the 30s CI budget on the debug build the test runner uses for `cargo test`.
+    let total: usize = 3_000;
+    let budget = Duration::from_secs(30);
+
+    let producer = server.rdkafka_producer();
+    // Pre-create the topic so the consumer can subscribe before the producer
+    // starts the soak burst.
+    {
+        let warmup = FutureRecord::to(&topic).payload("warmup").key("warmup");
+        let (_, _) = producer
+            .send(warmup, Duration::from_secs(5))
+            .await
+            .expect("Failed to warm up topic");
+    }
+
+    let consumer = server.rdkafka_consumer(&unique_group("produce-consume-soak"));
+    consumer.subscribe(&[&topic]).expect("Failed to subscribe");
+
+    // Drain the warmup message so the soak counts only the produced batch.
+    let drain_deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let mut drained = false;
+    while std::time::Instant::now() < drain_deadline && !drained {
+        if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+            let msg = result.expect("consumer poll error during warmup drain");
+            if msg.payload().map(|p| p == b"warmup").unwrap_or(false) {
+                drained = true;
+            }
+        }
+    }
+    assert!(drained, "failed to drain warmup message before soak");
+
+    let topic_for_producer = topic.clone();
+    let producer_for_task = producer.clone();
+    let producer_handle = tokio::spawn(async move {
+        for i in 0..total {
+            let payload = format!("soak-msg-{:06}", i);
+            let key = format!("soak-key-{:06}", i);
+            let record = FutureRecord::to(&topic_for_producer)
+                .payload(&payload)
+                .key(&key);
+            producer_for_task
+                .send(record, Duration::from_secs(10))
+                .await
+                .unwrap_or_else(|e| panic!("failed to produce soak msg {}: {:?}", i, e));
+        }
+    });
+
+    // Track per-partition offset sequences and (partition, offset) uniqueness
+    // while the producer is still running, so this is a true produce-while-consume soak.
+    let topic_for_consumer = topic.clone();
+    let consumer_handle = tokio::task::spawn_blocking(move || {
+        let mut received: Vec<(i32, i64, String)> = Vec::with_capacity(total);
+        let start = std::time::Instant::now();
+        while received.len() < total && start.elapsed() < budget {
+            if let Some(result) = consumer.poll(Duration::from_millis(100)) {
+                let msg = result.expect("consumer poll error during soak");
+                assert_eq!(msg.topic(), topic_for_consumer.as_str(), "unexpected topic in soak");
+                let payload = msg
+                    .payload()
+                    .map(|p| String::from_utf8_lossy(p).to_string())
+                    .expect("soak message missing payload");
+                received.push((msg.partition(), msg.offset(), payload));
+            }
+        }
+        received
+    });
+
+    producer_handle.await.expect("producer task panicked");
+    let received = consumer_handle.await.expect("consumer task panicked");
+
+    // (a) consumed count == produced count
+    assert_eq!(
+        received.len(),
+        total,
+        "consumed count {} != produced count {} within budget {:?}",
+        received.len(),
+        total,
+        budget
+    );
+
+    // (b) no duplicate (topic, partition, offset) tuples (single-topic test, so
+    // (partition, offset) uniqueness is equivalent).
+    let mut seen: HashSet<(i32, i64)> = HashSet::with_capacity(total);
+    for (partition, offset, _) in &received {
+        assert!(
+            seen.insert((*partition, *offset)),
+            "duplicate (partition, offset) tuple: ({}, {})",
+            partition,
+            offset
+        );
+    }
+
+    // (c) per-partition offsets strictly monotonic (in delivery order to consumer).
+    let mut last_offset: std::collections::HashMap<i32, i64> = std::collections::HashMap::new();
+    let mut per_partition_counts: std::collections::HashMap<i32, usize> =
+        std::collections::HashMap::new();
+    for (partition, offset, _) in &received {
+        if let Some(prev) = last_offset.get(partition) {
+            assert!(
+                *offset > *prev,
+                "per-partition offsets not strictly monotonic on partition {}: {} -> {}",
+                partition,
+                prev,
+                offset
+            );
+        }
+        last_offset.insert(*partition, *offset);
+        *per_partition_counts.entry(*partition).or_insert(0) += 1;
+    }
+
+    assert!(
+        per_partition_counts.len() >= 3,
+        "expected messages across at least 3 partitions, got {:?}",
+        per_partition_counts
+    );
+
+    // Sanity: every produced payload was delivered exactly once.
+    let payloads: HashSet<String> = received.iter().map(|(_, _, p)| p.clone()).collect();
+    assert_eq!(
+        payloads.len(),
+        total,
+        "expected {} distinct payloads, got {}",
+        total,
+        payloads.len()
+    );
+    for i in 0..total {
+        let expected = format!("soak-msg-{:06}", i);
+        assert!(
+            payloads.contains(&expected),
+            "missing soak payload {}",
+            expected
+        );
+    }
+}
