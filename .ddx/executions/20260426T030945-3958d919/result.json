@@ -1,0 +1,54 @@
+{
+  "verdict": "BLOCK",
+  "rationale": "Diff under review contains only ddx execution evidence files (manifest.json, result.json). No source changes to consumer_group, coordinator, or handlers are present, so the acceptance criteria cannot be evaluated from this diff.",
+  "findings": [
+    {
+      "severity": "block",
+      "summary": "No code changes visible in diff — only execution metadata files. Cannot verify trait extraction, memory impl, or handler wiring.",
+      "location": ".ddx/executions/20260426T030128-76595357/"
+    },
+    {
+      "severity": "block",
+      "summary": "Cannot confirm `cargo test --workspace` outcome or kcat stress script behavior from the provided diff.",
+      "location": "N/A"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 1467,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T030128-76595357/manifest.json",
+          ".ddx/executions/20260426T030128-76595357/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 4016,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 7289,
+    "output_bytes": 720,
+    "elapsed_ms": 7839,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

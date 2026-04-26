@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "BLOCK",
+  "summary": "Diff under review contains only ddx execution evidence files (manifest.json, result.json). No source changes to consumer_group, coordinator, or handlers are present, so the acceptance criteria cannot be evaluated from this diff.",
+  "findings": [
+    { "severity": "block", "summary": "No code changes visible in diff — only execution metadata files. Cannot verify trait extraction, memory impl, or handler wiring.", "location": ".ddx/executions/20260426T030128-76595357/" },
+    { "severity": "block", "summary": "Cannot confirm `cargo test --workspace` outcome or kcat stress script behavior from the provided diff.", "location": "N/A" }
+  ]
+}
+```
