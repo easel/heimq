@@ -4,6 +4,7 @@
 //! for supported endpoints.
 
 use bytes::{Buf, BufMut, BytesMut};
+use heimq::protocol::SUPPORTED_APIS;
 use heimq::test_support::{unique_group, unique_topic, TestServer};
 use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
 use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
@@ -179,33 +180,21 @@ fn contract_api_versions_matches_supported_range() {
 
     assert_eq!(response.error_code, 0);
 
-    let expected = vec![
-        (0, 0, 8),
-        (1, 0, 11),
-        (2, 0, 7),
-        (3, 0, 8),
-        (8, 0, 7),
-        (9, 0, 7),
-        (10, 0, 3),
-        (11, 0, 8),
-        (12, 0, 4),
-        (13, 0, 4),
-        (14, 0, 4),
-        (18, 0, 3),
-        (19, 0, 6),
-        (20, 0, 5),
-    ];
+    // Derive the expected set from SUPPORTED_APIS so this test cannot
+    // silently desync when the flexible-version policy changes.
+    // TestServer uses the memory backend, which has full capabilities, so
+    // every entry in SUPPORTED_APIS should be advertised.
+    let mut advertised: Vec<(i16, i16, i16)> = response
+        .api_keys
+        .iter()
+        .map(|api| (api.api_key, api.min_version, api.max_version))
+        .collect();
+    advertised.sort_by_key(|(k, _, _)| *k);
 
-    for (api_key, min_version, max_version) in expected {
-        let entry = response
-            .api_keys
-            .iter()
-            .find(|api| api.api_key == api_key)
-            .unwrap_or_else(|| panic!("missing api key {}", api_key));
+    let mut expected: Vec<(i16, i16, i16)> = SUPPORTED_APIS.to_vec();
+    expected.sort_by_key(|(k, _, _)| *k);
 
-        assert_eq!(entry.min_version, min_version, "api {} min_version mismatch", api_key);
-        assert_eq!(entry.max_version, max_version, "api {} max_version mismatch", api_key);
-    }
+    assert_eq!(advertised, expected);
 }
 
 #[test]
