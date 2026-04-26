@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260426T030128-76595357",
+  "bead_id": "heimq-fb3e5ca8",
+  "base_rev": "5c8e7606656e88a372c6b8ec637babfe828ba8bd",
+  "created_at": "2026-04-26T03:01:28.478343149Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-fb3e5ca8",
+    "title": "Extract GroupCoordinatorBackend trait",
+    "description": "Unlike a simple load/save KV, the group coordinator is live state: members, generations, assignments, sticky session behavior, rebalance state machine. Per codex review, this trait must be richer than a snapshot store.\n\nTrait surface (initial):\n- join_group(group, member, protocols) -\u003e JoinResult { generation, member_id, leader, ... }\n- sync_group(group, generation, member, assignments) -\u003e SyncResult\n- heartbeat(group, generation, member) -\u003e HeartbeatResult\n- leave_group(group, member) -\u003e LeaveResult\n- commit_offset / fetch_offset could either be here OR in OffsetStore — for the first cut, keep OffsetStore separate (already its own bead).\n- capabilities()\n\nMemory impl wraps current ConsumerGroupManager logic; no behavior change.\n\nIn-scope files:\n- src/consumer_group/mod.rs (trait + memory impl wiring)\n- src/consumer_group/coordinator.rs (refactor)\n- src/handler/{join_group,sync_group,heartbeat,leave_group}.rs (take Arc\u003cdyn GroupCoordinatorBackend\u003e)\nOut of scope:\n- Any durable group backend (separate future bead)\n- Rebalance-delay fix (separate bead, filed as flakiness bug)",
+    "acceptance": "`cargo test --workspace` green. kcat stress script group-consumer flow passes with default stagger.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:5-group-trait"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:01:28Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T03:01:28.413812934Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T030128-76595357",
+    "prompt": ".ddx/executions/20260426T030128-76595357/prompt.md",
+    "manifest": ".ddx/executions/20260426T030128-76595357/manifest.json",
+    "result": ".ddx/executions/20260426T030128-76595357/result.json",
+    "checks": ".ddx/executions/20260426T030128-76595357/checks.json",
+    "usage": ".ddx/executions/20260426T030128-76595357/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-fb3e5ca8-20260426T030128-76595357"
+  }
+}
