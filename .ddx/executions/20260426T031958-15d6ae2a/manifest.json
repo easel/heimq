@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260426T031958-15d6ae2a",
+  "bead_id": "heimq-c894fcda",
+  "base_rev": "479ddb9965bb461449ee335f3fe44586b63ced8d",
+  "created_at": "2026-04-26T03:19:58.213271089Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-c894fcda",
+    "title": "Postgres OffsetStore backend (feature-gated)",
+    "description": "First durable backend. Stores committed offsets in a Postgres database. Feature-gated: `--features backend-postgres`.\n\nSchema:\n  CREATE TABLE heimq_committed_offsets (\n    group_id TEXT NOT NULL,\n    topic TEXT NOT NULL,\n    partition INT NOT NULL,\n    committed_offset BIGINT NOT NULL,\n    metadata TEXT,\n    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),\n    PRIMARY KEY (group_id, topic, partition)\n  );\n\nImplementation:\n- sqlx or tokio-postgres dependency, gated by feature.\n- PostgresOffsetStore::connect(url) returns Arc\u003cdyn OffsetStore\u003e.\n- BackendCapabilities: durability=WalFsync, survives_restart=true, transactions=false (this trait doesn't expose them), read_your_writes=true.\n- URL scheme: postgres://user:pw@host:port/db?schema=heimq\n- Schema initialize() idempotent at startup.\n\nIn-scope files:\n- Cargo.toml (feature flag + sqlx dep)\n- src/storage/postgres_offsets.rs (new)\n- src/storage/dispatch.rs (register postgres://)\n- tests/postgres_offsets.rs (integration test, uses a containerized postgres via testcontainers or skip if env var HEIMQ_PG_TEST_URL unset)\nDepends on: OffsetStore trait, URL dispatch",
+    "acceptance": "`cargo test --features backend-postgres` green. Integration test: commit an offset via OffsetCommit handler backed by PostgresOffsetStore, restart the TestServer, fetch the same offset, assert it survived. Test gracefully skips if no postgres URL is configured in CI.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:9-postgres-offsets"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:19:58Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T03:19:58.125895082Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T031958-15d6ae2a",
+    "prompt": ".ddx/executions/20260426T031958-15d6ae2a/prompt.md",
+    "manifest": ".ddx/executions/20260426T031958-15d6ae2a/manifest.json",
+    "result": ".ddx/executions/20260426T031958-15d6ae2a/result.json",
+    "checks": ".ddx/executions/20260426T031958-15d6ae2a/checks.json",
+    "usage": ".ddx/executions/20260426T031958-15d6ae2a/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-c894fcda-20260426T031958-15d6ae2a"
+  }
+}
