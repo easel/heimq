@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260426T034551-996d7d0e",
+  "bead_id": "heimq-1e0a2d52",
+  "base_rev": "210f5e0cdaa99e6864600d4d051d9c45bd3bab78",
+  "created_at": "2026-04-26T03:45:51.080643857Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-1e0a2d52",
+    "title": "e2e: concurrent rdkafka producers",
+    "description": "Spawn M rdkafka FutureProducers (e.g. 4) concurrently producing N messages each (e.g. 500) to the same topic. Consumer reads all M*N messages, asserts count match and no corruption. Complements existing legacy (raw TCP) concurrency test.\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_concurrent_producers)",
+    "acceptance": "`cargo test --test integration test_rdkafka_concurrent_producers -- --ignored --nocapture` passes with correct total count and payload integrity.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p1",
+      "topic:concurrency"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:45:50Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T03:45:50.996860594Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T034551-996d7d0e",
+    "prompt": ".ddx/executions/20260426T034551-996d7d0e/prompt.md",
+    "manifest": ".ddx/executions/20260426T034551-996d7d0e/manifest.json",
+    "result": ".ddx/executions/20260426T034551-996d7d0e/result.json",
+    "checks": ".ddx/executions/20260426T034551-996d7d0e/checks.json",
+    "usage": ".ddx/executions/20260426T034551-996d7d0e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-1e0a2d52-20260426T034551-996d7d0e"
+  }
+}
