@@ -351,3 +351,4 @@ test:
 - All P0 idempotent-producer and transaction acceptance scenarios pass against heimq and against Redpanda (FEAT-002).
 - Standard Kafka benchmarks (`kafka-producer-perf-test`, `kafka-consumer-perf-test`, OpenMessaging Benchmark) complete without protocol/client errors (FEAT-004).
 - Each ecosystem integration target has at least one passing test in CI (FEAT-005).
+- Flexible-version codec implemented for in-scope APIs; `SUPPORTED_APIS` advertises target maxima; differential parity harness reports zero diffs at flexible versions for in-scope APIs (FEAT-006).
