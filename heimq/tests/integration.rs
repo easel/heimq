@@ -2687,3 +2687,149 @@ async fn test_rdkafka_explicit_partition_target() {
         TARGET_PARTITION, payload, delivered_offset
     );
 }
+
+// ============================================================================
+// Long-Poll Fetch Test
+// ============================================================================
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
+async fn test_rdkafka_fetch_long_poll() {
+    use std::time::Instant;
+
+    let server = TestServer::start();
+    let producer = server.rdkafka_producer();
+
+    // ------------------------------------------------------------------
+    // Case A: empty topic; with fetch.min.bytes=1024 and fetch.wait.max.ms=500,
+    // poll() should block for ~500ms then return an empty batch (None).
+    // ------------------------------------------------------------------
+    let topic_a = unique_topic("fetch-long-poll-a");
+    let group_a = unique_group("flp-a");
+
+    // Ensure the topic exists by producing a single init message.
+    producer
+        .send(
+            FutureRecord::<str, str>::to(&topic_a).payload("init"),
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("Case A: failed to produce init");
+
+    let consumer_a: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &group_a)
+        .set("auto.offset.reset", "earliest")
+        .set("enable.auto.commit", "false")
+        .set("fetch.min.bytes", "1024")
+        .set("fetch.wait.max.ms", "500")
+        .set("fetch.queue.backoff.ms", "50")
+        .create()
+        .expect("Case A: failed to create consumer");
+    consumer_a.subscribe(&[&topic_a]).expect("Case A: failed to subscribe");
+
+    // Drain the init message so the consumer position is at end-of-log.
+    let drain_deadline = Instant::now() + Duration::from_secs(5);
+    let mut drained = false;
+    while Instant::now() < drain_deadline && !drained {
+        if let Some(Ok(_)) = consumer_a.poll(Duration::from_millis(200)) {
+            drained = true;
+        }
+    }
+    assert!(drained, "Case A: failed to drain init message before measurement");
+
+    // Measure: empty topic, single poll up to 500ms.
+    let start = Instant::now();
+    let result = consumer_a.poll(Duration::from_millis(500));
+    let poll_a = start.elapsed();
+
+    assert!(
+        !matches!(result, Some(Ok(_))),
+        "Case A: expected empty batch, but received a message"
+    );
+    assert!(
+        poll_a >= Duration::from_millis(300),
+        "Case A: poll returned too early ({:?}); expected ~500ms",
+        poll_a
+    );
+    assert!(
+        poll_a < Duration::from_millis(800),
+        "Case A: poll hung too long ({:?}); expected ~500ms",
+        poll_a
+    );
+
+    // ------------------------------------------------------------------
+    // Case B: producer writes >= fetch.min.bytes mid-wait; the consumer
+    // should observe the message promptly (well under 300ms after produce).
+    // ------------------------------------------------------------------
+    let topic_b = unique_topic("fetch-long-poll-b");
+    let group_b = unique_group("flp-b");
+
+    producer
+        .send(
+            FutureRecord::<str, str>::to(&topic_b).payload("init"),
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("Case B: failed to produce init");
+
+    let consumer_b: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &group_b)
+        .set("auto.offset.reset", "earliest")
+        .set("enable.auto.commit", "false")
+        .set("fetch.min.bytes", "1024")
+        .set("fetch.wait.max.ms", "500")
+        .set("fetch.queue.backoff.ms", "50")
+        .create()
+        .expect("Case B: failed to create consumer");
+    consumer_b.subscribe(&[&topic_b]).expect("Case B: failed to subscribe");
+
+    let drain_deadline = Instant::now() + Duration::from_secs(5);
+    let mut drained = false;
+    while Instant::now() < drain_deadline && !drained {
+        if let Some(Ok(_)) = consumer_b.poll(Duration::from_millis(200)) {
+            drained = true;
+        }
+    }
+    assert!(drained, "Case B: failed to drain init message before measurement");
+
+    // Pump the consumer briefly so it is actively long-polling, then produce
+    // a >=1024-byte message inline and measure end-to-end receipt latency.
+    let pump_until = Instant::now() + Duration::from_millis(150);
+    while Instant::now() < pump_until {
+        let _ = consumer_b.poll(Duration::from_millis(20));
+    }
+
+    let payload = "x".repeat(2048);
+    producer
+        .send(
+            FutureRecord::<str, str>::to(&topic_b).payload(&payload),
+            Duration::from_secs(5),
+        )
+        .await
+        .expect("Case B: failed to produce big payload");
+    let produced_at = Instant::now();
+
+    let mut received_at: Option<Instant> = None;
+    let deadline = produced_at + Duration::from_secs(5);
+    while Instant::now() < deadline && received_at.is_none() {
+        if let Some(result) = consumer_b.poll(Duration::from_millis(20)) {
+            match result {
+                Ok(_) => received_at = Some(Instant::now()),
+                Err(e) => panic!("Case B: poll error: {:?}", e),
+            }
+        }
+    }
+
+    let received_at = received_at.expect("Case B: consumer did not receive message");
+    let poll_b = received_at.saturating_duration_since(produced_at);
+
+    assert!(
+        poll_b < Duration::from_millis(300),
+        "Case B: receive latency too high ({:?}); expected <300ms after produce",
+        poll_b
+    );
+
+    println!("test_rdkafka_fetch_long_poll: poll_a={:?}, poll_b={:?}", poll_a, poll_b);
+}
