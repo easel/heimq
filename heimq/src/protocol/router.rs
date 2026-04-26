@@ -1,7 +1,7 @@
 //! Request routing
 
 use crate::config::Config;
-use crate::consumer_group::ConsumerGroupManager;
+use crate::consumer_group::{ConsumerGroupManager, GroupCoordinatorBackend};
 use crate::error::Result;
 use crate::handler::*;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
@@ -16,6 +16,9 @@ pub struct Router {
     storage: Arc<dyn LogBackend>,
     consumer_groups: Arc<ConsumerGroupManager>,
     config: Arc<Config>,
+    /// Effective set of `(api_key, min, max)` advertised by ApiVersions,
+    /// computed at startup from each backend's capability descriptor.
+    advertised_apis: Arc<Vec<(i16, i16, i16)>>,
 }
 
 impl Router {
@@ -24,10 +27,25 @@ impl Router {
         consumer_groups: Arc<ConsumerGroupManager>,
         config: Arc<Config>,
     ) -> Self {
+        let advertised_apis = Arc::new(crate::protocol::compute_supported_apis(
+            storage.capabilities(),
+            consumer_groups.offset_store().capabilities(),
+            consumer_groups.capabilities(),
+        ));
+        Self::with_advertised_apis(storage, consumer_groups, config, advertised_apis)
+    }
+
+    pub fn with_advertised_apis(
+        storage: Arc<dyn LogBackend>,
+        consumer_groups: Arc<ConsumerGroupManager>,
+        config: Arc<Config>,
+        advertised_apis: Arc<Vec<(i16, i16, i16)>>,
+    ) -> Self {
         Self {
             storage,
             consumer_groups,
             config,
+            advertised_apis,
         }
     }
 
@@ -87,7 +105,7 @@ impl Router {
     }
 
     fn handle_api_versions(&self, header: &RequestHeader, _body: &[u8]) -> Result<Bytes> {
-        let response = api_versions::handle(header.api_version);
+        let response = api_versions::handle(header.api_version, &self.advertised_apis);
         self.encode_response_bytes(header, &response)
     }
 

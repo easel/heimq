@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::consumer_group::{ConsumerGroupManager, GroupCoordinatorBackend};
 use crate::error::Result;
-use crate::protocol::Router;
+use crate::protocol::{compute_supported_apis, Router};
 use crate::storage::{
     dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store, LogBackend,
 };
@@ -19,6 +19,10 @@ pub struct Server {
     config: Arc<Config>,
     storage: Arc<dyn LogBackend>,
     consumer_groups: Arc<ConsumerGroupManager>,
+    /// Effective ApiVersions advertised by this server, computed once at
+    /// startup by intersecting static protocol support with each backend's
+    /// capability descriptor.
+    advertised_apis: Arc<Vec<(i16, i16, i16)>>,
 }
 
 impl Server {
@@ -37,8 +41,14 @@ impl Server {
         // Validate the group-coordinator URL through the dispatcher; the
         // memory:// scheme returns the manager we just constructed, while any
         // unknown scheme fails fast at startup.
-        let _coordinator: Arc<dyn GroupCoordinatorBackend> =
+        let coordinator: Arc<dyn GroupCoordinatorBackend> =
             dispatch_group_coordinator(&storage_cfg.groups, consumer_groups.clone())?;
+
+        let advertised_apis = Arc::new(compute_supported_apis(
+            storage.capabilities(),
+            consumer_groups.offset_store().capabilities(),
+            coordinator.capabilities(),
+        ));
 
         for spec in &config.create_topics {
             match spec.split_once(':') {
@@ -62,6 +72,7 @@ impl Server {
             config,
             storage,
             consumer_groups,
+            advertised_apis,
         })
     }
 
@@ -106,10 +117,11 @@ impl Server {
             Ok((socket, addr)) => {
                 debug!(peer = %addr, "New connection");
 
-                let router = Router::new(
+                let router = Router::with_advertised_apis(
                     self.storage.clone(),
                     self.consumer_groups.clone(),
                     self.config.clone(),
+                    self.advertised_apis.clone(),
                 );
 
                 tokio::spawn(async move {

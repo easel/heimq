@@ -51,7 +51,7 @@ fn put_str(buf: &mut BytesMut, value: Option<&str>) {
 
 #[test]
 fn api_versions_lists_supported_apis() {
-    let response = api_versions::handle(0);
+    let response = api_versions::handle(0, crate::protocol::SUPPORTED_APIS);
     assert_eq!(response.error_code, 0);
     let keys: Vec<i16> = response.api_keys.iter().map(|k| k.api_key).collect();
     assert!(keys.contains(&0));
