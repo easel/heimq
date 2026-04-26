@@ -1,0 +1,54 @@
+{
+  "verdict": "APPROVE",
+  "rationale": "Test test_rdkafka_pause_resume_partitions added to heimq/tests/integration.rs: assigns 2 partitions, pauses p0, produces to both, asserts only p1 arrives + no p0 leakage, resumes p0, asserts backlog drains. Marked #[ignore]; execution result_rev reports exit 0.",
+  "findings": [
+    {
+      "severity": "info",
+      "summary": "Test correctly gated with #[ignore] and matches the AC invocation pattern (cargo test ... --ignored).",
+      "location": "heimq/tests/integration.rs:3870"
+    },
+    {
+      "severity": "info",
+      "summary": "Both pause-phase (only p1 delivered, p0 leak check) and resume-phase (p0 backlog drains, payloads match) assertions are present.",
+      "location": "heimq/tests/integration.rs:3937"
+    }
+  ],
+  "evidence_assembly": {
+    "sections": [
+      {
+        "name": "bead",
+        "bytes_included": 696,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          "bead"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "changed-files",
+        "bytes_included": 180,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": [
+          ".ddx/executions/20260426T041553-cb86080d/manifest.json",
+          ".ddx/executions/20260426T041553-cb86080d/result.json"
+        ],
+        "omitted_items": null
+      },
+      {
+        "name": "diff",
+        "bytes_included": 3273,
+        "bytes_omitted": 0,
+        "truncation_reason": "",
+        "selected_items": null,
+        "omitted_items": null
+      }
+    ],
+    "input_bytes": 5775,
+    "output_bytes": 768,
+    "elapsed_ms": 19615,
+    "harness": "claude",
+    "model": "opus"
+  }
+}

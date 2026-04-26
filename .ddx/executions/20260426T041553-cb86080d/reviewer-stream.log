@@ -1,0 +1,11 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Test test_rdkafka_pause_resume_partitions added to heimq/tests/integration.rs: assigns 2 partitions, pauses p0, produces to both, asserts only p1 arrives + no p0 leakage, resumes p0, asserts backlog drains. Marked #[ignore]; execution result_rev reports exit 0.",
+  "findings": [
+    { "severity": "info", "summary": "Test correctly gated with #[ignore] and matches the AC invocation pattern (cargo test ... --ignored).", "location": "heimq/tests/integration.rs:3870" },
+    { "severity": "info", "summary": "Both pause-phase (only p1 delivered, p0 leak check) and resume-phase (p0 backlog drains, payloads match) assertions are present.", "location": "heimq/tests/integration.rs:3937" }
+  ]
+}
+```
