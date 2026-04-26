@@ -23,8 +23,9 @@
 - **Transport**: TCP, binary Kafka protocol.
 - **Framing**: 4-byte big-endian message length, followed by request header + body.
 - **Request header (non-flexible)**: api_key, api_version, correlation_id, client_id.
+- **Request header (flexible v2)**: api_key, api_version, correlation_id, client_id, tagged_fields block (compact types/varints per FEAT-006; see ADR-003).
 - **Response header**: correlation_id.
-- **Flexible versions**: Not supported (requires compact types/varints).
+- **Flexible versions**: In scope per FEAT-006 (compact strings, unsigned varints, tagged fields; codec via `kafka-protocol` crate, see ADR-003).
 
 ### Version Policy
 
