@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260426T040547-a01a840d",
+  "bead_id": "heimq-3af6652c",
+  "base_rev": "d22c8050e8c7fd5ddc35f7130854f071a14fd03d",
+  "created_at": "2026-04-26T04:05:47.661535757Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-3af6652c",
+    "title": "Integration test matrix: kcat-stress against each backend combo",
+    "description": "Run the kcat-stress script against each sensible backend combination and assert behavior is consistent.\n\nCombinations initially:\n- log=memory, offsets=memory, groups=memory (default)\n- log=memory, offsets=postgres, groups=memory (durability slice)\n\nScript extension: a wrapper scripts/stress-matrix.sh that loops over combos, setting HEIMQ_STORAGE_LOG / HEIMQ_STORAGE_OFFSETS / HEIMQ_STORAGE_GROUPS env vars per iteration, running the existing kcat-stress.sh at moderate volume (e.g. 5 topics x 10k msgs).\n\nIn-scope files:\n- scripts/stress-matrix.sh (new)\n- docs/helix/03-test/test-plan/test-plan.md (add Phase 6: backend matrix)\nDepends on: postgres backend bead",
+    "acceptance": "stress-matrix.sh runs all configured combos and exits 0. If POSTGRES_URL is unset, the postgres row is skipped with a clear SKIPPED line (not FAIL). CI gets a new (optional) job that runs the matrix against a postgres service container.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:10-test-matrix"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T04:05:47Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T04:05:47.566816149Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T040547-a01a840d",
+    "prompt": ".ddx/executions/20260426T040547-a01a840d/prompt.md",
+    "manifest": ".ddx/executions/20260426T040547-a01a840d/manifest.json",
+    "result": ".ddx/executions/20260426T040547-a01a840d/result.json",
+    "checks": ".ddx/executions/20260426T040547-a01a840d/checks.json",
+    "usage": ".ddx/executions/20260426T040547-a01a840d/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-3af6652c-20260426T040547-a01a840d"
+  }
+}
