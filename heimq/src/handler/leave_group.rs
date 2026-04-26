@@ -1,18 +1,17 @@
 //! LeaveGroup request handler (API Key 13)
 
-use crate::consumer_group::ConsumerGroupManager;
+use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use bytes::Buf;
 use kafka_protocol::messages::LeaveGroupResponse;
 use std::io::Cursor;
-use std::sync::Arc;
 use tracing::debug;
 
 /// Handle LeaveGroup request
 pub fn handle(
     api_version: i16,
     body: &[u8],
-    consumer_groups: &Arc<ConsumerGroupManager>,
+    coordinator: &dyn GroupCoordinatorBackend,
 ) -> Result<LeaveGroupResponse> {
     let mut response = LeaveGroupResponse::default();
     let mut cursor = Cursor::new(body);
@@ -45,23 +44,14 @@ pub fn handle(
         }
     };
 
-    // Get the group
-    let group = match consumer_groups.get_group(&group_id) {
-        Some(g) => g,
-        None => {
-            response.error_code = 16; // NOT_COORDINATOR
-            return Ok(response);
-        }
-    };
-
-    // Remove members
-    for member_id in member_ids {
-        if group.remove_member(&member_id) {
-            debug!(group = %group_id, member = %member_id, "Member left group");
-        }
-    }
-
-    response.error_code = 0;
+    let result = coordinator.leave_group(&group_id, &member_ids);
+    debug!(
+        group = %group_id,
+        members = member_ids.len(),
+        error = result.error_code,
+        "LeaveGroup result"
+    );
+    response.error_code = result.error_code;
     Ok(response)
 }
 

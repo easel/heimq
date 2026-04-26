@@ -143,28 +143,28 @@ impl Router {
     fn handle_join_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| join_group::handle(header.api_version, body, &self.consumer_groups)),
+            Box::new(|| join_group::handle(header.api_version, body, self.consumer_groups.as_ref())),
         )
     }
 
     fn handle_sync_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| sync_group::handle(header.api_version, body, &self.consumer_groups)),
+            Box::new(|| sync_group::handle(header.api_version, body, self.consumer_groups.as_ref())),
         )
     }
 
     fn handle_heartbeat(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| heartbeat::handle(header.api_version, body, &self.consumer_groups)),
+            Box::new(|| heartbeat::handle(header.api_version, body, self.consumer_groups.as_ref())),
         )
     }
 
     fn handle_leave_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| leave_group::handle(header.api_version, body, &self.consumer_groups)),
+            Box::new(|| leave_group::handle(header.api_version, body, self.consumer_groups.as_ref())),
         )
     }
 

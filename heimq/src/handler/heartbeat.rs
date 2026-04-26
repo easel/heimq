@@ -1,17 +1,16 @@
 //! Heartbeat request handler (API Key 12)
 
-use crate::consumer_group::ConsumerGroupManager;
+use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use bytes::Buf;
 use kafka_protocol::messages::HeartbeatResponse;
 use std::io::Cursor;
-use std::sync::Arc;
 
 /// Handle Heartbeat request
 pub fn handle(
     _api_version: i16,
     body: &[u8],
-    consumer_groups: &Arc<ConsumerGroupManager>,
+    coordinator: &dyn GroupCoordinatorBackend,
 ) -> Result<HeartbeatResponse> {
     let mut response = HeartbeatResponse::default();
     let mut cursor = Cursor::new(body);
@@ -29,28 +28,8 @@ pub fn handle(
     // member_id (STRING)
     let member_id = read_string(&mut cursor).unwrap_or_default();
 
-    // Get the group
-    let group = match consumer_groups.get_group(&group_id) {
-        Some(g) => g,
-        None => {
-            response.error_code = 16; // NOT_COORDINATOR
-            return Ok(response);
-        }
-    };
-
-    // Verify generation
-    if group.generation_id() != generation_id {
-        response.error_code = 22; // ILLEGAL_GENERATION
-        return Ok(response);
-    }
-
-    // Update heartbeat
-    if !group.heartbeat(&member_id) {
-        response.error_code = 25; // UNKNOWN_MEMBER_ID
-        return Ok(response);
-    }
-
-    response.error_code = 0;
+    let result = coordinator.heartbeat(&group_id, generation_id, &member_id);
+    response.error_code = result.error_code;
     Ok(response)
 }
 

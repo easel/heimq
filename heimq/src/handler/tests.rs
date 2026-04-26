@@ -417,13 +417,13 @@ fn join_sync_heartbeat_leave_group_flow() {
     request.protocols = vec![protocol];
 
     let body = encode_body(&request, 1);
-    let response = join_group::handle(1, &body, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 79);
     assert!(!response.member_id.is_empty());
 
     request.member_id = response.member_id.clone();
     let body = encode_body(&request, 1);
-    let response = join_group::handle(1, &body, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
     assert_eq!(response.leader, response.member_id);
 
@@ -441,7 +441,7 @@ fn join_sync_heartbeat_leave_group_flow() {
     sync.assignments = vec![assignment];
 
     let body = encode_body(&sync, 0);
-    let response = sync_group::handle(0, &body, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 
     let mut heartbeat = HeartbeatRequest::default();
@@ -449,7 +449,7 @@ fn join_sync_heartbeat_leave_group_flow() {
     heartbeat.generation_id = generation_id;
     heartbeat.member_id = member_id.clone();
     let body = encode_body(&heartbeat, 0);
-    let response = heartbeat::handle(0, &body, &consumer_groups).unwrap();
+    let response = heartbeat::handle(0, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 
     let mut leave = LeaveGroupRequest::default();
@@ -459,7 +459,7 @@ fn join_sync_heartbeat_leave_group_flow() {
     member.member_id = member_id;
     leave.members = vec![member];
     let body = encode_body(&leave, 3);
-    let response = leave_group::handle(3, &body, &consumer_groups).unwrap();
+    let response = leave_group::handle(3, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 }
 
@@ -489,7 +489,7 @@ fn sync_group_leader_applies_assignments_and_stabilizes() {
     buf.put_i32(3);
     buf.extend_from_slice(&[1, 2, 3]);
 
-    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 
     let group = consumer_groups.get_group("sync-group").unwrap();
@@ -530,7 +530,7 @@ fn sync_group_non_leader_missing_assignment() {
     put_str(&mut buf, Some("follower"));
     buf.put_i32(0);
 
-    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
     assert!(response.assignment.is_empty());
 }
@@ -553,7 +553,7 @@ fn join_group_leader_includes_metadata() {
     request.protocols = vec![protocol];
 
     let body = encode_body(&request, 1);
-    let response = join_group::handle(1, &body, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
     assert_eq!(response.members.len(), 1);
     assert_eq!(response.members[0].metadata.as_ref(), &[9, 9]);
@@ -577,7 +577,7 @@ fn join_group_select_protocol_fallback_for_non_leader() {
     request_a.protocols = vec![protocol_a];
 
     let body = encode_body(&request_a, 1);
-    let response_a = join_group::handle(1, &body, &consumer_groups).unwrap();
+    let response_a = join_group::handle(1, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response_a.error_code, 0);
 
     let mut protocol_b = JoinGroupRequestProtocol::default();
@@ -593,7 +593,7 @@ fn join_group_select_protocol_fallback_for_non_leader() {
     request_b.protocols = vec![protocol_b];
 
     let body = encode_body(&request_b, 1);
-    let response_b = join_group::handle(1, &body, &consumer_groups).unwrap();
+    let response_b = join_group::handle(1, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response_b.error_code, 0);
     assert_eq!(response_b.protocol_name.as_ref().unwrap().as_str(), "roundrobin");
     assert!(response_b.members.is_empty());
@@ -604,16 +604,16 @@ fn group_handlers_error_paths() {
     let config = test_config(true);
     let consumer_groups = test_consumer_groups(config);
 
-    let response = join_group::handle(1, &[], &consumer_groups).unwrap();
+    let response = join_group::handle(1, &[], consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
-    let response = sync_group::handle(0, &[], &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &[], consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
-    let response = heartbeat::handle(0, &[], &consumer_groups).unwrap();
+    let response = heartbeat::handle(0, &[], consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
-    let response = leave_group::handle(0, &[], &consumer_groups).unwrap();
+    let response = leave_group::handle(0, &[], consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 16);
 }
 
@@ -1230,7 +1230,7 @@ fn heartbeat_error_and_read_string_cases() {
     put_str(&mut buf, Some("missing"));
     buf.put_i32(1);
     put_str(&mut buf, Some("member"));
-    let response = heartbeat::handle(0, &buf, &consumer_groups).unwrap();
+    let response = heartbeat::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 16);
 
     let group = consumer_groups.get_or_create_group("group");
@@ -1249,19 +1249,19 @@ fn heartbeat_error_and_read_string_cases() {
     put_str(&mut buf, Some("group"));
     buf.put_i32(group.generation_id());
     put_str(&mut buf, Some("missing-member"));
-    let response = heartbeat::handle(0, &buf, &consumer_groups).unwrap();
+    let response = heartbeat::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 25);
 
     let mut buf = BytesMut::new();
     buf.put_i16(-1);
     buf.put_i32(0);
-    let response = heartbeat::handle(0, &buf, &consumer_groups).unwrap();
+    let response = heartbeat::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 16);
 
     let mut buf = BytesMut::new();
     buf.put_i16(4);
     buf.extend_from_slice(b"a");
-    let response = heartbeat::handle(0, &buf, &consumer_groups).unwrap();
+    let response = heartbeat::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 }
 
@@ -1273,13 +1273,13 @@ fn join_group_additional_error_paths() {
 
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("group"));
-    let response = join_group::handle(1, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("group"));
     buf.put_i32(1);
-    let response = join_group::handle(1, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
     let mut buf = BytesMut::new();
@@ -1287,7 +1287,7 @@ fn join_group_additional_error_paths() {
     buf.put_i32(1);
     buf.put_i32(1);
     put_str(&mut buf, Some("member"));
-    let response = join_group::handle(1, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
     let mut buf = BytesMut::new();
@@ -1296,7 +1296,7 @@ fn join_group_additional_error_paths() {
     buf.put_i32(1);
     put_str(&mut buf, Some("member"));
     put_str(&mut buf, Some("consumer"));
-    let response = join_group::handle(1, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
     let mut buf = BytesMut::new();
@@ -1305,7 +1305,7 @@ fn join_group_additional_error_paths() {
     put_str(&mut buf, Some("member"));
     put_str(&mut buf, Some("consumer"));
     buf.put_i32(0);
-    let response = join_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 
     let mut buf = BytesMut::new();
@@ -1316,7 +1316,7 @@ fn join_group_additional_error_paths() {
     put_str(&mut buf, Some("consumer"));
     buf.put_i32(1);
     put_str(&mut buf, Some("range"));
-    let response = join_group::handle(1, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 
     let mut buf = BytesMut::new();
@@ -1325,7 +1325,7 @@ fn join_group_additional_error_paths() {
     buf.put_i32(1);
     put_str(&mut buf, Some("member"));
     put_str(&mut buf, None);
-    let response = join_group::handle(5, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(5, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
     let mut buf = BytesMut::new();
@@ -1335,7 +1335,7 @@ fn join_group_additional_error_paths() {
     put_str(&mut buf, Some("member"));
     put_str(&mut buf, Some("consumer"));
     buf.put_i32(1);
-    let response = join_group::handle(1, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(1, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 }
 
@@ -1351,13 +1351,13 @@ fn join_group_read_string_edges() {
     put_str(&mut buf, Some("member"));
     put_str(&mut buf, Some("consumer"));
     buf.put_i32(0);
-    let response = join_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 
     let mut buf = BytesMut::new();
     buf.put_i16(4);
     buf.extend_from_slice(b"a");
-    let response = join_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = join_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 }
 
@@ -1383,7 +1383,7 @@ fn leave_group_parses_member_list() {
     buf.put_i32(1);
     put_str(&mut buf, Some("member-1"));
     put_str(&mut buf, None);
-    let response = leave_group::handle(3, &buf, &consumer_groups).unwrap();
+    let response = leave_group::handle(3, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 }
 
@@ -1398,7 +1398,7 @@ fn leave_group_missing_member_is_ignored() {
     buf.put_i32(1);
     put_str(&mut buf, Some("missing"));
     put_str(&mut buf, None);
-    let response = leave_group::handle(3, &buf, &consumer_groups).unwrap();
+    let response = leave_group::handle(3, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 }
 
@@ -1410,14 +1410,14 @@ fn leave_group_truncated_inputs() {
 
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("group"));
-    let response = leave_group::handle(3, &buf, &consumer_groups).unwrap();
+    let response = leave_group::handle(3, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("group"));
     buf.put_i16(4);
     buf.extend_from_slice(b"a");
-    let response = leave_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = leave_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 }
 
@@ -1430,7 +1430,7 @@ fn sync_group_optional_and_errors() {
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("missing"));
     buf.put_i32(1);
-    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
     let mut buf = BytesMut::new();
@@ -1441,7 +1441,7 @@ fn sync_group_optional_and_errors() {
     put_str(&mut buf, Some("consumer"));
     put_str(&mut buf, Some("range"));
     buf.put_i32(0);
-    let response = sync_group::handle(5, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(5, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 16);
 
     let mut buf = BytesMut::new();
@@ -1450,7 +1450,7 @@ fn sync_group_optional_and_errors() {
     put_str(&mut buf, Some("member"));
     buf.put_i32(1);
     put_str(&mut buf, Some("member"));
-    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 16);
 
     let group = consumer_groups.get_or_create_group("group");
@@ -1470,7 +1470,7 @@ fn sync_group_optional_and_errors() {
     buf.put_i32(generation);
     put_str(&mut buf, Some("missing-member"));
     buf.put_i32(0);
-    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 25);
 
     let mut buf = BytesMut::new();
@@ -1480,7 +1480,7 @@ fn sync_group_optional_and_errors() {
     buf.put_i32(1);
     put_str(&mut buf, Some("member-1"));
     buf.put_i32(0);
-    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 }
 
@@ -1493,12 +1493,12 @@ fn sync_group_read_string_edges() {
     buf.put_i16(-1);
     buf.put_i32(1);
     buf.put_i32(0);
-    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 
     let mut buf = BytesMut::new();
     buf.put_i16(4);
     buf.extend_from_slice(b"a");
-    let response = sync_group::handle(0, &buf, &consumer_groups).unwrap();
+    let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
 }

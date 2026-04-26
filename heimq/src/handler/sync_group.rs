@@ -1,18 +1,17 @@
 //! SyncGroup request handler (API Key 14)
 
-use crate::consumer_group::{ConsumerGroup, ConsumerGroupManager};
+use crate::consumer_group::{GroupCoordinatorBackend, SyncRequest};
 use crate::error::Result;
 use bytes::Buf;
 use kafka_protocol::messages::SyncGroupResponse;
 use std::io::Cursor;
-use std::sync::Arc;
 use tracing::debug;
 
 /// Handle SyncGroup request
 pub fn handle(
     api_version: i16,
     body: &[u8],
-    consumer_groups: &Arc<ConsumerGroupManager>,
+    coordinator: &dyn GroupCoordinatorBackend,
 ) -> Result<SyncGroupResponse> {
     let mut response = SyncGroupResponse::default();
     let mut cursor = Cursor::new(body);
@@ -73,42 +72,23 @@ pub fn handle(
         assignments.push((assign_member_id, assignment));
     }
 
-    // Get the group
-    let group = match consumer_groups.get_group(&group_id) {
-        Some(g) => g,
-        None => {
-            response.error_code = 16; // NOT_COORDINATOR
-            return Ok(response);
-        }
-    };
-
-    // Verify generation
-    if group.generation_id() != generation_id {
-        response.error_code = 22; // ILLEGAL_GENERATION
-        return Ok(response);
-    }
-
-    // Verify member exists
-    if group.get_member(&member_id).is_none() {
-        response.error_code = 25; // UNKNOWN_MEMBER_ID
-        return Ok(response);
-    }
-
-    // If this is the leader, store the assignments
-    if group.leader_id() == Some(member_id.clone()) { apply_leader_assignments(&group, &assignments); }
-
-    // Return this member's assignment
-    let assignment = group.get_assignment(&member_id).unwrap_or_default();
-    response.assignment = bytes::Bytes::from(assignment);
+    let result = coordinator.sync_group(SyncRequest {
+        group_id: group_id.clone(),
+        generation_id,
+        member_id: member_id.clone(),
+        assignments,
+    });
 
     debug!(
         group = %group_id,
         member = %member_id,
         generation = generation_id,
-        "Member synced"
+        error = result.error_code,
+        "SyncGroup result"
     );
 
-    response.error_code = 0;
+    response.error_code = result.error_code;
+    response.assignment = bytes::Bytes::from(result.assignment);
     Ok(response)
 }
 
@@ -126,14 +106,4 @@ fn read_string(cursor: &mut Cursor<&[u8]>) -> Option<String> {
     let mut buf = vec![0u8; len as usize];
     cursor.copy_to_slice(&mut buf);
     Some(String::from_utf8_lossy(&buf).to_string())
-}
-
-fn apply_leader_assignments(group: &Arc<ConsumerGroup>, assignments: &[(String, Vec<u8>)]) {
-    for (assign_member_id, assignment) in assignments {
-        group.set_assignment(assign_member_id, assignment.clone());
-    }
-
-    // Select protocol and complete rebalance
-    let protocol = group.select_protocol().unwrap_or_default();
-    group.complete_rebalance(protocol);
 }
