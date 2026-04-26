@@ -142,7 +142,10 @@ pub fn test_config(auto_create: bool) -> Arc<Config> {
         cluster_id: "test-cluster".to_string(),
         metrics: false,
         metrics_port: 9093,
-            create_topics: Vec::new(),
+        create_topics: Vec::new(),
+        storage_log: "memory://".to_string(),
+        storage_offsets: "memory://".to_string(),
+        storage_groups: "memory://".to_string(),
     })
 }
 

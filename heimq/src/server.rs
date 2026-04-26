@@ -1,10 +1,12 @@
 //! TCP server implementation
 
 use crate::config::Config;
-use crate::consumer_group::ConsumerGroupManager;
+use crate::consumer_group::{ConsumerGroupManager, GroupCoordinatorBackend};
 use crate::error::Result;
 use crate::protocol::Router;
-use crate::storage::{LogBackend, MemoryLog};
+use crate::storage::{
+    dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store, LogBackend,
+};
 use bytes::{Buf, BytesMut};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -23,8 +25,20 @@ impl Server {
     /// Create a new server instance
     pub fn new(config: Config) -> Result<Self> {
         let config = Arc::new(config);
-        let storage: Arc<dyn LogBackend> = Arc::new(MemoryLog::new(config.clone()));
-        let consumer_groups = Arc::new(ConsumerGroupManager::new(config.clone()));
+        let storage_cfg = config.storage();
+
+        let storage: Arc<dyn LogBackend> =
+            dispatch_log_backend(&storage_cfg.log, config.clone())?;
+        let offset_store = dispatch_offset_store(&storage_cfg.offsets)?;
+        let consumer_groups = Arc::new(ConsumerGroupManager::with_offset_store(
+            config.clone(),
+            offset_store,
+        ));
+        // Validate the group-coordinator URL through the dispatcher; the
+        // memory:// scheme returns the manager we just constructed, while any
+        // unknown scheme fails fast at startup.
+        let _coordinator: Arc<dyn GroupCoordinatorBackend> =
+            dispatch_group_coordinator(&storage_cfg.groups, consumer_groups.clone())?;
 
         for spec in &config.create_topics {
             match spec.split_once(':') {
@@ -292,10 +306,39 @@ mod tests {
             metrics: false,
             metrics_port: 9093,
             create_topics: Vec::new(),
+            storage_log: "memory://".to_string(),
+            storage_offsets: "memory://".to_string(),
+            storage_groups: "memory://".to_string(),
         };
 
         let server = Server::new(config);
         assert!(server.is_ok());
+    }
+
+    #[test]
+    fn test_unknown_storage_scheme_fails_at_startup() {
+        let mut config = Config::parse_from(["heimq"]);
+        config.storage_log = "weird://".to_string();
+        let msg = match Server::new(config) {
+            Ok(_) => panic!("expected error"),
+            Err(e) => format!("{}", e),
+        };
+        assert!(msg.contains("weird"), "msg = {}", msg);
+        assert!(msg.contains("memory://"), "msg = {}", msg);
+    }
+
+    #[test]
+    fn test_unknown_offsets_scheme_fails_at_startup() {
+        let mut config = Config::parse_from(["heimq"]);
+        config.storage_offsets = "postgres://x".to_string();
+        assert!(Server::new(config).is_err());
+    }
+
+    #[test]
+    fn test_unknown_groups_scheme_fails_at_startup() {
+        let mut config = Config::parse_from(["heimq"]);
+        config.storage_groups = "weird://".to_string();
+        assert!(Server::new(config).is_err());
     }
 
     #[tokio::test]

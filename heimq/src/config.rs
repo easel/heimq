@@ -60,12 +60,41 @@ pub struct Config {
     /// Env var: comma-separated list.
     #[arg(long = "create-topic", env = "HEIMQ_CREATE_TOPICS", value_delimiter = ',')]
     pub create_topics: Vec<String>,
+
+    /// URL for the log-storage backend. Currently only `memory://` is supported.
+    #[arg(long = "storage-log", default_value = "memory://", env = "HEIMQ_STORAGE_LOG")]
+    pub storage_log: String,
+
+    /// URL for the consumer-group offset store. Currently only `memory://` is supported.
+    #[arg(long = "storage-offsets", default_value = "memory://", env = "HEIMQ_STORAGE_OFFSETS")]
+    pub storage_offsets: String,
+
+    /// URL for the consumer-group coordinator backend. Currently only `memory://` is supported.
+    #[arg(long = "storage-groups", default_value = "memory://", env = "HEIMQ_STORAGE_GROUPS")]
+    pub storage_groups: String,
+}
+
+/// Storage backend URLs grouped together for ergonomic access.
+#[derive(Debug, Clone)]
+pub struct StorageConfig {
+    pub log: String,
+    pub offsets: String,
+    pub groups: String,
 }
 
 impl Config {
     /// Get the socket address to bind to
     pub fn bind_addr(&self) -> String {
         format!("{}:{}", self.host, self.port)
+    }
+
+    /// Storage backend URLs as a single struct.
+    pub fn storage(&self) -> StorageConfig {
+        StorageConfig {
+            log: self.storage_log.clone(),
+            offsets: self.storage_offsets.clone(),
+            groups: self.storage_groups.clone(),
+        }
     }
 
     /// Get advertised listener for Kafka protocol
@@ -106,6 +135,35 @@ mod tests {
 
         config.host = "127.0.0.1".to_string();
         assert_eq!(config.advertised_listener(), "127.0.0.1:9094");
+    }
+
+    #[test]
+    fn test_storage_defaults_to_memory_urls() {
+        let config = Config::parse_from(["heimq"]);
+        assert_eq!(config.storage_log, "memory://");
+        assert_eq!(config.storage_offsets, "memory://");
+        assert_eq!(config.storage_groups, "memory://");
+        let storage = config.storage();
+        assert_eq!(storage.log, "memory://");
+        assert_eq!(storage.offsets, "memory://");
+        assert_eq!(storage.groups, "memory://");
+    }
+
+    #[test]
+    fn test_storage_overrides_via_flags() {
+        let config = Config::parse_from([
+            "heimq",
+            "--storage-log",
+            "memory://log",
+            "--storage-offsets",
+            "postgres://o",
+            "--storage-groups",
+            "weird://g",
+        ]);
+        let storage = config.storage();
+        assert_eq!(storage.log, "memory://log");
+        assert_eq!(storage.offsets, "postgres://o");
+        assert_eq!(storage.groups, "weird://g");
     }
 
     #[test]
