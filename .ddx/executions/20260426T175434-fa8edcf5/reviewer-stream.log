@@ -1,0 +1,3 @@
+```json
+{"schema_version":1,"verdict":"APPROVE","summary":"ADR-002 documents the retro outcome and proposes both a tracker close-hook and a required CI gate, satisfying the AC (decision recorded as ADR; CI gate and close-time hook proposed).","findings":[{"severity":"info","summary":"Implementation of the close-hook and CI workflow is deferred to separate beads, as explicitly noted in the ADR — appropriate scoping for a retro bead.","location":"heimq/docs/adr/002-bead-close-test-gate.md:119"}]}
+```
