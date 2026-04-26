@@ -134,46 +134,53 @@ ListOffsets (2), Metadata (3), OffsetCommit (8), OffsetFetch (9),
 FindCoordinator (10), JoinGroup (11), Heartbeat (12), LeaveGroup
 (13), SyncGroup (14).
 
+All Phase 5 items are landed under epic heimq-700e47b2; tests live in
+`heimq/tests/integration.rs` (run with `cargo test --test integration --
+--ignored`).
+
 #### P0 — Consumer group correctness
-- [ ] Single-group delivery integrity on a multi-partition topic: no gaps, no duplicate ownership across members (supersedes any "exactly-once" framing — not a Kafka guarantee).
-- [ ] Resume from committed offset after consumer restart in the same group.
-- [ ] Rebalance on member **leave** (graceful LeaveGroup + session-timeout expiry).
-- [ ] Rebalance on member **join** (second member added to an active group).
-- [ ] Multiple independent consumer groups reading the same topic with independent committed offsets.
+- [x] Single-group delivery integrity on a multi-partition topic: no gaps, no duplicate ownership across members (supersedes any "exactly-once" framing — not a Kafka guarantee). [heimq-f17da917]
+- [x] Resume from committed offset after consumer restart in the same group. [heimq-65cdaf14]
+- [x] Rebalance on member **leave** (graceful LeaveGroup + session-timeout expiry). [heimq-f1e42e32]
+- [x] Rebalance on member **join** (second member added to an active group). [`test_rdkafka_consumer_rebalance_on_new_member`]
+- [x] Multiple independent consumer groups reading the same topic with independent committed offsets. [heimq-990ad721]
 
 #### P0 — Offset behavior
-- [ ] `auto.offset.reset=earliest` vs `latest` on a fresh group with pre-existing messages.
-- [ ] Manual commit + committed-offset fetch path, distinct from auto-commit.
-- [ ] `enable.auto.commit=true` with explicit `auto.commit.interval.ms` covers the auto-commit code path.
+- [x] `auto.offset.reset=earliest` vs `latest` on a fresh group with pre-existing messages. [heimq-a77fc237]
+- [x] Manual commit + committed-offset fetch path, distinct from auto-commit. [heimq-6b53731e]
+- [x] `enable.auto.commit=true` with explicit `auto.commit.interval.ms` covers the auto-commit code path. [heimq-1597cf54]
 
 #### P0 — Multi-partition integrity and order
-- [ ] Multi-partition produce→consume roundtrip: every produced message is consumed exactly once across the group, across partitions.
-- [ ] Per-partition ordering: consumed offsets monotonic per partition under concurrent produce.
+- [x] Multi-partition produce→consume roundtrip: every produced message is consumed exactly once across the group, across partitions. [heimq-c93b7b4a]
+- [x] Per-partition ordering: consumed offsets monotonic per partition under concurrent produce. [heimq-6f69c0d3]
 
 #### P0 — Partition selection
-- [ ] Keyed-message partitioner determinism: same key → same partition on a multi-partition topic.
-- [ ] Explicit partition targeting via `rdkafka` producer API (bypass hash partitioner).
+- [x] Keyed-message partitioner determinism: same key → same partition on a multi-partition topic. [heimq-9d72b499]
+- [x] Explicit partition targeting via `rdkafka` producer API (bypass hash partitioner). [heimq-885505ce]
 
 #### P1 — Fetch wait behavior
-- [ ] Long-poll fetch: `fetch.min.bytes` + `fetch.max.wait.ms` blocks until data arrives or timeout.
-- [ ] Empty-topic consume timeout: consumer on an empty topic returns cleanly on poll timeout.
+- [x] Long-poll fetch: `fetch.min.bytes` + `fetch.max.wait.ms` blocks until data arrives or timeout. [heimq-4ab3d5d7]
+- [x] Empty-topic consume timeout: consumer on an empty topic returns cleanly on poll timeout. [heimq-979c6bea]
 
 #### P1 — Error paths and broker config
-- [ ] Produce to nonexistent topic with `auto.create.topics.enable=false`.
-- [ ] Oversized message vs `message.max.bytes`.
-- [ ] `auto.create.topics.enable` on/off behavior end-to-end.
+- [x] Produce to nonexistent topic with `auto.create.topics.enable=false`. [heimq-57261856]
+- [x] Oversized message vs `message.max.bytes`. [heimq-cd905f86]
+- [x] `auto.create.topics.enable` on/off behavior end-to-end. [heimq-6c6709a1]
 
 #### P1 — Throughput and concurrency
-- [ ] Concurrent rdkafka producers to the same topic.
-- [ ] Produce-while-consume soak: N thousand messages, assert no loss, no duplicates, monotonic per-partition offsets.
+- [x] Concurrent rdkafka producers to the same topic. [heimq-1e0a2d52]
+- [x] Produce-while-consume soak: N thousand messages, assert no loss, no duplicates, monotonic per-partition offsets. [heimq-bbab6a2e]
 
 #### P2 — Client-surface coverage (lower broker signal)
-- [ ] Record headers round-trip (produce → consume).
-- [ ] Compression codecs: gzip, snappy, lz4, zstd (distinct broker decode paths).
-- [ ] Seek to end, seek to arbitrary offset.
-- [ ] Pause / resume on assigned partitions.
+- [x] Record headers round-trip (produce → consume). [heimq-977d7b59]
+- [x] Compression codecs: gzip, snappy, lz4, zstd (distinct broker decode paths). [heimq-76674efa]
+- [x] Seek to end, seek to arbitrary offset. [heimq-cd222bbb]
+- [x] Pause / resume on assigned partitions. [heimq-0c5afc66]
 
 ### Phase 6: Backend Matrix (P0)
+
+Status: landed — driver `scripts/stress-matrix.sh` exists and is wired
+into `.github/workflows/stress-matrix.yml`.
 
 Scope: run the existing `scripts/kcat-stress.sh` workload against each
 sensible combination of pluggable storage backends (log / offsets /
