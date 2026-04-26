@@ -1,0 +1,88 @@
+{
+  "attempt_id": "20260426T031021-b55a48b0",
+  "bead_id": "heimq-fb3e5ca8",
+  "base_rev": "4e340949058740c0eac8fd4da2b04a6c696afde3",
+  "created_at": "2026-04-26T03:10:21.217471328Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-fb3e5ca8",
+    "title": "Extract GroupCoordinatorBackend trait",
+    "description": "Unlike a simple load/save KV, the group coordinator is live state: members, generations, assignments, sticky session behavior, rebalance state machine. Per codex review, this trait must be richer than a snapshot store.\n\nTrait surface (initial):\n- join_group(group, member, protocols) -\u003e JoinResult { generation, member_id, leader, ... }\n- sync_group(group, generation, member, assignments) -\u003e SyncResult\n- heartbeat(group, generation, member) -\u003e HeartbeatResult\n- leave_group(group, member) -\u003e LeaveResult\n- commit_offset / fetch_offset could either be here OR in OffsetStore — for the first cut, keep OffsetStore separate (already its own bead).\n- capabilities()\n\nMemory impl wraps current ConsumerGroupManager logic; no behavior change.\n\nIn-scope files:\n- src/consumer_group/mod.rs (trait + memory impl wiring)\n- src/consumer_group/coordinator.rs (refactor)\n- src/handler/{join_group,sync_group,heartbeat,leave_group}.rs (take Arc\u003cdyn GroupCoordinatorBackend\u003e)\nOut of scope:\n- Any durable group backend (separate future bead)\n- Rebalance-delay fix (separate bead, filed as flakiness bug)",
+    "acceptance": "`cargo test --workspace` green. kcat stress script group-consumer flow passes with default stagger.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:5-group-trait"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:10:21Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"claude\",\"fallback_chain\":[]}",
+          "created_at": "2026-04-26T03:09:44.354534925Z",
+          "kind": "routing",
+          "source": "ddx agent execute-bead",
+          "summary": "provider=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260426T030128-76595357\",\"harness\":\"claude\",\"input_tokens\":61,\"output_tokens\":31413,\"total_tokens\":31474,\"cost_usd\":4.767299249999999,\"duration_ms\":495874,\"exit_code\":0}",
+          "created_at": "2026-04-26T03:09:44.360369963Z",
+          "kind": "cost",
+          "source": "ddx agent execute-bead",
+          "summary": "tokens=31474 cost_usd=4.7673"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"escalation_count\":0,\"fallback_chain\":[],\"final_tier\":\"\",\"requested_profile\":\"\",\"requested_tier\":\"\",\"resolved_model\":\"\",\"resolved_provider\":\"claude\",\"resolved_tier\":\"\"}",
+          "created_at": "2026-04-26T03:09:45.774793459Z",
+          "kind": "routing",
+          "source": "ddx agent execute-loop",
+          "summary": "provider=claude"
+        },
+        {
+          "actor": "ddx",
+          "body": "Diff under review contains only ddx execution evidence files (manifest.json, result.json). No source changes to consumer_group, coordinator, or handlers are present, so the acceptance criteria cannot be evaluated from this diff.\nharness=claude\nmodel=opus\ninput_bytes=7289\noutput_bytes=720\nelapsed_ms=7839",
+          "created_at": "2026-04-26T03:09:53.639481934Z",
+          "kind": "review",
+          "source": "ddx agent execute-loop",
+          "summary": "BLOCK"
+        },
+        {
+          "actor": "",
+          "body": "",
+          "created_at": "2026-04-26T03:09:53.646755972Z",
+          "kind": "reopen",
+          "source": "",
+          "summary": "review: BLOCK"
+        },
+        {
+          "actor": "ddx",
+          "body": "post-merge review: BLOCK (flagged for human)\nDiff under review contains only ddx execution evidence files (manifest.json, result.json). No source changes to consumer_group, coordinator, or handlers are present, so the acceptance criteria cannot be evaluated from this diff.\nresult_rev=c099d19d10524a0e2f7395858db8963f938b6bd1\nbase_rev=5c8e7606656e88a372c6b8ec637babfe828ba8bd",
+          "created_at": "2026-04-26T03:09:53.652378802Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "review_block"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-04-26T03:10:21.147539781Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T031021-b55a48b0",
+    "prompt": ".ddx/executions/20260426T031021-b55a48b0/prompt.md",
+    "manifest": ".ddx/executions/20260426T031021-b55a48b0/manifest.json",
+    "result": ".ddx/executions/20260426T031021-b55a48b0/result.json",
+    "checks": ".ddx/executions/20260426T031021-b55a48b0/checks.json",
+    "usage": ".ddx/executions/20260426T031021-b55a48b0/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-fb3e5ca8-20260426T031021-b55a48b0"
+  }
+}
