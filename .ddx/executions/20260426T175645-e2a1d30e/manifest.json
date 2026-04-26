@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260426T175645-e2a1d30e",
+  "bead_id": "heimq-cf148f58",
+  "base_rev": "3306499dcc6bb8b3e1c05ebdb32aae73ed29e3d5",
+  "created_at": "2026-04-26T17:56:46.062041098Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-cf148f58",
+    "title": "chore(verify): close epic heimq-700e47b2 once Phase 5 checkboxes flipped",
+    "description": "Epic heimq-700e47b2 acceptance: 'All child beads closed. cargo test --test integration -- --ignored passes cleanly. Test plan Phase 5 checkboxes all marked.' Children are all closed; integration suite passes; Phase 5 checkbox flip is the only remaining AC. Once that lands, close this epic.",
+    "acceptance": "Epic heimq-700e47b2 closed with evidence link to commit that flipped checkboxes and to a passing --ignored test run.",
+    "parent": "heimq-013aaa35",
+    "labels": [
+      "helix",
+      "phase:iterate",
+      "kind:chore",
+      "area:tests"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T17:56:45Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T17:56:45.943257005Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T175645-e2a1d30e",
+    "prompt": ".ddx/executions/20260426T175645-e2a1d30e/prompt.md",
+    "manifest": ".ddx/executions/20260426T175645-e2a1d30e/manifest.json",
+    "result": ".ddx/executions/20260426T175645-e2a1d30e/result.json",
+    "checks": ".ddx/executions/20260426T175645-e2a1d30e/checks.json",
+    "usage": ".ddx/executions/20260426T175645-e2a1d30e/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-cf148f58-20260426T175645-e2a1d30e"
+  }
+}
