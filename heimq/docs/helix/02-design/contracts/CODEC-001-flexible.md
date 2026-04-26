@@ -79,7 +79,7 @@ This function is pure and O(1) via a match arm over known API keys.
 |----------------|-------------|-----------|
 | v0 (legacy) | `api_key` i16, `api_version` i16, `correlation_id` i32, `client_id` nullable-string (i16 len + bytes) | `is_flexible == false` |
 | v1 (legacy + tagged fields) | same as v0, then tagged-fields block | not used by any in-scope API |
-| v2 (flexible) | `api_key` i16, `api_version` i16, `correlation_id` i32, `client_id` compact-nullable-string (varint len+1 + bytes), tagged-fields block | `is_flexible == true` |
+| v2 (flexible) | `api_key` i16, `api_version` i16, `correlation_id` i32, `client_id` nullable-string (i16 len + bytes, same as legacy), tagged-fields block | `is_flexible == true` |
 
 **Note on ApiVersions**: ApiVersions v3 uses a flexible request header (v2).
 The request body also becomes flexible (compact types), including optional
@@ -98,10 +98,12 @@ Under FEAT-006, `decode_request` becomes header-format-aware:
 2. Calls `is_flexible(api_key, api_version)`.
 3. **If legacy**: reads `client_id` as i16-length-prefixed nullable string
    (existing logic). No tagged-fields block follows the header.
-4. **If flexible**: reads `client_id` as compact-nullable-string (unsigned
-   varint for `len+1`, then `len` bytes; varint 0 = null), then reads and
-   discards the tagged-fields block (varint count followed by tag/length/value
-   tuples — count must be consumed even if zero).
+4. **If flexible**: reads `client_id` as i16-length-prefixed nullable string
+   (same encoding as the legacy header — per FEAT-006 FR #2 and KIP-482,
+   client_id retains the legacy wire format in request header v2 because the
+   header was already on-the-wire and could not be retroactively re-encoded),
+   then reads and discards the tagged-fields block (varint count followed by
+   tag/length/value tuples — count must be consumed even if zero).
 5. Returns `(RequestHeader, remaining_body_bytes)` as before.
 
 The `RequestHeader` struct is unchanged. The body bytes passed to each handler
@@ -228,8 +230,8 @@ The following tests verify this contract at FEAT-006 implementation time:
    `is_flexible(api_key, flexible_min - 1) == false` and
    `is_flexible(api_key, flexible_min) == true`.
 2. **`test_decode_request_flexible_header`**: Decode a hand-crafted flexible
-   request (compact client_id + empty tagged-fields block); assert `client_id`
-   is parsed correctly and body starts at the right offset.
+   request (i16-length-prefixed client_id + empty tagged-fields block); assert
+   `client_id` is parsed correctly and body starts at the right offset.
 3. **`test_decode_request_legacy_header`**: Existing tests remain passing.
 4. **`test_encode_response_flexible_header`**: Encode a response at a
    flexible version; assert byte 8 (after 4-byte length + 4-byte
@@ -250,5 +252,6 @@ Test locations: `src/protocol/codec.rs` (unit tests 1–5),
 - [API-001: Kafka Protocol Contract](API-001-kafka-protocol.md)
 - [FEAT-006: Flexible-Version Protocol Specification](../../01-frame/features/FEAT-006-flexible-version-protocol.md)
 - [`kafka-protocol` crate v0.15](https://crates.io/crates/kafka-protocol)
-- KIP-482: Tagged Fields
+- KIP-482: Tagged Fields — defines request header v2; explicitly retains legacy nullable-string for `client_id` (FR #2 rationale: header was already on-the-wire)
 - KIP-368: Allow brokers to SASL handshake without encoding changes (flexible header context)
+- FEAT-006 FR #2: "`client_id` still as nullable string" — functional requirement confirming i16-length-prefixed encoding is preserved in request header v2
