@@ -1,10 +1,10 @@
 # API Contract: Kafka Wire Protocol [heimq]
 
 **Contract ID**: API-001
-**Feature**: FEAT-001 (Kafka Compatibility)
+**Features**: FEAT-001 (Wire-Protocol Compatibility), FEAT-002 (Core Kafka Semantics)
 **Type**: Protocol (Kafka TCP Wire)
 **Status**: Draft
-**Version**: 0.1.0
+**Version**: 0.2.0
 **Source**: Kafka Protocol Guide (`https://kafka.apache.org/protocol/`)
 
 *This contract defines heimq's Kafka wire-protocol surface area, supported versions, exclusions, and test coverage expectations.*
@@ -13,7 +13,8 @@
 
 - Single-node Kafka-compatible broker focused on transport speed over durability.
 - No distributed consensus, replication, or controller responsibilities.
-- No security, transactions, or ACLs in scope for this contract.
+- No security or ACLs in scope for this contract.
+- **Transactions and idempotent producers are in scope** per FEAT-002. The single-coordinator implementation operates without a replicated transaction log; loss of in-memory transactional/producer-id state across restart is acceptable per PRD non-goal #1, with clients re-initializing per Kafka spec for a fresh broker.
 
 ## Protocol Interface Contract
 
@@ -27,22 +28,40 @@
 
 ### Version Policy
 
-- **Flexible-version boundary**: Each API's `max_version` is held strictly below the Kafka flexible-version boundary for that API. Flexible versions introduce compact strings, varints, and tagged fields, which heimq's legacy-layout handlers do not parse. Per-API boundaries (first flexible version): Produce v9, Fetch v12, ListOffsets v6, Metadata v9, OffsetCommit v8, OffsetFetch v6, FindCoordinator v3, JoinGroup v6, Heartbeat v4, LeaveGroup v4, SyncGroup v4, ApiVersions v3, CreateTopics v5, DeleteTopics v4.
-- The static version table is `SUPPORTED_APIS` in `src/protocol/mod.rs`; the matrix below mirrors it. Any change to advertised versions must update both.
+- **Flexible versions are in scope (FEAT-006).** Per-API `max_version`
+  targets the current Kafka spec for the in-scope semantic surface.
+  Flexible-version APIs use compact strings, unsigned varints, and
+  tagged fields; the codec is delivered via the `kafka-protocol` crate's
+  generated encode/decode (see ADR-003); a thin dispatch shim under
+  `src/protocol/codec/` may or may not be introduced during FEAT-006
+  implementation.
+- The static version table is `SUPPORTED_APIS` in `src/protocol/mod.rs`;
+  the matrix below mirrors it. Any change to advertised versions must
+  update both.
+- **Per-API target maxima** (initial targets — to be confirmed against
+  the current `kafka-protocol` spec at FEAT-006 implementation time):
+  Produce v11, Fetch v17, ListOffsets v9, Metadata v12, OffsetCommit v9,
+  OffsetFetch v9, FindCoordinator v6, JoinGroup v9, Heartbeat v4,
+  LeaveGroup v5, SyncGroup v5, ApiVersions v3, CreateTopics v7,
+  DeleteTopics v6, InitProducerId v5, AddPartitionsToTxn v5,
+  AddOffsetsToTxn v4, EndTxn v4, WriteTxnMarkers v1,
+  TxnOffsetCommit v4, DescribeProducers v0, DescribeTransactions v0,
+  ListTransactions v1. Final maxima are pinned during FEAT-006
+  implementation; the matrix below records advertised support state.
 - **Capability-derived advertisement**: The ApiVersions response is not a verbatim copy of `SUPPORTED_APIS`. At runtime, `compute_supported_apis` (`src/protocol/mod.rs`) intersects the static table with the per-API `CapabilityGate` against each backend's descriptor (`BackendCapabilities`, `OffsetStoreCapabilities`, `GroupCoordinatorCapabilities`). APIs whose required backend is absent (e.g. no group coordinator) are filtered out before the response is encoded, so heimq advertises only what its currently configured backends can actually serve. Gating is per-API, not a global meet — a backend that lacks compaction does not lose unrelated APIs.
 
 ## Support Matrix (Kafka API Keys)
 
 Kafka API keys listed here follow the current Apache Kafka protocol spec.
 
-Legend:
+Status values:
 - **Supported**: Implemented in heimq.
+- **Planned (FEAT-002)**: In scope per FEAT-002 (transactions / idempotent producer); not yet implemented. Tracked as upcoming work, not excluded.
 - **Excluded**: Out of scope for single-node/no-durability design (reason noted).
 
 Reason codes (Exclusions):
 - **R1**: Requires multi-broker/controller/replication/KRaft.
 - **R2**: Requires security/authentication/authorization.
-- **R3**: Requires transactions/idempotent producer.
 - **R4**: Admin/control-plane APIs not yet in scope.
 - **R5**: Telemetry/share-group/new-group APIs beyond current scope.
 
@@ -66,13 +85,13 @@ Reason codes (Exclusions):
 | 19 | CreateTopics | Supported | 0-4 | `src/handler/tests.rs`; `tests/contract.rs` | No config validation |
 | 20 | DeleteTopics | Supported | 0-3 | `src/handler/tests.rs`; `tests/contract.rs` | Best-effort delete |
 | 21 | DeleteRecords | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
-| 22 | InitProducerId | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 22 | InitProducerId | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Required for idempotent producer + transactions |
 | 23 | OffsetForLeaderEpoch | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
-| 24 | AddPartitionsToTxn | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
-| 25 | AddOffsetsToTxn | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
-| 26 | EndTxn | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
-| 27 | WriteTxnMarkers | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
-| 28 | TxnOffsetCommit | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 24 | AddPartitionsToTxn | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Single-coordinator transaction state machine |
+| 25 | AddOffsetsToTxn | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Single-coordinator transaction state machine |
+| 26 | EndTxn | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Single-coordinator transaction state machine |
+| 27 | WriteTxnMarkers | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Control batches drive read_committed visibility |
+| 28 | TxnOffsetCommit | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | EOS consumer offset commits |
 | 29 | DescribeAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
 | 30 | CreateAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
 | 31 | DeleteAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
@@ -99,10 +118,10 @@ Reason codes (Exclusions):
 | 55 | DescribeQuorum | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
 | 57 | UpdateFeatures | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
 | 60 | DescribeCluster | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
-| 61 | DescribeProducers | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 61 | DescribeProducers | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Producer-id state introspection |
 | 64 | UnregisterBroker | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
-| 65 | DescribeTransactions | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
-| 66 | ListTransactions | Excluded (R3) | N/A | N/A | Out of scope for current single-node implementation |
+| 65 | DescribeTransactions | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Transaction-state introspection |
+| 66 | ListTransactions | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Transaction-state introspection |
 | 68 | ConsumerGroupHeartbeat | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
 | 69 | ConsumerGroupDescribe | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
 | 71 | GetTelemetrySubscriptions | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
@@ -140,13 +159,27 @@ Reason codes (Exclusions):
 5. **ListOffsets**: earliest/latest/timestamp behavior.
 6. **CreateTopics/DeleteTopics**: create/delete idempotency and errors.
 7. **Consumer Groups**: FindCoordinator, JoinGroup, SyncGroup, Heartbeat, LeaveGroup, OffsetFetch, OffsetCommit.
+8. **Idempotent Producer (FEAT-002)**: InitProducerId returns producerId/epoch; sequence-number tracking dedups retries; out-of-order returns OUT_OF_ORDER_SEQUENCE_NUMBER; duplicate returns DUPLICATE_SEQUENCE_NUMBER (or is silently de-duped per Kafka semantics).
+9. **Transactions (FEAT-002)**: AddPartitionsToTxn, AddOffsetsToTxn, EndTxn (commit/abort), WriteTxnMarkers, TxnOffsetCommit drive a single-coordinator transaction state machine; control batches make read_committed consumers skip aborted records; stale epoch returns INVALID_PRODUCER_EPOCH; transaction.timeout.ms is enforced.
+10. **Differential parity (FEAT-003)**: every supported and planned API is exercised by the parity harness against Redpanda; zero diffs at the gating workload.
 
 ### Backwards Compatibility
-- No flexible versions; max version constrained to non-flexible range.
+- Flexible versions are supported per FEAT-006; legacy versions remain
+  supported and are exercised by existing contract tests.
 - All future changes must remain additive or gated by ApiVersions.
+
+### FEAT-006 Tracking
+
+Until FEAT-006 lands, the `Supported Versions` column in the matrix
+above continues to reflect the current legacy-only range. As each
+in-scope API gains its flexible variant, this contract is updated in
+the same commit and the parity harness (FEAT-003) is re-run to confirm
+zero diffs at flexible versions vs Redpanda.
 
 ## Feature Traceability
 
-- **Implementation**: `src/handler/*.rs`, `src/protocol/*`, `src/storage/*`.
-- **Tests**: `tests/contract.rs`, `tests/integration.rs`, `src/handler/tests.rs`, `src/protocol/router.rs`, storage module unit/property tests.
+- **PRD**: `docs/helix/01-frame/prd.md` (P0 #1 wire compat, #2 groups, #3 idempotent producers, #4 transactions, #5 parity, #6 benchmarks, #7 ecosystem).
+- **Feature specs**: FEAT-001 (wire protocol), FEAT-002 (groups + transactions + idempotency), FEAT-003 (differential parity), FEAT-004 (benchmark conformance), FEAT-005 (ecosystem integrations).
+- **Implementation**: `src/handler/*.rs`, `src/protocol/*`, `src/storage/*`; transaction coordinator and producer-id manager TBD under FEAT-002.
+- **Tests**: `tests/contract.rs`, `tests/integration.rs`, `src/handler/tests.rs`, `src/protocol/router.rs`, storage module unit/property tests; planned `tests/contract/transactions.rs`, `tests/parity/`, `tests/ecosystem/`, `scripts/bench/`.
 - **Related Doc**: `docs/helix/03-test/test-plan/test-plan.md`.

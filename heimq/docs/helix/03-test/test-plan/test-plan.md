@@ -19,10 +19,16 @@ heimq targets Kafka protocol compatibility on a single node with no durability g
 - Prove basic correctness of storage/offset invariants under varied inputs.
 - Prevent regressions by aligning behavior against Kafka and Redpanda baselines.
 
+**In scope (per PRD, FEAT-002)**:
+- Idempotent producers and Kafka transactions (single-coordinator EOS).
+  Loss of in-memory producer-id / transaction state on restart is acceptable
+  per PRD non-goal #1, but functional correctness while the broker is
+  running is required.
+
 **Out of Scope (for now)**:
 - Distributed system semantics (controller, replication, leader epochs).
 - Security/authentication/authorization (SASL, ACLs).
-- Transactions and idempotent producer guarantees.
+- Persistence of transaction / producer-id state across restart.
 
 ### Test Levels
 
@@ -92,9 +98,17 @@ heimq/
 
 ## Baseline Alignment
 
-- **Redpanda parity**: Run `scripts/compatibility-test.sh` weekly and on protocol changes.
-- **Kafka parity**: Add a Kafka docker target and compare responses for the same workloads.
-- **Golden traces**: Capture request/response fixtures from Kafka/Redpanda and assert equivalence.
+- **Differential parity harness (FEAT-003)**: A harness in `tests/parity/`
+  drives identical client workloads against heimq and Redpanda, normalizes
+  non-determinism, and asserts zero behavioral diffs for in-scope APIs
+  (produce/fetch, consumer groups, idempotent producers, transactions).
+  This is the gating mechanism for protocol-touching changes.
+- **Redpanda smoke**: `scripts/compatibility-test.sh` continues to run
+  weekly and on protocol changes.
+- **Kafka parity**: Add a Kafka docker target and compare responses for
+  the same workloads.
+- **Golden traces**: Capture request/response fixtures from Kafka/Redpanda
+  and assert equivalence.
 
 ## Execution Notes
 
@@ -212,6 +226,83 @@ job is `continue-on-error` so it does not block the main test gate.
 - `acks=0/1/all` — on a single-node in-memory broker, `acks=1` and `all` collapse to the same path; `acks=0` is not meaningfully observable from rdkafka. Not worth a dedicated test.
 - Batching / `linger.ms` / `batch.size` — client-side behavior; broker decode is already exercised by large-batch contract and soak tests.
 
+### Phase 7-pre: Flexible-version codec (P0, FEAT-006)
+
+Spec traceability: FEAT-006, PRD P0 #1 (modern wire-protocol versions).
+This phase is a prerequisite for Phase 7 (transactions: modern
+transactional APIs are flexible-only) and Phase 10 (ecosystem tools
+that default to flexible negotiation).
+
+- [ ] Codec primitives: compact string, compact bytes, compact array, unsigned varint, signed (zigzag) varint, tagged-fields block — round-trip property tests.
+- [ ] Flexible request header v2 + flexible response header v1 wired into the router for flexible APIs.
+- [ ] Each in-scope API gains its flexible-version handler path; legacy paths retained.
+- [ ] `SUPPORTED_APIS` updated to advertise current Kafka per-API maxima for the in-scope surface.
+- [ ] ApiVersions v3 (flexible request body, including ignored client_software_name / client_software_version) implemented.
+- [ ] Differential parity (Phase 8) reports zero diffs at flexible versions for in-scope APIs.
+
+### Phase 7: Idempotent Producer + Transactions (P0, FEAT-002)
+
+Spec traceability: FEAT-002, PRD P0 #3 (idempotent producers) and #4
+(transactions). Adds the API keys currently marked `Planned (FEAT-002)` in
+`API-001-kafka-protocol.md`: InitProducerId (22), AddPartitionsToTxn (24),
+AddOffsetsToTxn (25), EndTxn (26), WriteTxnMarkers (27), TxnOffsetCommit
+(28), DescribeProducers (61), DescribeTransactions (65), ListTransactions
+(66).
+
+#### P0 — Idempotent producer
+- [ ] `enable.idempotence=true` retried batch is de-duped (no duplicate visible to consumer).
+- [ ] Out-of-order sequence returns `OUT_OF_ORDER_SEQUENCE_NUMBER`.
+- [ ] Duplicate sequence returns `DUPLICATE_SEQUENCE_NUMBER` (or is silently de-duped per Kafka semantics).
+- [ ] `InitProducerId` returns producerId/epoch; epoch bumps on re-init.
+
+#### P0 — Transactions
+- [ ] Committed transaction is visible to `read_committed` consumers.
+- [ ] Aborted transaction is invisible to `read_committed` consumers.
+- [ ] `read_uncommitted` consumer observes both.
+- [ ] Stale producer epoch returns `INVALID_PRODUCER_EPOCH`.
+- [ ] `transaction.timeout.ms` is enforced; expired transactions are aborted.
+- [ ] `TxnOffsetCommit` participates in transaction lifecycle for EOS consumer.
+
+### Phase 8: Differential Parity Harness (P0, FEAT-003)
+
+Spec traceability: FEAT-003, PRD P0 #5. Lives under `tests/parity/`.
+
+- [ ] Harness scaffolding: same client workload against heimq and Redpanda; structured diff output.
+- [ ] Normalization rules for broker ids, host timestamps, monotonic ids.
+- [ ] Workloads cover produce/fetch, consumer groups, idempotent producers, transactions.
+- [ ] CI gating job: parity harness runs on protocol-touching changes; zero-diff is the success condition.
+- [ ] Known-divergence registry (e.g., loss-on-restart) with PRD references.
+
+### Phase 9: Standard Kafka Benchmark Conformance (P0, FEAT-004)
+
+Spec traceability: FEAT-004, PRD P0 #6. Lives under `scripts/bench/`.
+
+- [ ] `kafka-producer-perf-test` runs against heimq with documented load profile; exits 0, no error lines.
+- [ ] `kafka-consumer-perf-test` runs against heimq with documented load profile; exits 0, no error lines.
+- [ ] Idempotent profile (`enable.idempotence=true`) and transactional profile (`transactional.id`) each complete cleanly.
+- [ ] OpenMessaging Benchmark Kafka driver runs at least one documented workload to completion.
+- [ ] Bench profiles, expected exit codes, and acceptable warnings checked in.
+
+### Phase 10: Ecosystem Integrations (P0, FEAT-005)
+
+Spec traceability: FEAT-005, PRD P0 #7. Lives under `tests/ecosystem/`.
+
+| Integration | Driver script | Status |
+| --- | --- | --- |
+| Kafka Connect (source + sink) | `tests/ecosystem/kafka-connect/run.sh` | [ ] Pending |
+| Apache Flink (Kafka source + sink) | `tests/ecosystem/flink/run.sh` | [ ] Pending |
+| ksqlDB | `tests/ecosystem/ksqldb/run.sh` | [ ] Pending |
+| Debezium (one connector) | `tests/ecosystem/debezium/run.sh` | [ ] Pending |
+| Schema Registry round-trip | `tests/ecosystem/schema-registry/run.sh` | [ ] Pending |
+| `confluent-kafka-go` | `tests/ecosystem/clients/go/run.sh` | [ ] Pending |
+| `confluent-kafka` (Python) | `tests/ecosystem/clients/python/run.sh` | [ ] Pending |
+| `node-rdkafka` | `tests/ecosystem/clients/node/run.sh` | [ ] Pending |
+
+Each integration: a single script brings up the tool, runs its primary
+use case against heimq, asserts exit 0, tears down. Tools that depend on
+out-of-scope APIs are parking-lotted with a written rationale rather
+than silently emulated.
+
 ## Test Infrastructure
 
 ### Environment Requirements
@@ -256,4 +347,7 @@ test:
 
 - 100% contract tests for supported APIs passing.
 - Property tests cover core storage and protocol invariants.
-- Parity diffs against Kafka/Redpanda are tracked and intentional.
+- Differential parity harness reports zero behavioral diffs vs Redpanda for in-scope APIs at the gating workload (FEAT-003).
+- All P0 idempotent-producer and transaction acceptance scenarios pass against heimq and against Redpanda (FEAT-002).
+- Standard Kafka benchmarks (`kafka-producer-perf-test`, `kafka-consumer-perf-test`, OpenMessaging Benchmark) complete without protocol/client errors (FEAT-004).
+- Each ecosystem integration target has at least one passing test in CI (FEAT-005).
