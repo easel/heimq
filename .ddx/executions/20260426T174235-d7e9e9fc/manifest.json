@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260426T174235-d7e9e9fc",
+  "bead_id": "heimq-c79880b4",
+  "base_rev": "441d9f92d5f3d0d5c06f3c686c0afe23f0892286",
+  "created_at": "2026-04-26T17:42:35.508909968Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-c79880b4",
+    "title": "review: storage-backends alignment (capability descriptors, traits, dispatch)",
+    "description": "Review area: pluggable storage. LogBackend / OffsetStore / GroupCoordinatorBackend traits, BackendCapabilities, URL-scheme dispatch, Postgres OffsetStore feature flag, compute_supported_apis intersection.",
+    "acceptance": "Findings recorded; epic heimq-2136e295 closure recommendation made.",
+    "parent": "heimq-b33b5a3e",
+    "labels": [
+      "helix",
+      "phase:review",
+      "kind:review",
+      "area:storage"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T17:42:35Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T17:42:35.420233582Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T174235-d7e9e9fc",
+    "prompt": ".ddx/executions/20260426T174235-d7e9e9fc/prompt.md",
+    "manifest": ".ddx/executions/20260426T174235-d7e9e9fc/manifest.json",
+    "result": ".ddx/executions/20260426T174235-d7e9e9fc/result.json",
+    "checks": ".ddx/executions/20260426T174235-d7e9e9fc/checks.json",
+    "usage": ".ddx/executions/20260426T174235-d7e9e9fc/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-c79880b4-20260426T174235-d7e9e9fc"
+  }
+}
