@@ -1,0 +1,42 @@
+{
+  "attempt_id": "20260426T041021-f5376186",
+  "bead_id": "heimq-76674efa",
+  "base_rev": "fb881bb8ccf5f5c773a1af618f5a509d7ddcc450",
+  "created_at": "2026-04-26T04:10:21.088875661Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-76674efa",
+    "title": "e2e: compression codec round-trips (gzip, snappy, lz4, zstd)",
+    "description": "For each of compression.type = gzip, snappy, lz4, zstd: producer encodes a batch, consumer decodes and asserts payload equality. Exercises the broker's RecordBatch decode paths for each codec (heimq must re-read batch metadata but the compressed payload itself is passed through opaque — confirm behavior).\nIn-scope files:\n- tests/integration.rs (new fn test_rdkafka_compression_codecs, parameterized over codecs)\n- Cargo.toml dev-dependencies (enable rdkafka compression features if needed)",
+    "acceptance": "`cargo test --test integration test_rdkafka_compression_codecs -- --ignored --nocapture` passes for all four codecs. If a codec is unsupported, test documents and asserts a clear error rather than silent corruption.",
+    "parent": "heimq-700e47b2",
+    "labels": [
+      "area:tests",
+      "kind:test",
+      "layer:e2e",
+      "client:rdkafka",
+      "phase:5",
+      "tier:p2",
+      "topic:client-surface"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T04:10:21Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T04:10:21.001717089Z",
+      "spec-id": "API-001"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T041021-f5376186",
+    "prompt": ".ddx/executions/20260426T041021-f5376186/prompt.md",
+    "manifest": ".ddx/executions/20260426T041021-f5376186/manifest.json",
+    "result": ".ddx/executions/20260426T041021-f5376186/result.json",
+    "checks": ".ddx/executions/20260426T041021-f5376186/checks.json",
+    "usage": ".ddx/executions/20260426T041021-f5376186/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-76674efa-20260426T041021-f5376186"
+  }
+}
