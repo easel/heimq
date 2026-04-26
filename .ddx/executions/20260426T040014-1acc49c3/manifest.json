@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260426T040014-1acc49c3",
+  "bead_id": "heimq-620861e8",
+  "base_rev": "c16548d5d8b17da19b25f361a87469b5d5e223e4",
+  "created_at": "2026-04-26T04:00:14.840581326Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-620861e8",
+    "title": "Reject unsupported operations at handler entry",
+    "description": "Complement startup ApiVersions filtering with per-call checks: if a client somehow sends a transactional marker or an oversized batch, the handler returns a proper Kafka error code rather than attempting the op and producing undefined behavior.\n\nIn-scope files:\n- src/handler/produce.rs (size checks against caps.max_message_size/max_batch_size; transactional flag rejected if caps.transactions=false)\n- src/handler/fetch.rs (long-poll falls back to Immediate if caps.fetch_wait doesn't include LongPoll)\n- src/handler/*group*.rs (generation semantics check)\nDepends on: capability descriptor + trait extractions",
+    "acceptance": "`cargo test` green. New integration test: set a memory backend with max_message_size=1024, produce 2KB message, assert MessageSizeTooLarge error response.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:8-call-time-rejection"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T04:00:14Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T04:00:14.752303226Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T040014-1acc49c3",
+    "prompt": ".ddx/executions/20260426T040014-1acc49c3/prompt.md",
+    "manifest": ".ddx/executions/20260426T040014-1acc49c3/manifest.json",
+    "result": ".ddx/executions/20260426T040014-1acc49c3/result.json",
+    "checks": ".ddx/executions/20260426T040014-1acc49c3/checks.json",
+    "usage": ".ddx/executions/20260426T040014-1acc49c3/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-620861e8-20260426T040014-1acc49c3"
+  }
+}
