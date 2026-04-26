@@ -1,0 +1,38 @@
+{
+  "attempt_id": "20260426T031251-426aca26",
+  "bead_id": "heimq-ed70c613",
+  "base_rev": "fbae963750d873fdb75e1235c5bbf34ae1715162",
+  "created_at": "2026-04-26T03:12:51.228851803Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-ed70c613",
+    "title": "URL-scheme config + runtime dispatch for storage backends",
+    "description": "Add a [storage] config block with three URL fields (log, offsets, groups), all defaulting to memory://. Introduce a dispatch fn per trait that parses the URL scheme and returns Arc\u003cdyn ...\u003e. Default config produces three memory backends; existing behavior unchanged.\n\nOnly the memory:// scheme resolves at this step. Unknown schemes return a configuration error at startup (fail fast, not at first request).\n\nIn-scope files:\n- src/config.rs (new StorageConfig struct, feeding three URLs)\n- src/storage/dispatch.rs (new — scheme -\u003e Arc\u003cdyn LogBackend\u003e, OffsetStore, GroupCoordinatorBackend)\n- src/server.rs (construct backends via dispatch)\n- tests/config tests\nOut of scope:\n- Postgres or any non-memory scheme (separate bead)\nDepends on: LogBackend + OffsetStore + GroupCoordinatorBackend traits (beads 3, 4, 5)",
+    "acceptance": "`cargo test` green. Starting heimq with default config uses three memory backends. Starting with an unknown scheme (e.g. `log = \"weird://\"`) fails at startup with a clear error. kcat stress passes.",
+    "parent": "heimq-2136e295",
+    "labels": [
+      "area:storage",
+      "kind:feat",
+      "phase:backends",
+      "step:6-url-dispatch"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-26T03:12:51Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "4075646",
+      "execute-loop-heartbeat-at": "2026-04-26T03:12:51.159280792Z"
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260426T031251-426aca26",
+    "prompt": ".ddx/executions/20260426T031251-426aca26/prompt.md",
+    "manifest": ".ddx/executions/20260426T031251-426aca26/manifest.json",
+    "result": ".ddx/executions/20260426T031251-426aca26/result.json",
+    "checks": ".ddx/executions/20260426T031251-426aca26/checks.json",
+    "usage": ".ddx/executions/20260426T031251-426aca26/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-heimq-ed70c613-20260426T031251-426aca26"
+  }
+}
