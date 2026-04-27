@@ -1,0 +1,85 @@
+{
+  "attempt_id": "20260427T120849-11c83fb6",
+  "bead_id": "hx-1e45b9ad",
+  "base_rev": "02fb490a638e7c15a7c86df60b8372e202878e58",
+  "created_at": "2026-04-27T12:08:49.74485325Z",
+  "requested": {
+    "harness": "claude",
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "hx-1e45b9ad",
+    "title": "drift: bench harness assumes Linux docker --network host without documenting",
+    "description": "Review finding from fresh-eyes review of heimq-9bcd03e1 (commit 0b01249f).\nFile: heimq/scripts/bench/kafka-perf-test.sh:83-84,90-91,107-108  README: heimq/scripts/bench/README.md (Prerequisites)\nCategory: drift\nSeverity: medium\nDescription: The harness uses 'docker run --rm --network host ...' to reach 127.0.0.1:$HEIMQ_PORT on the host. This works on Linux Docker, but Docker Desktop on macOS/Windows has limited host-networking support: containers cannot routinely reach localhost services on the host even with --network host. README's 'Prerequisites: Docker' does not warn about this. A developer on a Mac will hit a confusing readiness-loop timeout with no clear pointer to the cause.\nSuggested fix: pick one of (a) document Linux-only / Docker-Engine-only in the README prerequisites; (b) detect non-Linux and use 'host.docker.internal' as the broker address inside the container while keeping 127.0.0.1 on the host; (c) put heimq into the same docker network as the tooling container. Option (a) is the smallest change and matches the bead's intent (legacy-version path only).",
+    "acceptance": "Either README.md prerequisites note the platform constraint, or the harness runs successfully on Docker Desktop / macOS with no manual env setup.",
+    "labels": [
+      "helix",
+      "phase:build",
+      "review-finding"
+    ],
+    "metadata": {
+      "claimed-at": "2026-04-27T12:08:49Z",
+      "claimed-machine": "eitri",
+      "claimed-pid": "1479237",
+      "events": [
+        {
+          "actor": "ddx",
+          "body": "tier=cheap harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-27T12:01:03.256841702Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=standard harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-27T12:01:05.44157348Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "tier=smart harness= model= probe=no viable provider\nno viable harness found",
+          "created_at": "2026-04-27T12:01:07.647842597Z",
+          "kind": "tier-attempt",
+          "source": "ddx agent execute-loop",
+          "summary": "skipped"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"tiers_attempted\":[{\"tier\":\"cheap\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"standard\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0},{\"tier\":\"smart\",\"status\":\"skipped\",\"cost_usd\":0,\"duration_ms\":0}],\"winning_tier\":\"exhausted\",\"total_cost_usd\":0,\"wasted_cost_usd\":0}",
+          "created_at": "2026-04-27T12:01:07.660477284Z",
+          "kind": "escalation-summary",
+          "source": "ddx agent execute-loop",
+          "summary": "winning_tier=exhausted attempts=3 total_cost_usd=0.0000 wasted_cost_usd=0.0000"
+        },
+        {
+          "actor": "ddx",
+          "body": "execute-loop: all tiers exhausted — no viable provider found",
+          "created_at": "2026-04-27T12:01:07.681807414Z",
+          "kind": "execute-bead",
+          "source": "ddx agent execute-loop",
+          "summary": "execution_failed"
+        }
+      ],
+      "execute-loop-heartbeat-at": "2026-04-27T12:08:49.608576719Z",
+      "spec-id": "heimq/scripts/bench/kafka-perf-test.sh"
+    }
+  },
+  "governing": [
+    {
+      "id": "heimq/scripts/bench/kafka-perf-test.sh",
+      "path": "heimq/scripts/bench/kafka-perf-test.sh"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260427T120849-11c83fb6",
+    "prompt": ".ddx/executions/20260427T120849-11c83fb6/prompt.md",
+    "manifest": ".ddx/executions/20260427T120849-11c83fb6/manifest.json",
+    "result": ".ddx/executions/20260427T120849-11c83fb6/result.json",
+    "checks": ".ddx/executions/20260427T120849-11c83fb6/checks.json",
+    "usage": ".ddx/executions/20260427T120849-11c83fb6/usage.json",
+    "worktree": "tmp/ddx-exec-wt/.execute-bead-wt-hx-1e45b9ad-20260427T120849-11c83fb6"
+  }
+}
