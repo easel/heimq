@@ -101,7 +101,9 @@ heimq/
 - **Differential parity harness (FEAT-003)**: A harness in `tests/parity/`
   drives identical client workloads against heimq and Redpanda, normalizes
   non-determinism, and asserts zero behavioral diffs for in-scope APIs
-  (produce/fetch, consumer groups, idempotent producers, transactions).
+  (produce/fetch and consumer groups as gating workloads at FEAT-003
+  acceptance; idempotent producers and transactions are added once
+  FEAT-002 is accepted — gated on FEAT-002 acceptance).
   This is the gating mechanism for protocol-touching changes.
 - **Redpanda smoke**: `scripts/compatibility-test.sh` continues to run
   weekly and on protocol changes.
@@ -269,7 +271,8 @@ Spec traceability: FEAT-003, PRD P0 #5. Lives under `tests/parity/`.
 
 - [ ] Harness scaffolding: same client workload against heimq and Redpanda; structured diff output.
 - [ ] Normalization rules for broker ids, host timestamps, monotonic ids.
-- [ ] Workloads cover produce/fetch, consumer groups, idempotent producers, transactions.
+- [ ] Workloads cover produce/fetch and consumer groups as gating workloads at FEAT-003 acceptance.
+- [ ] Workloads add idempotent producers and transactions once FEAT-002 is accepted (gated on FEAT-002 acceptance; see HARNESS-001-parity.md § Expansion path).
 - [ ] CI gating job: parity harness runs on protocol-touching changes; zero-diff is the success condition.
 - [ ] Known-divergence registry (e.g., loss-on-restart) with PRD references.
 
