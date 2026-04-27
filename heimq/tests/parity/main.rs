@@ -13,8 +13,6 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    diff::validate_schema();
-
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
