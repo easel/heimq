@@ -60,6 +60,18 @@ fi
 
 # ── start heimq ─────────────────────────────────────────────────────────────
 
+# shellcheck disable=SC2329  # invoked via trap EXIT below
+cleanup() {
+  echo "==> stopping heimq (pid ${HEIMQ_PID:-<unset>})"
+  kill "${HEIMQ_PID:-}" 2>/dev/null || true
+  wait "${HEIMQ_PID:-}" 2>/dev/null || true
+  if [[ "$FAILED" = "0" ]]; then
+    rm -rf "$LOG_DIR"
+  else
+    echo "    logs preserved at $LOG_DIR"
+  fi
+}
+
 echo "==> starting heimq on $BROKER"
 # --data-dir is forward-defensive: heimq currently uses memory:// storage for all
 # backends and ignores data_dir at runtime. If a disk-backed backend is added
@@ -68,18 +80,6 @@ echo "==> starting heimq on $BROKER"
   --data-dir "$LOG_DIR/data" \
   >"$LOG_DIR/heimq.log" 2>&1 &
 HEIMQ_PID=$!
-
-# shellcheck disable=SC2329  # invoked via trap EXIT below
-cleanup() {
-  echo "==> stopping heimq (pid $HEIMQ_PID)"
-  kill "$HEIMQ_PID" 2>/dev/null || true
-  wait "$HEIMQ_PID" 2>/dev/null || true
-  if [[ "$FAILED" = "0" ]]; then
-    rm -rf "$LOG_DIR"
-  else
-    echo "    logs preserved at $LOG_DIR"
-  fi
-}
 trap cleanup EXIT
 
 # Wait for heimq to accept connections (up to 15s)
