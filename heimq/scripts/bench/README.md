@@ -5,7 +5,9 @@ heimq using Docker — no JVM required on the host.
 
 ## Prerequisites
 
-- Docker (to pull/run the Kafka tooling container)
+- Linux with Docker Engine (the harness uses `docker run --network host` to
+  reach heimq on `127.0.0.1:$HEIMQ_PORT`; Docker Desktop on macOS/Windows does
+  not route host networking the same way and the readiness loop will time out)
 - Rust toolchain (to build heimq), or set `HEIMQ_BINARY` to a pre-built binary
 
 ## Quick Start
