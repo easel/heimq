@@ -69,6 +69,7 @@ echo "==> starting heimq on $BROKER"
   >"$LOG_DIR/heimq.log" 2>&1 &
 HEIMQ_PID=$!
 
+# shellcheck disable=SC2329  # invoked via trap EXIT below
 cleanup() {
   echo "==> stopping heimq (pid $HEIMQ_PID)"
   kill "$HEIMQ_PID" 2>/dev/null || true
@@ -147,7 +148,7 @@ if [[ "$RUN_PRODUCER" = "1" ]]; then
       --throughput "$THROUGHPUT" \
       --producer-props \
         bootstrap.servers="$BROKER" \
-        acks="$ACKS"
+        acks="$ACKS" || true
 fi
 
 # ── consumer perf-test ───────────────────────────────────────────────────────
@@ -168,7 +169,7 @@ if [[ "$RUN_CONSUMER" = "1" ]]; then
       --group "$GROUP_ID" \
       --threads "$THREADS" \
       --fetch-size "$FETCH_SIZE" \
-      --bootstrap-server "$BROKER"
+      --bootstrap-server "$BROKER" || true
 fi
 
 # ── summary ─────────────────────────────────────────────────────────────────
