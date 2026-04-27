@@ -235,7 +235,14 @@ This phase is a prerequisite for Phase 7 (transactions: modern
 transactional APIs are flexible-only) and Phase 10 (ecosystem tools
 that default to flexible negotiation).
 
-- [ ] Codec primitives: compact string, compact bytes, compact array, unsigned varint, signed (zigzag) varint, tagged-fields block — round-trip property tests.
+- [ ] `is_flexible(api_key, api_version)` boundary table: off-by-one on each entry returns the correct legacy/flexible classification.
+- [ ] `decode_request` legacy header path remains green; flexible header path parses `client_id` (legacy nullable string) and consumes tagged-fields trailer.
+- [ ] `encode_response` flexible header path emits empty tagged-fields trailer after `correlation_id`.
+- [ ] `encode_response` ApiVersions v3 special case — no tagged-fields trailer in response header.
+- [ ] Router roundtrip at one flexible API version: `correlation_id` preserved; response decodes correctly via kafka-protocol crate.
+
+> Note: Codec primitive correctness (varints, compact strings, tagged fields) is delegated to the kafka-protocol crate per ADR-003.
+
 - [ ] Flexible request header v2 + flexible response header v1 wired into the router for flexible APIs.
 - [ ] Each in-scope API gains its flexible-version handler path; legacy paths retained.
 - [ ] `SUPPORTED_APIS` updated to advertise current Kafka per-API maxima for the in-scope surface.
