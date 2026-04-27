@@ -61,6 +61,9 @@ fi
 # ── start heimq ─────────────────────────────────────────────────────────────
 
 echo "==> starting heimq on $BROKER"
+# --data-dir is forward-defensive: heimq currently uses memory:// storage for all
+# backends and ignores data_dir at runtime. If a disk-backed backend is added
+# later, this flag ensures bench runs stay isolated per invocation.
 "$HEIMQ" --host 127.0.0.1 --port "$HEIMQ_PORT" --default-partitions 3 \
   --data-dir "$LOG_DIR/data" \
   >"$LOG_DIR/heimq.log" 2>&1 &
