@@ -73,7 +73,8 @@ pub struct Observation {
 
 pub enum ObservationEvent {
     RecordConsumed { key: Option<Bytes>, value: Option<Bytes>,
-                     headers: Vec<(String, Bytes)>, partition: i32, offset: i64 },
+                     headers: Vec<(String, Bytes)>, partition: i32, offset: i64,
+                     timestamp: i64 },
     ErrorCode      { api: &'static str, code: i16 },
     GroupState     { group_id: String, state: String, member_count: usize },
     TxnOutcome     { committed: bool, records_visible: bool },
@@ -135,7 +136,7 @@ Fields normalized:
 | cluster_id               | Replace with `"<cluster_id>"`                 |
 | leader_epoch             | Replace with `0`                               |
 | log_append_time          | Replace with `0` when `CreateTime` semantics not in use |
-| record CreateTime ts     | Replace with sequential per-step index when `CreateTime` semantics in use; otherwise preserve |
+| record CreateTime ts     | Replace with sequential per-step index `[ts:N]` when `CreateTime` semantics in use; otherwise preserve |
 | producer_id              | Replace with sequential index `[pid:N]`        |
 | producer_epoch           | Replace with `0`                               |
 | correlation_id           | Replace with sequential index per connection   |
