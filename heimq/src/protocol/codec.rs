@@ -74,6 +74,7 @@ pub fn decode_request(data: &[u8]) -> std::io::Result<(RequestHeader, Bytes)> {
 /// Encode a response with the correlation ID
 pub fn encode_response<R: Encodable>(
     correlation_id: i32,
+    _api_key: i16,
     api_version: i16,
     response: &R,
 ) -> std::io::Result<Bytes> {
@@ -212,7 +213,7 @@ mod tests {
     #[test]
     fn test_encode_response_error_mapping() {
         let response = FailingEncode;
-        let err = encode_response(1, 0, &response).unwrap_err();
+        let err = encode_response(1, 0, 0, &response).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 
@@ -247,33 +248,33 @@ mod tests {
         use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
 
         let invalid_version = i16::MAX;
-        let err = encode_response(1, invalid_version, &ApiVersionsResponse::default()).unwrap_err();
+        let err = encode_response(1, 18, invalid_version, &ApiVersionsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &MetadataResponse::default()).unwrap_err();
+        let err = encode_response(1, 3, invalid_version, &MetadataResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &ProduceResponse::default()).unwrap_err();
+        let err = encode_response(1, 0, invalid_version, &ProduceResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &FetchResponse::default()).unwrap_err();
+        let err = encode_response(1, 1, invalid_version, &FetchResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &ListOffsetsResponse::default()).unwrap_err();
+        let err = encode_response(1, 2, invalid_version, &ListOffsetsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &CreateTopicsResponse::default()).unwrap_err();
+        let err = encode_response(1, 19, invalid_version, &CreateTopicsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &DeleteTopicsResponse::default()).unwrap_err();
+        let err = encode_response(1, 20, invalid_version, &DeleteTopicsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &FindCoordinatorResponse::default()).unwrap_err();
+        let err = encode_response(1, 10, invalid_version, &FindCoordinatorResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &JoinGroupResponse::default()).unwrap_err();
+        let err = encode_response(1, 11, invalid_version, &JoinGroupResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &HeartbeatResponse::default()).unwrap_err();
+        let err = encode_response(1, 12, invalid_version, &HeartbeatResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &LeaveGroupResponse::default()).unwrap_err();
+        let err = encode_response(1, 13, invalid_version, &LeaveGroupResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &SyncGroupResponse::default()).unwrap_err();
+        let err = encode_response(1, 14, invalid_version, &SyncGroupResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &OffsetCommitResponse::default()).unwrap_err();
+        let err = encode_response(1, 8, invalid_version, &OffsetCommitResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, invalid_version, &OffsetFetchResponse::default()).unwrap_err();
+        let err = encode_response(1, 9, invalid_version, &OffsetFetchResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 
@@ -521,7 +522,7 @@ mod flexible_tests {
         // Metadata v9 is flexible per CODEC-001.
         let body_only = encode_response_body(42, 9, &response)
             .expect("encode_response_body must succeed");
-        let full = encode_response(42, 9, &response).expect("encode_response must succeed");
+        let full = encode_response(42, 3, 9, &response).expect("encode_response must succeed");
         // encode_response_body = [corr_id(4)][body...]
         // encode_response with FEAT-006 = [length(4)][corr_id(4)][tagged-fields(1)][body...]
         //   = 4 + body_only.len() + 1
@@ -539,15 +540,23 @@ mod flexible_tests {
     /// response header v0 (no tagged-fields trailer) even when the request is flexible v3.
     ///
     /// Pins the requirement: after FEAT-006 adds the trailer for other APIs, ApiVersions
-    /// must NOT receive one.  Verified via legacy v2 where bytes[8] is the body start
-    /// (error_code high byte = 0x00).
+    /// must NOT receive one.  Verified at api_version=3 (the flexible boundary) by asserting
+    /// total length = 8 + body_len with no +1 trailer byte.
     #[test]
     fn test_encode_response_apiversions_no_flexible_header() {
         use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
         let response = ApiVersionsResponse::default();
-        let bytes = encode_response(1, 2, &response).expect("encode_response must succeed");
-        assert!(bytes.len() > 9);
-        assert_eq!(bytes[8], 0x00, "ApiVersions v2: bytes[8] = error_code high byte");
-        assert_eq!(bytes[9], 0x00, "ApiVersions v2: bytes[9] = error_code low byte");
+        let body_only = encode_response_body(1, 3, &response)
+            .expect("encode_response_body must succeed");
+        let full = encode_response(1, 18, 3, &response).expect("encode_response must succeed");
+        assert_eq!(
+            full.len(),
+            4 + body_only.len(),
+            "ApiVersions v3: total = [length(4)] + [corr_id(4)] + body_len with no tagged-fields trailer"
+        );
+        assert_eq!(
+            full[8], body_only[4],
+            "ApiVersions v3: byte at offset 8 must be the first body byte, not a tagged-fields trailer"
+        );
     }
 }

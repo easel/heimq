@@ -89,7 +89,8 @@ impl Router {
         header: &RequestHeader,
         response: &R,
     ) -> Result<Bytes> {
-        encode_response(header.correlation_id, header.api_version, response).map_err(Into::into)
+        encode_response(header.correlation_id, header.api_key, header.api_version, response)
+            .map_err(Into::into)
     }
 
     fn handle_and_encode<R>(
