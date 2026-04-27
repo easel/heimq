@@ -2,6 +2,7 @@ use anyhow::Result;
 use heimq::test_support::TestServer;
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::ClientConfig;
+use std::net::TcpListener;
 use std::time::Duration;
 use testcontainers::core::{IntoContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
@@ -37,10 +38,14 @@ pub struct Targets {
 }
 
 pub async fn boot() -> Result<(ContainerAsync<GenericImage>, TestServer, Targets)> {
-    // Use fixed host port = container port so Redpanda's advertised address is correct.
-    // HARNESS-001: --advertise-kafka-addr localhost:<port>
-    // Configure image first, then apply mapped port (which returns ContainerRequest).
-    // Fixed port binding: host 9092 → container 9092, so advertised localhost:9092 resolves.
+    // Reserve an ephemeral port then release it so testcontainers can bind the same port.
+    // This avoids pinning host port 9092, allowing concurrent test runs.
+    let ephemeral_port = {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        listener.local_addr()?.port()
+        // listener drops here, releasing the port
+    };
+    let advertise_addr = format!("localhost:{}", ephemeral_port);
     let redpanda_container = GenericImage::new(REDPANDA_IMAGE, REDPANDA_TAG)
         .with_exposed_port(KAFKA_PORT.tcp())
         .with_wait_for(WaitFor::message_on_stderr("Successfully started Redpanda!"))
@@ -55,13 +60,13 @@ pub async fn boot() -> Result<(ContainerAsync<GenericImage>, TestServer, Targets
             "--kafka-addr",
             "0.0.0.0:9092",
             "--advertise-kafka-addr",
-            "localhost:9092",
+            &advertise_addr,
         ])
-        .with_mapped_port(KAFKA_PORT, KAFKA_PORT.tcp())
+        .with_mapped_port(ephemeral_port, KAFKA_PORT.tcp())
         .start()
         .await?;
 
-    let redpanda_bootstrap = format!("127.0.0.1:{}", KAFKA_PORT);
+    let redpanda_bootstrap = format!("127.0.0.1:{}", ephemeral_port);
 
     let heimq_server = TestServer::start();
     let heimq_bootstrap = heimq_server.bootstrap_servers();
