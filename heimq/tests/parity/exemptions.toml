@@ -1,0 +1,15 @@
+[[exemption]]
+id      = "cluster-id-nondeterministic"
+field   = "cluster_id"
+scope   = "all"
+reason  = "heimq generates a fresh cluster_id on each start; clients do not use this for routing"
+prd_ref = "PRD non-goal #1 (no persistence of broker identity across restart)"
+status  = "active"
+
+[[exemption]]
+id      = "txn-state-loss-on-restart"
+field   = "txn_outcome.records_visible"
+scope   = "workloads/transactions"
+reason  = "In-memory transactional state is not persisted; PRD explicitly allows loss on restart"
+prd_ref = "PRD non-goal #1"
+status  = "future"

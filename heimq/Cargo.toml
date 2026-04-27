@@ -71,6 +71,13 @@ rdkafka = { version = "0.36", features = ["cmake-build", "tokio"] }
 # Legacy protocol testing (pure Rust, v0-v2 message formats)
 kafka = { version = "0.10", default-features = false, features = ["gzip", "snappy"] }
 
+# Parity harness - container orchestration and serialization
+testcontainers = "0.23"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+async-trait = "0.1"
+
 [features]
 default = []
 test-support = []
@@ -83,6 +90,11 @@ features = ["test-support"]
 [[bin]]
 name = "heimq"
 path = "src/main.rs"
+
+[[test]]
+name = "parity"
+path = "tests/parity/main.rs"
+harness = false
 
 # Benchmarks - uncomment when rdkafka is available
 # [[bench]]
