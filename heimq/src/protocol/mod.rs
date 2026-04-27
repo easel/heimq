@@ -8,6 +8,9 @@ mod router;
 
 pub use codec::{decode_request, encode_response, RequestHeader};
 pub use router::Router;
+pub use flexible::is_flexible;
+
+mod flexible;
 
 use crate::consumer_group::GroupCoordinatorCapabilities;
 use crate::storage::{BackendCapabilities, OffsetStoreCapabilities};
