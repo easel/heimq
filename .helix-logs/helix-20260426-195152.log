@@ -1,0 +1,66 @@
+--- ddx agent run [19:52:49] harness=claude rc=0 exit=1 elapsed=55s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: agent exited 1 but tracker shows progress (closed 73 → 74) — counting as success
+helix: post-implementation review after cycle 1
+--- ddx agent run [20:02:26] harness=claude rc=0 exit=1 elapsed=575s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: review output missing REVIEW_STATUS trailer
+helix: review output was not safely interpretable after cycle 1 — continuing
+--- ddx agent run [20:03:18] harness=claude rc=0 exit=1 elapsed=50s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: agent exited 1 but tracker shows progress (closed 75 → 76) — counting as success
+helix: post-implementation review after cycle 2
+--- ddx agent run [20:08:56] harness=claude rc=0 exit=1 elapsed=336s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: review output missing REVIEW_STATUS trailer
+helix: review output was not safely interpretable after cycle 2 — continuing
+--- ddx agent run [20:09:49] harness=claude rc=0 exit=1 elapsed=50s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: agent exited 1 but tracker shows progress (closed 77 → 78) — counting as success
+helix: post-implementation review after cycle 3
+--- ddx agent run [20:17:01] harness=claude rc=0 exit=1 elapsed=430s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: review output was not safely interpretable after cycle 3 — continuing
+helix: review output missing REVIEW_STATUS trailer
+--- ddx agent run [20:17:59] harness=claude rc=0 exit=1 elapsed=55s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: agent exited 1 but tracker shows progress (closed 79 → 80) — counting as success
+helix: post-implementation review after cycle 4
+--- ddx agent run [20:20:36] harness=claude rc=0 exit=1 elapsed=155s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: review output missing REVIEW_STATUS trailer
+helix: review output was not safely interpretable after cycle 4 — continuing
+--- ddx agent run [20:21:54] harness=claude rc=0 exit=1 elapsed=76s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: agent exited 1 but tracker shows progress (closed 81 → 82) — counting as success
+helix: post-implementation review after cycle 5
+--- ddx agent run [20:27:36] harness=claude rc=0 exit=1 elapsed=340s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: review output was not safely interpretable after cycle 5 — continuing
+helix: review output missing REVIEW_STATUS trailer
+--- ddx agent run [20:31:19] harness=claude rc=0 exit=1 elapsed=220s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: agent exited 1 but tracker shows progress (closed 83 → 85) — counting as success
+helix: post-implementation review after cycle 6
+--- ddx agent run [20:37:06] harness=claude rc=0 exit=1 elapsed=345s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: review output was not safely interpretable after cycle 6 — continuing
+helix: review output missing REVIEW_STATUS trailer
+--- ddx agent run [20:38:39] harness=claude rc=0 exit=1 elapsed=90s cost=$0 tokens=0 ---
+
+--- end ddx agent output ---
+helix: check failed after queue drain
+
+helix: ═══ run complete: 6 attempted, 6 completed, 0 skipped, 0 tokens ═══

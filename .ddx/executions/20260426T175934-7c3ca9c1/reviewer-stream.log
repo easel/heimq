@@ -1,0 +1,10 @@
+```json
+{
+  "schema_version": 1,
+  "verdict": "APPROVE",
+  "summary": "Epic heimq-2136e295 closed in commit 6e83f80; API-001 doc refreshed to describe capability-derived ApiVersions via compute_supported_apis with reference to unit tests in src/protocol/mod.rs. Acceptance criteria satisfied.",
+  "findings": [
+    { "severity": "info", "summary": "Reviewed diff only contains execution artifacts; the substantive doc/tracker changes are in prior commit 6e83f80 referenced by this bead.", "location": ".ddx/executions/20260426T175934-7c3ca9c1/result.json" }
+  ]
+}
+```
