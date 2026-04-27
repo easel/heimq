@@ -24,7 +24,8 @@
 - **Framing**: 4-byte big-endian message length, followed by request header + body.
 - **Request header (non-flexible)**: api_key, api_version, correlation_id, client_id.
 - **Request header (flexible v2)**: api_key, api_version, correlation_id, client_id, tagged_fields block (compact types/varints per FEAT-006; see ADR-003).
-- **Response header**: correlation_id.
+- **Response header (non-flexible / v0)**: correlation_id.
+- **Response header (flexible v1)**: correlation_id, tagged_fields block (compact encoding per FEAT-006; see ADR-003). Exception: ApiVersions responses always use v0 even for flexible requests (KIP-482 quirk).
 - **Flexible versions**: In scope per FEAT-006 (compact strings, unsigned varints, tagged fields; codec via `kafka-protocol` crate, see ADR-003).
 
 ### Version Policy
