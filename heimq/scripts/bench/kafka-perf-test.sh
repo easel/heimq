@@ -62,6 +62,7 @@ fi
 
 echo "==> starting heimq on $BROKER"
 "$HEIMQ" --host 127.0.0.1 --port "$HEIMQ_PORT" --default-partitions 3 \
+  --data-dir "$LOG_DIR/data" \
   >"$LOG_DIR/heimq.log" 2>&1 &
 HEIMQ_PID=$!
 
