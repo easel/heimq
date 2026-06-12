@@ -1,0 +1,32 @@
+name: test
+
+# Hard test gate per ADR-002 (Layer 2 — required CI status check):
+# runs the full workspace test suite on every push and pull request.
+# Marked required in branch protection on main. The stress-matrix job
+# remains continue-on-error and is not a gate.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: heimq
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: heimq
+
+      - name: Run workspace tests
+        run: cargo test --workspace --all-features
