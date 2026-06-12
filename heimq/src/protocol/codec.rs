@@ -1,9 +1,59 @@
 //! Protocol encoding and decoding
 
+use crate::protocol::is_flexible;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use kafka_protocol::protocol::Encodable;
 use std::io::Cursor;
 use tracing::trace;
+
+/// Read a KIP-482 unsigned varint from the cursor.
+///
+/// A truncated or over-long varint is a standard codec error per
+/// CODEC-001 §Error Semantics.
+fn get_unsigned_varint(cursor: &mut Cursor<&[u8]>) -> std::io::Result<u64> {
+    let mut value: u64 = 0;
+    let mut shift = 0u32;
+    loop {
+        if !cursor.has_remaining() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Truncated unsigned varint",
+            ));
+        }
+        let byte = cursor.get_u8();
+        value |= u64::from(byte & 0x7F) << shift;
+        if byte & 0x80 == 0 {
+            return Ok(value);
+        }
+        shift += 7;
+        if shift > 63 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Unsigned varint too long",
+            ));
+        }
+    }
+}
+
+/// Consume the tagged-fields block of a flexible (v2) request header.
+///
+/// Unknown tagged fields are ignored on decode; a truncated block is a
+/// standard codec error (CODEC-001 §Error Semantics).
+fn skip_tagged_fields(cursor: &mut Cursor<&[u8]>) -> std::io::Result<()> {
+    let count = get_unsigned_varint(cursor)?;
+    for _ in 0..count {
+        let _tag = get_unsigned_varint(cursor)?;
+        let size = get_unsigned_varint(cursor)? as usize;
+        if cursor.remaining() < size {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Truncated tagged field",
+            ));
+        }
+        cursor.advance(size);
+    }
+    Ok(())
+}
 
 /// Parsed request header
 #[derive(Debug, Clone)]
@@ -49,6 +99,13 @@ pub fn decode_request(data: &[u8]) -> std::io::Result<(RequestHeader, Bytes)> {
         None
     };
 
+    // Flexible request header (v2): the client_id stays a legacy nullable
+    // string, followed by a tagged-fields block that must be consumed so the
+    // body starts at the right offset (CODEC-001 §Request Header Decoding).
+    if is_flexible(api_key, api_version) {
+        skip_tagged_fields(&mut cursor)?;
+    }
+
     let header = RequestHeader {
         api_key,
         api_version,
@@ -74,7 +131,7 @@ pub fn decode_request(data: &[u8]) -> std::io::Result<(RequestHeader, Bytes)> {
 /// Encode a response with the correlation ID
 pub fn encode_response<R: Encodable>(
     correlation_id: i32,
-    _api_key: i16,
+    api_key: i16,
     api_version: i16,
     response: &R,
 ) -> std::io::Result<Bytes> {
@@ -85,6 +142,14 @@ pub fn encode_response<R: Encodable>(
 
     // Write correlation ID
     buf.put_i32(correlation_id);
+
+    // Flexible response header (v1) carries a tagged-fields trailer after the
+    // correlation id; heimq emits none, so the trailer is the empty block
+    // (varint 0). ApiVersions responses always use header v0 — no trailer —
+    // regardless of version (CODEC-001 §Response Header Encoding).
+    if api_key != 18 && is_flexible(api_key, api_version) {
+        buf.put_u8(0x00);
+    }
 
     // Encode response body
     response
@@ -293,8 +358,8 @@ mod tests {
 /// These tests verify the crate's round-trip behaviour and drive the FEAT-006 build bead
 /// by asserting heimq-side dispatch (is_flexible) and framing that are not yet implemented.
 ///
-/// EXPECTED STATE: proptest round-trips pass (crate handles primitives); FEAT-006
-/// integration tests (is_flexible, flexible decode/encode) fail until the build bead lands.
+/// Proptest round-trips cover the crate primitives; the integration tests below
+/// pin heimq-side dispatch (is_flexible) and flexible header framing.
 #[cfg(test)]
 mod flexible_tests {
     use super::*;
@@ -438,10 +503,7 @@ mod flexible_tests {
     // -------------------------------------------------------------------------
 
     /// CODEC-001 §Contract Validation #1: is_flexible boundary per API key.
-    ///
-    /// Fails: is_flexible() panics with "not yet implemented".
     #[test]
-    #[ignore = "FEAT-006 scaffolding: flexible codec not yet implemented (heimq-11399a35); remove when it lands"]
     fn test_is_flexible_boundary() {
         // (api_key, flexible_from)
         let table: &[(i16, i16)] = &[
@@ -483,11 +545,8 @@ mod flexible_tests {
     /// Wire layout (flexible request header v2, ApiVersions v3, null client_id):
     ///   api_key=18 i16, api_version=3 i16, correlation_id=7 i32,
     ///   client_id=-1 i16, tagged-fields=varint(0)=0x00, body=0xAB
-    ///
-    /// Currently decode_request does not consume the 0x00 tagged-fields byte,
-    /// so body.len() is 2 instead of 1 — fails.
+
     #[test]
-    #[ignore = "FEAT-006 scaffolding: flexible codec not yet implemented (heimq-11399a35); remove when it lands"]
     fn test_decode_request_flexible_header() {
         let data: &[u8] = &[
             0x00, 0x12, // api_key = 18 (ApiVersions)
@@ -504,7 +563,7 @@ mod flexible_tests {
         assert_eq!(
             body.len(),
             1,
-            "tagged-fields block must be consumed by decode_request (FEAT-006 not yet implemented)"
+            "tagged-fields block must be consumed by decode_request"
         );
         assert_eq!(body[0], 0xAB);
     }
@@ -516,9 +575,7 @@ mod flexible_tests {
     ///
     /// Verified by size: encode_response must produce exactly 1 more byte than
     /// encode_response_body for flexible versions (the tagged-fields trailer).
-    /// Currently encode_response omits this byte — fails.
     #[test]
-    #[ignore = "FEAT-006 scaffolding: flexible codec not yet implemented (heimq-11399a35); remove when it lands"]
     fn test_encode_response_flexible_header() {
         use kafka_protocol::messages::metadata_response::MetadataResponse;
         let response = MetadataResponse::default();
@@ -534,7 +591,7 @@ mod flexible_tests {
         assert_eq!(
             full.len(),
             4 + body_only.len() + 1,
-            "encode_response at flexible v9 must include 1-byte tagged-fields response header trailer (FEAT-006 not yet implemented)"
+            "encode_response at flexible v9 must include 1-byte tagged-fields response header trailer"
         );
         assert_eq!(full[8], 0x00, "tagged-fields trailer byte must be 0x00");
     }
