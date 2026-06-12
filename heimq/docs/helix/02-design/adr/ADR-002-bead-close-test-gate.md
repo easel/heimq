@@ -1,3 +1,9 @@
+---
+ddx:
+  id: ADR-002
+  status: accepted
+---
+
 # ADR-002: Enforce Workspace Test Gate at Bead Close
 
 **Status**: Accepted

@@ -1,3 +1,9 @@
+---
+ddx:
+  id: ADR-001
+  status: accepted
+---
+
 # ADR-001: Kafka Client Library for Integration Testing
 
 **Status**: Accepted
@@ -76,6 +82,6 @@ kafka = { version = "0.10", default-features = false, features = ["gzip", "snapp
 
 ## References
 
-- [Spike: rskafka Evaluation](../spikes/rskafka-evaluation/SPIKE.md)
+- Spike: rskafka Evaluation (spike evaluation doc not retained in repo)
 - [rdkafka cmake-build docs](https://docs.rs/rdkafka/latest/rdkafka/#cmake-build)
 - [librdkafka configuration](https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md)

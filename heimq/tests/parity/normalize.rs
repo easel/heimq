@@ -1,7 +1,7 @@
 use crate::driver::Observation;
 
 /// Apply field-level normalization transforms to remove non-determinism
-/// before diffing. Rules follow HARNESS-001 §Normalization Layer.
+/// before diffing. Rules follow SD-003 §Normalization Layer.
 ///
 /// For the scaffolding bead, observations are always empty (no workloads);
 /// this function is a no-op placeholder for future NormRule expansion.

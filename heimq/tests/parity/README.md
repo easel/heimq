@@ -1,6 +1,6 @@
 # Parity Harness (`tests/parity/`)
 
-Differential parity harness per HARNESS-001. Runs identical client workloads
+Differential parity harness per SD-003. Runs identical client workloads
 against heimq and a Redpanda container, normalizes non-determinism, and asserts
 zero behavioral diffs for in-scope APIs. Implements FEAT-003.
 
@@ -28,7 +28,7 @@ tests/parity/
 ├── driver.rs         -- WorkloadDriver trait and Observation types
 ├── workloads/
 │   └── mod.rs        -- workload registry (empty: scaffolding bead)
-├── normalize.rs      -- field-level normalization (HARNESS-001 §Normalization)
+├── normalize.rs      -- field-level normalization (SD-003 §Normalization)
 ├── diff.rs           -- diff engine, DiffRecord JSONL schema
 ├── exemptions.rs     -- exemptions.toml loader with fail-fast validation
 └── exemptions.toml   -- known-divergence declarations
@@ -50,7 +50,7 @@ impl WorkloadDriver for MyWorkload {
 ## Diff Output
 
 Diffs are written to `target/parity/<timestamp>-<workload>.jsonl` (gitignored).
-Each line is a `DiffRecord` JSON object per HARNESS-001 §Structured Diff Format.
+Each line is a `DiffRecord` JSON object per SD-003 §Structured Diff Format.
 
 Summary lines are printed to stdout:
 ```

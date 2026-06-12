@@ -1,5 +1,5 @@
 ---
-dun:
+ddx:
   id: FEAT-005
   depends_on:
     - helix.prd
@@ -13,6 +13,9 @@ dun:
 **Status**: Specified
 **Priority**: P0
 **Owner**: heimq core
+**Covered PRD Subsystem(s)**: Ecosystem integrations (FEAT-005)
+**Covered PRD Requirements**: FR-10 (ecosystem integration coverage) — PRD P0 #7
+**Cross-Subsystem Rationale**: None — single subsystem.
 
 ## Overview
 
@@ -21,6 +24,14 @@ least one tested integration each for Kafka Connect, Apache Flink,
 ksqlDB, Debezium, a Schema Registry client, and librdkafka-based clients
 in at least three languages. This is the practical proof that heimq is
 "a Kafka the ecosystem can talk to."
+
+## Ideal Future State
+
+A user points a Kafka Connect connector, a Flink job, a ksqlDB query, a
+Debezium connector, a Schema Registry serializer, or a librdkafka binding
+in Go, Python, or Node.js at heimq, and the tool's primary use case works
+— each demonstrated by a canonical, reproducible example that runs via a
+single script per target.
 
 ## Problem Statement
 
@@ -37,31 +48,42 @@ in at least three languages. This is the practical proof that heimq is
   case (e.g., a Debezium connector emits CDC events into a heimq topic
   that an rdkafka consumer reads).
 
+## Functional Areas
+
+| Area | User question or job | Feature responsibility |
+|------|----------------------|------------------------|
+| Kafka Connect | Run source and sink connectors against heimq | A representative source task and sink task each complete end-to-end |
+| Apache Flink | Run a Kafka source + sink job against heimq | Job reads from one heimq topic and writes to another, exactly-once where supported |
+| ksqlDB | Run stream queries over heimq topics | `CREATE STREAM` and a simple `SELECT` produce expected results |
+| Debezium | Emit CDC events into heimq | One connector emits the expected CDC envelope, readable by an rdkafka consumer |
+| Schema Registry | Round-trip schema-serialized records via heimq | Confluent serializer publishes/resolves schemas; producer/consumer round-trip works |
+| librdkafka clients | Use the canonical librdkafka binding in ≥3 languages | Integration tests pass for Go, Python, and Node.js bindings |
+
 ## Requirements
 
-### Functional Requirements
+### Functional Requirements by Area
 
-1. **Kafka Connect**: a representative source connector and a
-   representative sink connector run against heimq and complete one
-   end-to-end task each (e.g., file source → topic; topic → file sink).
-2. **Apache Flink**: a Flink job using the Kafka source and Kafka sink
-   connectors reads from one heimq topic and writes to another, with
-   exactly-once configuration where supported.
-3. **ksqlDB**: a ksqlDB instance configured against heimq executes a
-   `CREATE STREAM` and a simple `SELECT` query, producing expected
-   results.
-4. **Debezium**: at least one Debezium connector (e.g., the embedded /
-   PostgreSQL connector) emits CDC events into a heimq topic, and an
-   rdkafka consumer reads the expected envelope.
-5. **Schema Registry**: a client publishes and resolves schemas via a
-   Confluent Schema Registry instance, while a producer / consumer using
-   the Confluent Avro/Protobuf serializer round-trips records via heimq.
-6. **librdkafka clients**: at least three languages run integration
-   tests against heimq using the canonical librdkafka binding for that
-   language. Recommended: Go (`confluent-kafka-go`), Python
-   (`confluent-kafka`), Node.js (`node-rdkafka`).
-7. Each integration target's test exits 0 and is reproducible via a
-   single script per target.
+- **KC-01** — **Kafka Connect**: a representative source connector and a
+  representative sink connector run against heimq and complete one
+  end-to-end task each (e.g., file source → topic; topic → file sink).
+- **FL-01** — **Apache Flink**: a Flink job using the Kafka source and Kafka sink
+  connectors reads from one heimq topic and writes to another, with
+  exactly-once configuration where supported.
+- **KS-01** — **ksqlDB**: a ksqlDB instance configured against heimq executes a
+  `CREATE STREAM` and a simple `SELECT` query, producing expected
+  results.
+- **DB-01** — **Debezium**: at least one Debezium connector (e.g., the embedded /
+  PostgreSQL connector) emits CDC events into a heimq topic, and an
+  rdkafka consumer reads the expected envelope.
+- **SR-01** — **Schema Registry**: a client publishes and resolves schemas via a
+  Confluent Schema Registry instance, while a producer / consumer using
+  the Confluent Avro/Protobuf serializer round-trips records via heimq.
+- **LC-01** — **librdkafka clients**: at least three languages run integration
+  tests against heimq using the canonical librdkafka binding for that
+  language. Recommended: Go (`confluent-kafka-go`), Python
+  (`confluent-kafka`), Node.js (`node-rdkafka`).
+- **INT-01** — Each integration target's test exits 0 and is reproducible via a
+  single script per target.
 
 ### Non-Functional Requirements
 
@@ -75,6 +97,7 @@ in at least three languages. This is the practical proof that heimq is
 
 - [US-008 — Kafka Connect against heimq](../user-stories/US-008-kafka-connect.md)
 - [US-009 — Flink Kafka source/sink against heimq](../user-stories/US-009-flink.md)
+- [US-014 — ksqlDB against heimq](../user-stories/US-014-ksqldb.md)
 - [US-010 — Debezium emits CDC into heimq](../user-stories/US-010-debezium.md)
 - [US-011 — Schema Registry round-trip against heimq](../user-stories/US-011-schema-registry.md)
 - [US-012 — Multi-language librdkafka clients against heimq](../user-stories/US-012-multi-language-clients.md)
@@ -107,7 +130,9 @@ in at least three languages. This is the practical proof that heimq is
 ## Dependencies
 
 - **Other features**: FEAT-001 (wire protocol), FEAT-002 (transactions
-  / idempotency for Flink EOS, Debezium semantics).
+  / idempotency for Flink EOS, Debezium semantics), FEAT-006
+  (flexible-version protocol — ecosystem tools negotiate modern
+  flexible-only API versions; see PRD P0 #1).
 - **External services**: Each tool's runtime / Docker image.
 - **PRD requirements**: P0 #7.
 

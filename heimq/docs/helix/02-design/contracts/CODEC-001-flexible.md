@@ -1,17 +1,35 @@
+---
+ddx:
+  id: CODEC-001
+  type: contract
+  activity: design
+  status: draft
+  depends_on:
+    - FEAT-006
+    - API-001
+    - ADR-003
+---
+
 # CODEC-001: Flexible-Version Codec Module Surface
 
 **Contract ID**: CODEC-001
 **Type**: Protocol (Flexible-Version Codec)
-**Status**: Draft v0.1.0
+**Version**: 0.1.0
+**Status**: Draft
 **Feature**: FEAT-006
 **Depends on**: API-001-kafka-protocol.md, ADR-003
 
 ---
 
-## Scope
+## Purpose
 
 This contract specifies the module surface for flexible-version Kafka protocol
-support in heimq. It covers:
+support in heimq, so that handlers and the router can be implemented against a
+fixed codec dispatch surface.
+
+## Scope and Boundaries
+
+In scope:
 
 - How flexible-version codec primitives are provided (via `kafka-protocol` crate)
 - The `is_flexible(api_key, api_version) -> bool` dispatch function
@@ -24,7 +42,9 @@ crate per ADR-003), handler-level API semantics, FEAT-002 transactional APIs.
 
 ---
 
-## Codec Primitives
+## Normative Surface
+
+### Codec Primitives
 
 Per ADR-003, heimq **does not implement** compact-string, compact-array,
 unsigned-varint, signed-zigzag-varint, or tagged-fields codec primitives.
@@ -40,7 +60,7 @@ equivalents for reference:
 |-----------|------------|-------------|
 | `unsigned_varint` | base-128 unsigned varint (LEB128) | `kafka_protocol::protocol::buf` varint routines |
 | `signed_varint` | zigzag-encoded signed varint | `kafka_protocol::protocol::buf` varint routines |
-| `compact_string` | varint(len+1) + UTF-8 bytes; varint(0) = null | `kafka_protocol::protocol::StrBytes` encode/decode at flexible version |
+| `compact_string` | varint(len+1) + UTF-8 bytes; varint(0) = null sentinel, distinct from empty string (varint(1)) | `kafka_protocol::protocol::StrBytes` encode/decode at flexible version |
 | `compact_bytes` | varint(len+1) + raw bytes; varint(0) = null | `kafka_protocol::protocol::types::CompactBytes` |
 | `compact_array` | varint(count+1) + elements; varint(0) = null | `kafka_protocol::protocol::types::CompactArray` |
 | `tagged_fields` | varint(count) + tag/length/value tuples | `kafka_protocol::protocol::types::TagBuffer` |
@@ -51,11 +71,11 @@ version. No heimq-owned codec primitive module is required.
 
 ---
 
-## Flexible-Status Dispatch
+### Flexible-Status Dispatch
 
-### `is_flexible(api_key: i16, api_version: i16) -> bool`
+#### `is_flexible(api_key: i16, api_version: i16) -> bool`
 
-**Location**: `src/protocol/mod.rs`
+**Location**: `src/protocol/flexible.rs` (re-exported via `src/protocol/mod.rs`)
 
 Returns `true` when the request/response pair for `(api_key, api_version)`
 must use flexible framing. Implemented as a lookup against the
@@ -71,9 +91,9 @@ This function is pure and O(1) via a match arm over known API keys.
 
 ---
 
-## Request Header Decoding
+### Request Header Decoding
 
-### Header Versions
+#### Header Versions
 
 | Header version | Wire layout | Used when |
 |----------------|-------------|-----------|
@@ -86,7 +106,7 @@ The request body also becomes flexible (compact types), including optional
 `client_software_name` and `client_software_version` fields in tagged fields.
 heimq must read and discard these fields without error; it need not store them.
 
-### Updated `decode_request` interface
+#### Updated `decode_request` interface
 
 **Location**: `src/protocol/codec.rs`
 
@@ -99,7 +119,7 @@ Under FEAT-006, `decode_request` becomes header-format-aware:
 3. **If legacy**: reads `client_id` as i16-length-prefixed nullable string
    (existing logic). No tagged-fields block follows the header.
 4. **If flexible**: reads `client_id` as i16-length-prefixed nullable string
-   (same encoding as the legacy header — per FEAT-006 FR #2 and KIP-482,
+   (same encoding as the legacy header — per FEAT-006 FR-02 and KIP-482,
    client_id retains the legacy wire format in request header v2 because the
    header was already on-the-wire and could not be retroactively re-encoded),
    then reads and discards the tagged-fields block (varint count followed by
@@ -112,16 +132,16 @@ fully consumed by `decode_request`.
 
 ---
 
-## Response Header Encoding
+### Response Header Encoding
 
-### Header Versions
+#### Header Versions
 
 | Header version | Wire layout | Used when |
 |----------------|-------------|-----------|
 | v0 (legacy) | `correlation_id` i32 | `is_flexible == false` |
 | v1 (flexible) | `correlation_id` i32, tagged-fields block (varint 0 for empty) | `is_flexible == true` |
 
-### Updated `encode_response` interface
+#### Updated `encode_response` interface
 
 **Location**: `src/protocol/codec.rs`
 
@@ -152,7 +172,7 @@ from the `RequestHeader`.
 
 ---
 
-## Router Integration
+### Router Integration
 
 **Location**: `src/protocol/router.rs`
 
@@ -181,7 +201,7 @@ API-specific request type.
 
 ---
 
-## Per-API Flexible-Version-Min Table
+## Precedence and Compatibility: Per-API Flexible-Version-Min Table
 
 The `FLEXIBLE_VERSION_MIN` table maps API key to the first version that
 requires flexible framing. Values are derived from Kafka's official protocol
@@ -222,7 +242,23 @@ For API keys not in this table, `is_flexible` returns `false`.
 
 ---
 
-## Contract Validation
+## Error Semantics
+
+Protocol-level error codes are defined by
+[API-001 §Error Semantics](API-001-kafka-protocol.md#error-semantics): Kafka
+standard error codes per API response; unsupported APIs are answered via
+ApiVersions with the supported range only; unsupported versions return the
+version error as defined by the `kafka-protocol` decoder where applicable.
+This contract introduces no new error codes.
+
+Codec-level rule, per FEAT-006 §Edge Cases and Error Handling: a
+**truncated tagged-fields block** is a **standard codec error**; **unknown
+tagged fields** are ignored on decode and preserved or dropped per the Kafka
+spec for that response.
+
+---
+
+## Validation Checklist
 
 The following tests verify this contract at FEAT-006 implementation time:
 
@@ -248,10 +284,10 @@ Test locations: `src/protocol/codec.rs` (unit tests 1–5),
 
 ## References
 
-- [ADR-003: Flexible-Version Codec Strategy](../../adr/003-flexible-version-codec-strategy.md)
+- [ADR-003: Flexible-Version Codec Strategy](../adr/ADR-003-flexible-version-codec-strategy.md)
 - [API-001: Kafka Protocol Contract](API-001-kafka-protocol.md)
 - [FEAT-006: Flexible-Version Protocol Specification](../../01-frame/features/FEAT-006-flexible-version-protocol.md)
 - [`kafka-protocol` crate v0.15](https://crates.io/crates/kafka-protocol)
-- KIP-482: Tagged Fields — defines request header v2; explicitly retains legacy nullable-string for `client_id` (FR #2 rationale: header was already on-the-wire)
+- KIP-482: Tagged Fields — defines request header v2; explicitly retains legacy nullable-string for `client_id` (rationale: header was already on-the-wire)
 - KIP-368: Allow brokers to SASL handshake without encoding changes (flexible header context)
-- FEAT-006 FR #2: "`client_id` still as nullable string" — functional requirement confirming i16-length-prefixed encoding is preserved in request header v2
+- FEAT-006 FR-02: requires flexible request/response header support per in-scope API; this contract owns the normative header wire layouts (including the i16-length-prefixed `client_id` retained in request header v2)

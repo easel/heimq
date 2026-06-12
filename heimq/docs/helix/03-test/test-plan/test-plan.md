@@ -1,8 +1,24 @@
+---
+ddx:
+  id: TP-001
+  type: test-plan
+  activity: test
+  status: draft
+  depends_on:
+    - helix.prd
+    - FEAT-001
+    - FEAT-002
+    - FEAT-003
+    - FEAT-004
+    - FEAT-005
+    - FEAT-006
+---
+
 # Test Plan
 
 **Project**: heimq
-**Version**: 0.1.0
-**Date**: 2026-01-31
+**Version**: 0.2.0
+**Date**: 2026-06-11
 **Status**: Draft
 **Author**: Codex (freyr)
 
@@ -13,6 +29,10 @@ heimq targets Kafka protocol compatibility on a single node with no durability g
 ## Testing Strategy
 
 ### Scope and Objectives
+
+**Traceability Source**: PRD (`helix.prd`), FEAT-001–FEAT-006, and the per-API
+version matrix in `API-001-kafka-protocol.md` (cited per phase under
+"Spec traceability" in the Implementation Roadmap).
 
 **Testing Goals**:
 - Validate Kafka protocol behavior for all supported APIs and versions.
@@ -135,9 +155,15 @@ heimq/
 - [x] Expand integration test coverage to include consumer group offsets and group lifecycle (`tests/integration.rs`).
 - [ ] Add legacy protocol edge cases via `kafka` crate.
 
-### Phase 4: Baseline Parity (P0)
-- [ ] Add Kafka docker target to `scripts/compatibility-test.sh`.
-- [ ] Add Redpanda/Kafka golden request/response fixtures for parity regression tests.
+### Phase 4: Baseline Parity — Parked — superseded by Phase 8 (differential parity harness); see docs/helix/parking-lot.md
+
+Parked (unchecked since the 2026-04-26 alignment review). This phase
+proposed two items: (1) adding a Kafka docker target to
+`scripts/compatibility-test.sh`, and (2) capturing Redpanda/Kafka golden
+request/response fixtures and asserting equivalence for parity
+regression tests. Both are functionally superseded by Phase 8's
+differential parity harness, which compares live behavior against
+Redpanda. See the parking-lot entry for the revisit trigger.
 
 ### Phase 5: rdkafka Producer + Consumer E2E Gaps (P0/P1)
 
@@ -279,7 +305,7 @@ Spec traceability: FEAT-003, PRD P0 #5. Lives under `tests/parity/`.
 - [ ] Harness scaffolding: same client workload against heimq and Redpanda; structured diff output.
 - [ ] Normalization rules for broker ids, host timestamps, monotonic ids.
 - [ ] Workloads cover produce/fetch and consumer groups as gating workloads at FEAT-003 acceptance.
-- [ ] Workloads add idempotent producers and transactions once FEAT-002 is accepted (gated on FEAT-002 acceptance; see HARNESS-001-parity.md § Expansion path).
+- [ ] Workloads add idempotent producers and transactions once FEAT-002 is accepted (gated on FEAT-002 acceptance; see ../../02-design/solution-designs/SD-003-differential-parity-testing.md § Expansion path).
 - [ ] CI gating job: parity harness runs on protocol-touching changes; zero-diff is the success condition.
 - [ ] Known-divergence registry (e.g., loss-on-restart) with PRD references.
 

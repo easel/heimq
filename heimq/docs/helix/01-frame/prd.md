@@ -1,6 +1,8 @@
 ---
-dun:
+ddx:
   id: helix.prd
+  depends_on:
+    - helix.product-vision
 ---
 # Product Requirements Document
 
@@ -46,8 +48,9 @@ production Kafka — including the semantics services actually rely on
 |--------|--------|--------------------|
 | Differential parity with Redpanda for in-scope APIs | 100% of in-scope APIs pass diff tests | Differential test harness in `tests/parity/` running same workload against heimq and Redpanda |
 | Standard Kafka benchmark conformance | `kafka-producer-perf-test` and `kafka-consumer-perf-test` complete with no errors at documented load; OpenMessaging Benchmark runs to completion | Bench harness scripts in `scripts/bench/` |
-| Ecosystem integration coverage | ≥1 tested integration each for: Kafka Connect, Flink, ksqlDB, Debezium, a Schema Registry client, librdkafka in ≥3 languages | Integration test suite in `tests/ecosystem/` |
+| Ecosystem integration coverage | ≥1 tested integration each for: Kafka Connect, Flink, ksqlDB, Debezium, a Schema Registry client, librdkafka in ≥3 languages | Integration test suite in `tests/ecosystem/` (planned) |
 | Wire-protocol contract coverage | 100% of in-scope APIs covered by contract tests | `tests/contract.rs` + per-API contract files |
+| Startup and footprint (vision differentiator) | Cold start — process exec to first successful client produce/consume round-trip — < 1 second on a CI runner; distributed as a single self-contained binary with no JVM or external services required | Startup-timing check in CI (planned); release artifact inspection |
 
 ### Non-Goals
 
@@ -137,7 +140,7 @@ mock-vs-real divergence.
 
 1. Optional durable backends for individual subsystems (e.g., Postgres
    offsets) so committed offsets can survive a restart even though message
-   logs do not.
+   logs do not. (See FEAT-007.)
 2. Per-partition compression codecs (gzip, snappy, lz4, zstd) round-trip
    correctly through standard clients (already covered in Phase 5 client-
    surface coverage).
@@ -149,55 +152,64 @@ mock-vs-real divergence.
 
 ## Functional Requirements
 
-### Wire protocol (FEAT-001 + FEAT-006)
+### Subsystem: Wire protocol (FEAT-001 + FEAT-006)
 
-- All in-scope API keys / versions advertised via `ApiVersions` are decoded
+- **FR-1** — All in-scope API keys / versions advertised via `ApiVersions` are decoded
   and answered with byte-equivalent semantics to Kafka/Redpanda for the
   same request.
-- Unsupported APIs are advertised correctly and return the standard error
+- **FR-2** — Unsupported APIs are advertised correctly and return the standard error
   for unsupported version where applicable.
-- Capability gating in `compute_supported_apis` continues to filter
+- **FR-3** — Capability gating in `compute_supported_apis` continues to filter
   advertised APIs to what the configured backends can serve.
-- **Flexible versions** (compact strings, unsigned varints, tagged
+- **FR-4** — **Flexible versions** (compact strings, unsigned varints, tagged
   fields) are decoded and encoded for every API that has a flexible
   variant in current Kafka. heimq advertises versions through current
   Kafka per-API maxima, not a frozen legacy subset. (FEAT-006.)
 
-### Core semantics (FEAT-002)
+### Subsystem: Core semantics (FEAT-002)
 
-- Consumer-group lifecycle (join, sync, heartbeat, rebalance on join/leave,
+- **FR-5** — Consumer-group lifecycle (join, sync, heartbeat, rebalance on join/leave,
   session timeout) matches Kafka semantics for single-coordinator
   deployments.
-- Idempotent producer: `InitProducerId` returns a producer id; the broker
+- **FR-6** — Idempotent producer: `InitProducerId` returns a producer id; the broker
   tracks `(producerId, epoch, partition)` sequence numbers; duplicate
   sequence numbers return `DUPLICATE_SEQUENCE_NUMBER`; out-of-order returns
   `OUT_OF_ORDER_SEQUENCE_NUMBER`.
-- Transactions: `AddPartitionsToTxn` / `AddOffsetsToTxn` / `EndTxn` /
+- **FR-7** — Transactions: `AddPartitionsToTxn` / `AddOffsetsToTxn` / `EndTxn` /
   `WriteTxnMarkers` / `TxnOffsetCommit` operate on a single-coordinator
   transaction state machine; `read_committed` consumers do not observe
   uncommitted records or aborted records.
 
-### Differential parity (FEAT-003)
+### Subsystem: Differential parity (FEAT-003)
 
-- A parity harness drives the same client-level workload against heimq and
+- **FR-8** — A parity harness drives the same client-level workload against heimq and
   a Redpanda container, compares observable outputs (records consumed,
   offsets committed, error codes returned, group state observed via
   client API), and reports diffs.
 
-### Benchmark conformance (FEAT-004)
+### Subsystem: Benchmark conformance (FEAT-004)
 
-- A benchmark harness invokes `kafka-producer-perf-test`,
+- **FR-9** — A benchmark harness invokes `kafka-producer-perf-test`,
   `kafka-consumer-perf-test`, and the OpenMessaging Benchmark Kafka driver
   against heimq with documented load profiles and asserts they complete
   without protocol/client errors.
 
-### Ecosystem integrations (FEAT-005)
+### Subsystem: Ecosystem integrations (FEAT-005)
 
-- Each integration target has a runnable test/example that points the tool
+- **FR-10** — Each integration target has a runnable test/example that points the tool
   at heimq and exercises its primary use case (e.g., a Debezium connector
   emits CDC events into a heimq topic; a Flink job reads from a heimq topic
   and writes to a sink; a Schema Registry client publishes and resolves
   schemas).
+
+### Subsystem: Durable offset backend (FEAT-007)
+
+- **FR-11** — An opt-in Postgres-backed offset store, selected via
+  `HEIMQ_STORAGE_OFFSETS=postgres://…` (or `--storage-offsets`), persists
+  committed consumer-group offsets so they survive a broker restart even
+  though message logs do not. The in-memory offset store remains the
+  default, and correctness of in-scope features must not depend on the
+  durable backend (PRD non-goal #1). Priority: P1 (P1 #1).
 
 ## Acceptance Test Sketches
 
@@ -219,6 +231,12 @@ mock-vs-real divergence.
 - **Data/Storage**: In-memory by default; pluggable backends include Postgres for offsets (`HEIMQ_STORAGE_OFFSETS=postgres`).
 - **APIs**: Kafka wire protocol per `https://kafka.apache.org/protocol/`; per-API version matrix in `docs/helix/02-design/contracts/API-001-kafka-protocol.md`.
 - **Platform Targets**: Linux x86_64 / arm64, macOS arm64. Single-binary distribution.
+
+Resolved product decisions are recorded as ADRs:
+
+- [ADR-004](../02-design/adr/ADR-004-openmessaging-benchmark-version.md) — OpenMessaging Benchmark: target the latest released driver, pin it; version bumps are ordinary maintenance.
+- [ADR-005](../02-design/adr/ADR-005-schema-registry-target.md) — Schema Registry: the Confluent Schema Registry API is the target.
+- [ADR-006](../02-design/adr/ADR-006-no-state-across-restart.md) — Producer / transaction state is not retained across restart; clients receive `UNKNOWN_PRODUCER_ID` and re-initialize per Kafka spec.
 
 ## Constraints, Assumptions, Dependencies
 
@@ -255,22 +273,6 @@ mock-vs-real divergence.
 | Ecosystem tools rely on undocumented Kafka behavior | Medium | High | Capture each divergence as a parking-lot item with reproducer; do not silently emulate |
 | Benchmark tools assume APIs we don't implement (e.g., admin/config APIs at startup) | Medium | Medium | Profile each benchmark's API trace; either implement minimal stubs or document non-support |
 | Differential harness is flaky due to non-determinism (timestamps, broker ids) | Medium | Medium | Compare normalized outputs (canonicalize broker ids, masked timestamps); pin client config |
-
-## Resolved Decisions
-
-- **OpenMessaging Benchmark version**: target the latest released
-  driver. The bench harness pins to that release; bumps are tracked as
-  ordinary maintenance.
-- **Schema Registry**: target the **Confluent Schema Registry API**.
-  Apicurio's Confluent-compatibility mode may incidentally pass but is
-  not a separate target.
-- **Idempotent producer / transaction state across restart**: not
-  retained. heimq is in-memory; on restart the broker presents as a
-  fresh broker. This matches what real Kafka does when its log is lost
-  (e.g., disk wipe / fresh broker): clients receive
-  `UNKNOWN_PRODUCER_ID` and re-initialize via `InitProducerId`.
-  Modern librdkafka and the Java client handle this transparently.
-  No heimq-specific recovery behavior — Kafka spec applies.
 
 ## Open Questions
 

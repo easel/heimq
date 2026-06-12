@@ -1,5 +1,5 @@
 ---
-dun:
+ddx:
   id: FEAT-003
   depends_on:
     - helix.prd
@@ -12,6 +12,9 @@ dun:
 **Status**: Specified
 **Priority**: P0
 **Owner**: heimq core
+**Covered PRD Subsystem(s)**: Differential parity (FEAT-003)
+**Covered PRD Requirements**: FR-8 (differential parity testing) — PRD P0 #5
+**Cross-Subsystem Rationale**: None — single subsystem.
 
 ## Overview
 
@@ -20,6 +23,14 @@ against a real Redpanda (or Kafka) instance and asserts that observable
 behavior is equivalent for in-scope APIs. This is how heimq's PRD claim
 of "behaves identically to Kafka/Redpanda" is verified rather than
 asserted.
+
+## Ideal Future State
+
+Every protocol-touching change is gated by a reproducible diff harness:
+the same client-level workload runs against heimq and a Redpanda
+container, observable outputs are normalized and diffed, zero behavioral
+diffs is the passing condition, and CI fails on regressions — so parity
+with Redpanda is observable rather than asserted.
 
 ## Problem Statement
 
@@ -37,23 +48,23 @@ asserted.
 
 ### Functional Requirements
 
-1. A harness runs the same client workload (driver script + identical
-   client config) against heimq and against a Redpanda container.
-2. The harness records observable client outputs: records consumed
-   (key, value, headers, partition, offset), error codes returned, group
-   state observed via client API, transactional outcomes (committed vs
-   aborted record visibility under each isolation level).
-3. The harness normalizes non-determinism (broker ids, host-specific
-   timestamps, monotonic ids) before diffing.
-4. The harness reports zero diffs as success and prints a structured
-   diff on failure (target field, heimq value, redpanda value, request
-   correlation_id).
-5. Workloads cover produce/fetch and consumer groups as gating workloads
-   at FEAT-003 acceptance; idempotent producers and transactions are added
-   once FEAT-002 is accepted (see US-005 acceptance criteria and
-   HARNESS-001-parity.md § Expansion path).
-6. The harness is runnable locally (developer machine with Docker) and in
-   CI.
+- **FR-01** — A harness runs the same client workload (driver script + identical
+  client config) against heimq and against a Redpanda container.
+- **FR-02** — The harness records observable client outputs: records consumed
+  (key, value, headers, partition, offset), error codes returned, group
+  state observed via client API, transactional outcomes (committed vs
+  aborted record visibility under each isolation level).
+- **FR-03** — The harness normalizes non-determinism (broker ids, host-specific
+  timestamps, monotonic ids) before diffing.
+- **FR-04** — The harness reports zero diffs as success and prints a structured
+  diff on failure (target field, heimq value, redpanda value, request
+  correlation_id).
+- **FR-05** — Workloads cover produce/fetch and consumer groups as gating workloads
+  at FEAT-003 acceptance; idempotent producers and transactions are added
+  once FEAT-002 is accepted (see US-005 acceptance criteria and
+  solution-designs/SD-003-differential-parity-testing.md § Expansion path).
+- **FR-06** — The harness is runnable locally (developer machine with Docker) and in
+  CI.
 
 ### Non-Functional Requirements
 

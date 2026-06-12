@@ -1,3 +1,17 @@
+---
+ddx:
+  id: API-001
+  type: contract
+  activity: design
+  status: draft
+  depends_on:
+    - helix.prd
+    - FEAT-001
+    - FEAT-002
+    - FEAT-006
+    - ADR-003
+---
+
 # API Contract: Kafka Wire Protocol [heimq]
 
 **Contract ID**: API-001
@@ -7,16 +21,18 @@
 **Version**: 0.2.0
 **Source**: Kafka Protocol Guide (`https://kafka.apache.org/protocol/`)
 
+## Purpose
+
 *This contract defines heimq's Kafka wire-protocol surface area, supported versions, exclusions, and test coverage expectations.*
 
-## Scope
+## Scope and Boundaries
 
 - Single-node Kafka-compatible broker focused on transport speed over durability.
 - No distributed consensus, replication, or controller responsibilities.
 - No security or ACLs in scope for this contract.
 - **Transactions and idempotent producers are in scope** per FEAT-002. The single-coordinator implementation operates without a replicated transaction log; loss of in-memory transactional/producer-id state across restart is acceptable per PRD non-goal #1, with clients re-initializing per Kafka spec for a fresh broker.
 
-## Protocol Interface Contract
+## Normative Surface
 
 ### Transport and Framing
 
@@ -52,7 +68,7 @@
   implementation; the matrix below records advertised support state.
 - **Capability-derived advertisement**: The ApiVersions response is not a verbatim copy of `SUPPORTED_APIS`. At runtime, `compute_supported_apis` (`src/protocol/mod.rs`) intersects the static table with the per-API `CapabilityGate` against each backend's descriptor (`BackendCapabilities`, `OffsetStoreCapabilities`, `GroupCoordinatorCapabilities`). APIs whose required backend is absent (e.g. no group coordinator) are filtered out before the response is encoded, so heimq advertises only what its currently configured backends can actually serve. Gating is per-API, not a global meet — a backend that lacks compaction does not lose unrelated APIs.
 
-## Support Matrix (Kafka API Keys)
+### Support Matrix (Kafka API Keys)
 
 Kafka API keys listed here follow the current Apache Kafka protocol spec.
 
@@ -145,13 +161,13 @@ Reason codes (Exclusions):
 | 91 | AlterShareGroupOffsets | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
 | 92 | DeleteShareGroupOffsets | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
 
-## Error Contracts
+## Error Semantics
 
 - **Error codes**: Use Kafka standard error codes per API response.
 - **Unsupported APIs**: Respond via ApiVersions with supported range only.
 - **Unsupported versions**: Return version error as defined by kafka-protocol decoder where applicable.
 
-## Contract Validation
+## Validation Checklist
 
 ### Required Contract Tests (per supported API)
 1. **ApiVersions**: version negotiation reflects `compute_supported_apis(SUPPORTED_APIS, backend capabilities)` — i.e. the static table intersected with the per-API capability gates of the configured backends. Unit tests in `src/protocol/mod.rs` pin the intersection behaviour (memory default advertises full set; missing group coordinator drops only group APIs; missing offset store drops only offset APIs; capability flags do not leak across APIs).
@@ -165,7 +181,11 @@ Reason codes (Exclusions):
 9. **Transactions (FEAT-002)**: AddPartitionsToTxn, AddOffsetsToTxn, EndTxn (commit/abort), WriteTxnMarkers, TxnOffsetCommit drive a single-coordinator transaction state machine; control batches make read_committed consumers skip aborted records; stale epoch returns INVALID_PRODUCER_EPOCH; transaction.timeout.ms is enforced.
 10. **Differential parity (FEAT-003)**: every supported and planned API is exercised by the parity harness against Redpanda; zero diffs at the gating workload.
 
-### Backwards Compatibility
+## Precedence and Compatibility
+
+- Versioning: per-API supported version ranges are advertised via ApiVersions
+  (see Version Policy above); the static table is `SUPPORTED_APIS` in
+  `src/protocol/mod.rs`.
 - Flexible versions are supported per FEAT-006; legacy versions remain
   supported and are exercised by existing contract tests.
 - All future changes must remain additive or gated by ApiVersions.
@@ -177,6 +197,14 @@ above continues to reflect the current legacy-only range. As each
 in-scope API gains its flexible variant, this contract is updated in
 the same commit and the parity harness (FEAT-003) is re-run to confirm
 zero diffs at flexible versions vs Redpanda.
+
+## Examples
+
+Concrete request/response examples are not inlined here. Wire-format examples
+for each API follow the Kafka Protocol Guide (see **Source** above); per-API
+executable examples are pinned by the contract tests listed in the Support
+Matrix `Tests` column (`tests/contract.rs`, `tests/integration.rs`,
+`src/handler/tests.rs`).
 
 ## Feature Traceability
 

@@ -1,3 +1,7 @@
+---
+ddx:
+  id: helix.product-vision
+---
 # Product Vision
 
 ## Mission Statement

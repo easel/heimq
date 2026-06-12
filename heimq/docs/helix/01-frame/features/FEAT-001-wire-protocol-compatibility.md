@@ -1,5 +1,5 @@
 ---
-dun:
+ddx:
   id: FEAT-001
   depends_on:
     - helix.prd
@@ -10,6 +10,9 @@ dun:
 **Status**: Specified
 **Priority**: P0
 **Owner**: heimq core
+**Covered PRD Subsystem(s)**: Wire protocol (FEAT-001 + FEAT-006)
+**Covered PRD Requirements**: FR-1, FR-2, FR-3 (legacy / pre-flexible layer of PRD P0 #1; flexible versions — FR-4 — are FEAT-006)
+**Cross-Subsystem Rationale**: None — single subsystem.
 
 ## Overview
 
@@ -19,6 +22,15 @@ sarama, etc.) — connect with no code changes and observe the same protocol-
 level behavior they would against Kafka or Redpanda for the in-scope API
 surface. This addresses PRD goal 1 (clients connect unchanged) and is the
 foundation other features build on.
+
+## Ideal Future State
+
+A developer points any standard Kafka client (rdkafka, java client, sarama,
+etc.) at heimq's bootstrap address and observes the same protocol-level
+behavior it would observe against Kafka or Redpanda: for every in-scope
+API/version pair, a standard client request returns a byte-equivalent
+(modulo ids/timestamps) response, verified by contract and differential
+tests rather than asserted.
 
 ## Problem Statement
 
@@ -38,17 +50,17 @@ foundation other features build on.
 
 ### Functional Requirements
 
-1. ApiVersions advertises the runtime intersection of `SUPPORTED_APIS` and
-   per-backend capability gates (`compute_supported_apis`).
-2. All in-scope API keys decode and answer with semantically equivalent
-   responses to Kafka/Redpanda for the same input.
-3. Unsupported APIs and versions return the standard Kafka error codes.
-4. Per-API maxima target current Kafka spec versions (subject to the
-   in-scope semantic surface). Flexible-version decode/encode is
-   delivered by FEAT-006; FEAT-001 alone is the legacy / pre-flexible
-   layer of the same wire-compatibility goal.
-5. Capability gating filters advertised APIs per-API (a missing group
-   coordinator drops only group APIs, etc.).
+- **FR-01** — ApiVersions advertises the runtime intersection of `SUPPORTED_APIS` and
+  per-backend capability gates (`compute_supported_apis`).
+- **FR-02** — All in-scope API keys decode and answer with semantically equivalent
+  responses to Kafka/Redpanda for the same input.
+- **FR-03** — Unsupported APIs and versions return the standard Kafka error codes.
+- **FR-04** — Per-API maxima target current Kafka spec versions (subject to the
+  in-scope semantic surface). Flexible-version decode/encode is
+  delivered by FEAT-006; FEAT-001 alone is the legacy / pre-flexible
+  layer of the same wire-compatibility goal.
+- **FR-05** — Capability gating filters advertised APIs per-API (a missing group
+  coordinator drops only group APIs, etc.).
 
 ### Non-Functional Requirements
 
@@ -66,8 +78,9 @@ foundation other features build on.
 ## Edge Cases and Error Handling
 
 - **Unknown API key**: return `UNSUPPORTED_VERSION` per Kafka spec.
-- **Flexible-version request**: rejected with the standard error; not
-  silently downgraded.
+- **Flexible-version request**: flexible-version negotiation is owned by
+  FEAT-006; until FEAT-006 is delivered, flexible requests are rejected
+  with the standard error rather than silently downgraded.
 - **ApiVersions probe with an unknown client_software_name field
   (flexible)**: handled per non-flexible policy.
 
@@ -80,7 +93,9 @@ foundation other features build on.
 ## Constraints and Assumptions
 
 - Single-node only; no controller/replication APIs.
-- No flexible versions.
+- Flexible-version negotiation is owned by FEAT-006; until FEAT-006 is
+  delivered, flexible requests are rejected with the standard error
+  rather than silently downgraded.
 
 ## Dependencies
 

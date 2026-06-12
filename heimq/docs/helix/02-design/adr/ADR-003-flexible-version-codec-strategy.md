@@ -1,3 +1,9 @@
+---
+ddx:
+  id: ADR-003
+  status: accepted
+---
+
 # ADR-003: Flexible-Version Kafka Protocol Codec Strategy
 
 **Status**: Accepted
@@ -63,6 +69,8 @@ Compact strings, unsigned varints, zigzag-signed varints, nullable-string null-s
 
 The table below records every in-scope API, the current legacy maximum advertised by `SUPPORTED_APIS` in `src/protocol/mod.rs`, the Kafka flexible-version boundary, and the planned new maximum after FEAT-006. APIs marked **Planned (FEAT-002)** are not yet implemented; their target maxima are recorded for design completeness.
 
+*Illustrative snapshot at decision time — the normative per-API version matrix is owned by [API-001](../contracts/API-001-kafka-protocol.md).*
+
 | API Key | Name | Current max (legacy) | Flexible from | Target max (FEAT-006) | Handler status |
 |---------|------|---------------------|---------------|----------------------|----------------|
 | 0 | Produce | v8 | v9 | v11 | Legacy retained; flexible variant added |
@@ -96,8 +104,8 @@ The table below records every in-scope API, the current legacy maximum advertise
 
 ## References
 
-- [FEAT-006 specification](../helix/01-frame/features/FEAT-006-flexible-version-protocol.md)
-- [API-001 Kafka Protocol Contract](../helix/02-design/contracts/API-001-kafka-protocol.md)
+- [FEAT-006 specification](../../01-frame/features/FEAT-006-flexible-version-protocol.md)
+- [API-001 Kafka Protocol Contract](../contracts/API-001-kafka-protocol.md)
 - [`kafka-protocol` crate](https://crates.io/crates/kafka-protocol) — Apache Kafka wire protocol in Rust
 - KIP-482: Tagged fields and flexible versions
 - `src/protocol/mod.rs` — `SUPPORTED_APIS` static table

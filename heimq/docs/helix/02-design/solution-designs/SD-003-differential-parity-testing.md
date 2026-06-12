@@ -1,13 +1,25 @@
-# Design: Differential Parity Harness [HARNESS-001]
+---
+ddx:
+  id: SD-003
+  type: solution-design
+  activity: design
+  status: approved
+  depends_on:
+    - helix.prd
+    - FEAT-003
+    - US-005
+---
 
-**Design ID**: HARNESS-001
+# Design: Differential Parity Harness [SD-003]
+
+**Design ID**: SD-003 (formerly HARNESS-001)
 **Feature**: FEAT-003
-**Status**: Draft
+**Status**: Approved (implementation in progress — scaffolding shipped, workloads pending)
 **Spec Authority**: FEAT-003-differential-parity-testing.md, US-005
 
 ---
 
-## Overview
+## Scope
 
 This document specifies the architecture of `tests/parity/`, a Rust-native
 harness that drives identical Kafka client workloads against heimq and
@@ -16,7 +28,25 @@ diffs on the gating workload constitutes CI success.
 
 ---
 
-## Container Orchestration Decision
+## Requirements Mapping
+
+FEAT-003 functional requirements map to harness capabilities as follows
+(requirement text lives in FEAT-003; it is not restated here):
+
+| FEAT-003 FR | Technical Capability | Design Element / Module |
+|-------------|----------------------|-------------------------|
+| FR 1 (same workload, both brokers) | `WorkloadDriver` run twice per workload, once per `BrokerTarget` | `driver.rs`, `broker.rs` |
+| FR 2 (record observable outputs) | `Observation` / `ObservationEvent` variants (`RecordConsumed`, `ErrorCode`, `GroupState`, `TxnOutcome`) | `driver.rs` |
+| FR 3 (normalize non-determinism) | Pure, deterministic `NormRule` table | `normalize.rs` (§ Normalization Layer) |
+| FR 4 (zero diffs = success; structured diff on failure) | JSONL diff records, exit code 0/1 | `diff.rs` (§ Structured Diff Format) |
+| FR 5 (gating workloads; txn after FEAT-002) | produce_fetch + consumer_group workloads; expansion path | `workloads/` (§ Initial Workloads) |
+| FR 6 (runnable locally and in CI) | testcontainers + host Docker socket; GitHub Actions job | § Solution Approaches, § CI Integration |
+
+---
+
+## Solution Approaches
+
+### Container Orchestration Decision
 
 **Decision: testcontainers (via `testcontainers` + `testcontainers-modules` crates)**
 
@@ -39,7 +69,9 @@ docker-compose rejected because:
 
 ---
 
-## Module Layout
+## System Decomposition
+
+### Module Layout
 
 ```
 tests/parity/
@@ -61,7 +93,7 @@ with `harness = false`) so it controls its own `main` and async runtime.
 
 ---
 
-## Workload Driver Shape
+## Domain Model: Workload Driver Shape
 
 ```rust
 /// A recorded observable from one broker run.
@@ -291,6 +323,17 @@ is not required because testcontainers uses the host Docker socket.
   `prd_ref` is non-empty at test startup (fail-fast, not silently ignored).
 
 ---
+
+## Traceability
+
+| Requirement | Design Element | Verification |
+|-------------|----------------|--------------|
+| FEAT-003 FR 1–2 | `WorkloadDriver` + `Observation` (§ Domain Model) | Workload runs against both targets in `cargo test --test parity` |
+| FEAT-003 FR 3 | `NormRule` table (§ Normalization Layer) | Deterministic normalization; rules logged for triage |
+| FEAT-003 FR 4 | Diff engine + JSONL schema (§ Structured Diff Format) | JSONL schema validated by unit test in `diff.rs`; exit code gates CI |
+| FEAT-003 FR 5 | § Initial Workloads + § Expansion path | Gating workloads at FEAT-003 acceptance; txn workloads blocked on FEAT-002 |
+| FEAT-003 FR 6 | § CI Integration | GitHub Actions `parity` job (follow-on issue) |
+| FEAT-003 edge case: intentional diffs | § Known-Divergence Registry (`exemptions.toml`) | Exemption loader fail-fast validation (§ Quality Gates) |
 
 ## Open Questions (resolved for this design pass)
 
