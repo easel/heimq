@@ -8,15 +8,28 @@ ddx:
 
 ## Summary
 
-heimq is a single-node, Kafka-wire-compatible broker for tests, local
-development, and ephemeral workloads. Standard Kafka producers and consumers
-connect unchanged and observe the same behavior they would against Kafka or
-Redpanda for the in-scope semantic surface: consumer groups, transactional
-groups (EOS), and idempotent producers. heimq is permitted to lose data on
-restart and to offer limited retention; it is not a durable, distributed
-broker. Success is measured by differential parity against Redpanda, by
-passing standard Kafka benchmarks, and by working with common Kafka-speaking
-ecosystem tools.
+heimq has a dual identity: it is (a) an embeddable Kafka broker **engine** —
+the `heimq-wire`/`heimq-broker` crate family providing wire scaffolding and
+broker semantics over pluggable storage and node-coordination traits — and (b)
+a single-binary in-memory **distribution** (the `heimq` CLI) for tests, local
+development, and CI.
+
+As a **distribution**: standard Kafka producers and consumers connect unchanged
+and observe the same behavior they would against Kafka or Redpanda for the
+in-scope semantic surface: consumer groups, transactional groups (EOS), and
+idempotent producers. heimq is permitted to lose data on restart and to offer
+limited retention; it is not a durable, distributed broker.
+
+As an **engine**: downstream projects (fjord, pqueue, niflheim) embed the
+engine crates and implement backend traits to get a Kafka wire surface with
+capability gating and per-trait conformance suites. Durability is a backend
+property; the engine makes no durability assumption. The engine is
+multi-node-capable via the pluggable `ClusterView` coordination trait.
+
+Success is measured by differential parity against Redpanda, by passing
+standard Kafka benchmarks, by working with common Kafka-speaking ecosystem
+tools, and by per-trait conformance suites passing on all consumer-shaped
+backends.
 
 ## Problem and Goals
 
@@ -29,6 +42,11 @@ single-binary, in-memory broker that speaks the Kafka wire protocol
 faithfully enough that tests passing against it imply tests will pass against
 production Kafka — including the semantics services actually rely on
 (consumer groups, transactions, idempotent producers).
+
+Separately, three sibling projects (fjord, pqueue, niflheim) each need a
+Kafka-compatible protocol front-end over their own storage and coordination
+planes; without a shared engine, each re-implements wire scaffolding and
+broker semantics that then drift independently.
 
 ### Goals
 
@@ -64,8 +82,11 @@ The following are explicit non-goals — heimq does not aim to do these:
    configured caps. Multi-day or multi-TB retention is out of scope.
 3. **Multi-broker / replication / KRaft / controller responsibilities.**
    heimq is single-node by design.
-4. **Security / SASL / ACLs / delegation tokens.** Out of scope for the
-   current PRD.
+4. **SASL / ACLs / delegation tokens.** SASL PLAIN/TLS exist as a gated
+   `heimq-wire` capability for embedding consumers (normative surface in
+   WIRE-001 at `docs/helix/02-design/contracts/WIRE-001-wire-scaffolding.md`);
+   they are OFF in the heimq distribution and not a distribution feature.
+   ACLs and delegation tokens remain fully out of scope.
 5. **Share groups, telemetry APIs, admin reassignment APIs.** Out of scope.
 6. **Performance at production-Kafka scale.** heimq must *complete* standard
    benchmarks correctly; it does not aim to match Kafka/Redpanda throughput.
@@ -92,9 +113,24 @@ keep parity with production broker behavior.
 **Pain Points**: Kafka images are large; flaky cluster bootstraps; debugging
 mock-vs-real divergence.
 
+### Tertiary Persona: Broker Builder
+
+**Role**: Engineer embedding `heimq-wire`/`heimq-broker` into a larger system
+(object-store broker, WAL-backed ingest path, producer front-end, or similar).
+**Goals**: Obtain a conformant Kafka wire surface and broker semantics without
+writing or owning a Kafka wire implementation; certify their backend
+implementations using the per-trait conformance suites.
+**Pain Points**: Kafka wire protocol is complex to implement correctly;
+conformance is hard to verify without an established test surface; capability
+gating (advertising only APIs the backend can serve) requires framework
+support.
+**Constraint**: Broker Builders depend on the engine crates (`heimq-wire`,
+`heimq-broker`, `heimq-testkit`); they never depend on the `heimq` bin crate.
+
 ## Requirements
 
 ### Must Have (P0)
+
 
 1. **Wire-protocol compatibility, including modern (flexible) versions.**
    A standard Kafka producer and a standard Kafka consumer connect to heimq
@@ -135,6 +171,14 @@ mock-vs-real divergence.
    representative connector), a Schema Registry client (Confluent or
    Apicurio API), and librdkafka-based clients in at least three languages
    (e.g., Go/confluent-kafka-go, Python/confluent-kafka, Node/node-rdkafka).
+8. **Engine trait surface with per-trait conformance suites.** The engine
+   exposes stable trait families — `TopicLog`/`LogBackend`/`PartitionLog`,
+   `OffsetStore`, `GroupCoordinatorBackend`, `ClusterView` — each accompanied
+   by a per-trait conformance suite in `heimq-testkit`. A backend that does
+   not implement a trait family causes the corresponding Kafka APIs to not be
+   advertised (capability gating). The normative trait surface is defined in
+   TRAIT-001 (`docs/helix/02-design/contracts/TRAIT-001-backend-traits.md`);
+   this PRD states the capability requirement, not the signatures.
 
 ### Should Have (P1)
 
@@ -211,6 +255,25 @@ mock-vs-real divergence.
   default, and correctness of in-scope features must not depend on the
   durable backend (PRD non-goal #1). Priority: P1 (P1 #1).
 
+### Subsystem: Engine trait surface (TRAIT-001)
+
+- **FR-12** — The engine exposes stable trait families (`TopicLog`/`LogBackend`/`PartitionLog`,
+  `OffsetStore`, `GroupCoordinatorBackend`, `ClusterView`) with per-trait
+  conformance suites in `heimq-testkit`. A backend that does not implement a
+  trait family causes the corresponding Kafka APIs to not be advertised
+  (capability-gated advertisement). The normative trait signatures and
+  conformance obligations are defined in TRAIT-001
+  (`docs/helix/02-design/contracts/TRAIT-001-backend-traits.md`).
+
+- **FR-13** — Wire handler contract: handlers are async, produce handlers
+  support deferred acks, every request carries a per-request principal context
+  threaded through to trait calls, and backpressure is mapped to standard
+  Kafka errors (e.g., `KAFKA_STORAGE_ERROR` for ingestion backpressure).
+  The normative handler/registry surface — including typed-vs-raw body policy,
+  response-encoding ownership, cancellation, and SASL/TLS capability gating —
+  is defined in WIRE-001
+  (`docs/helix/02-design/contracts/WIRE-001-wire-scaffolding.md`).
+
 ## Acceptance Test Sketches
 
 | Requirement | Scenario | Input | Expected Output |
@@ -227,22 +290,39 @@ mock-vs-real divergence.
 ## Technical Context
 
 - **Language/Runtime**: Rust (toolchain version pinned in `rust-toolchain.toml` if present, otherwise stable).
-- **Key Libraries**: `kafka-protocol` (codec), `tokio` (runtime), `proptest` (property tests), `rdkafka` (integration tests).
+- **Key Libraries**: `kafka-protocol` (codec — single workspace pin per ADR-007), `tokio` (runtime), `proptest` (property tests), `rdkafka` (integration tests).
 - **Data/Storage**: In-memory by default; pluggable backends include Postgres for offsets (`HEIMQ_STORAGE_OFFSETS=postgres`).
 - **APIs**: Kafka wire protocol per `https://kafka.apache.org/protocol/`; per-API version matrix in `docs/helix/02-design/contracts/API-001-kafka-protocol.md`.
 - **Platform Targets**: Linux x86_64 / arm64, macOS arm64. Single-binary distribution.
+
+### Workspace Structure
+
+| Crate | Contents | Consumers |
+|-------|----------|-----------|
+| `heimq-wire` | Framing, codec, flexible headers, connection loop, SASL/TLS hooks (gated), error-frame policy, handler registry | niflheim, pqueue, heimq-broker |
+| `heimq-broker` | Handlers, group/idempotence/transaction semantics, capability gating, trait families (`LogBackend`/`TopicLog`/`PartitionLog`, `OffsetStore`, `GroupCoordinatorBackend`, `ClusterView`), in-memory reference backends | fjord, niflheim (produce path), heimq bin |
+| `heimq-testkit` | Per-trait conformance suites, contract-test pattern, differential parity harness, expected-divergence annotations | All consumers |
+| `heimq` (bin) | CLI, config, backend dispatch (memory/postgres), packaging — the distribution | End users |
+
+Consumers (fjord, pqueue, niflheim) embed engine crates; they never depend on the `heimq` bin crate.
+
+`kafka-protocol` is pinned at a single version for the entire workspace (ADR-007); consumers that embed engine crates use the same pin.
 
 Resolved product decisions are recorded as ADRs:
 
 - [ADR-004](../02-design/adr/ADR-004-openmessaging-benchmark-version.md) — OpenMessaging Benchmark: target the latest released driver, pin it; version bumps are ordinary maintenance.
 - [ADR-005](../02-design/adr/ADR-005-schema-registry-target.md) — Schema Registry: the Confluent Schema Registry API is the target.
 - [ADR-006](../02-design/adr/ADR-006-no-state-across-restart.md) — Producer / transaction state is not retained across restart; clients receive `UNKNOWN_PRODUCER_ID` and re-initialize per Kafka spec.
+- [ADR-007](../02-design/adr/ADR-007-workspace-split-engine-crates.md) — Workspace split and crate boundaries; `kafka-protocol` single-pin policy; niflheim/fjord/pqueue consumption model.
 
 ## Constraints, Assumptions, Dependencies
 
 ### Constraints
 
-- **Technical**: Single-node only; no replication. Transactions and
+- **Technical**: The heimq distribution is single-node only; no
+  replication. The engine is multi-node-capable through the `ClusterView`
+  coordination trait (TRAIT-001) — multi-node topology is a consumer
+  responsibility (e.g. fjord), never a distribution feature. Transactions and
   idempotency operate against a single-coordinator state machine, not a
   replicated transaction log. Flexible-version Kafka APIs (compact
   strings, unsigned varints, tagged fields) ARE in scope per FEAT-006 —
