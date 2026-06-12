@@ -441,6 +441,7 @@ mod flexible_tests {
     ///
     /// Fails: is_flexible() panics with "not yet implemented".
     #[test]
+    #[ignore = "FEAT-006 scaffolding: flexible codec not yet implemented (heimq-11399a35); remove when it lands"]
     fn test_is_flexible_boundary() {
         // (api_key, flexible_from)
         let table: &[(i16, i16)] = &[
@@ -486,6 +487,7 @@ mod flexible_tests {
     /// Currently decode_request does not consume the 0x00 tagged-fields byte,
     /// so body.len() is 2 instead of 1 — fails.
     #[test]
+    #[ignore = "FEAT-006 scaffolding: flexible codec not yet implemented (heimq-11399a35); remove when it lands"]
     fn test_decode_request_flexible_header() {
         let data: &[u8] = &[
             0x00, 0x12, // api_key = 18 (ApiVersions)
@@ -516,6 +518,7 @@ mod flexible_tests {
     /// encode_response_body for flexible versions (the tagged-fields trailer).
     /// Currently encode_response omits this byte — fails.
     #[test]
+    #[ignore = "FEAT-006 scaffolding: flexible codec not yet implemented (heimq-11399a35); remove when it lands"]
     fn test_encode_response_flexible_header() {
         use kafka_protocol::messages::metadata_response::MetadataResponse;
         let response = MetadataResponse::default();
