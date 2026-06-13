@@ -12,6 +12,7 @@ pub mod delete_records;
 pub mod describe_cluster;
 pub mod describe_configs;
 pub mod describe_groups;
+pub mod describe_log_dirs;
 pub mod end_txn;
 pub mod fetch;
 pub mod find_coordinator;

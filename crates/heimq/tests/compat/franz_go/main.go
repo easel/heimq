@@ -89,6 +89,12 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("describe-log-dirs", func() error {
+		return describeLogDirs(ctx, bootstrap, topic)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("describe-cluster", func() error {
 		return describeCluster(ctx, bootstrap)
 	}); err != nil {
@@ -483,6 +489,32 @@ func describeGroups(ctx context.Context, bootstrap, wantGroup string) error {
 
 // describeConfigs verifies that DescribeConfigs (API 32) returns a non-error
 // response for a topic resource.
+// describeLogDirs exercises DescribeLogDirs (API 35).
+func describeLogDirs(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	var ts kadm.TopicsSet
+	ts.Add(topic, 0)
+	allDirs, err := adm.DescribeAllLogDirs(ctx, ts)
+	if err != nil {
+		return fmt.Errorf("describe log dirs rpc: %w", err)
+	}
+	for _, dirs := range allDirs {
+		if err := dirs.Error(); err != nil {
+			return fmt.Errorf("describe log dirs: %w", err)
+		}
+		if len(dirs) == 0 {
+			return fmt.Errorf("describe log dirs: no directories returned")
+		}
+	}
+	return nil
+}
+
 func describeConfigs(ctx context.Context, bootstrap, topic string) error {
 	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
 	if err != nil {
