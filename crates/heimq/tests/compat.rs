@@ -6,6 +6,7 @@
 //!
 //! Current oracles:
 //!   - franz-go (pure-Go Kafka client, no librdkafka dependency)
+//!   - sarama (IBM/sarama pure-Go Kafka client, independent of franz-go)
 //!
 //! Tests are skipped when the required runtime (go, java, …) is absent from
 //! PATH, so they never break a developer's environment. In CI the runtimes are
@@ -28,6 +29,13 @@ fn franz_go_dir() -> PathBuf {
         .join("tests")
         .join("compat")
         .join("franz_go")
+}
+
+fn sarama_oracle_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("compat")
+        .join("sarama_oracle")
 }
 
 /// Run the franz-go compat binary against a live heimq instance.
@@ -63,6 +71,45 @@ fn test_franz_go_produce_consume_consumer_group() {
     assert!(
         out.status.success(),
         "franz-go compat oracle failed (exit {:?})\nstdout: {stdout}\nstderr: {stderr}",
+        out.status.code()
+    );
+}
+
+/// Run the sarama oracle against a live heimq instance.
+///
+/// Exercises: Produce (SyncProducer), JoinGroup, SyncGroup, Heartbeat,
+/// Fetch, OffsetCommit — through IBM/sarama's independent Go wire
+/// implementation. Together with rdkafka and franz-go, this gives three
+/// independent client stacks all verifying the same heimq wire behaviour.
+#[test]
+fn test_sarama_produce_consume_consumer_group() {
+    if !go_available() {
+        eprintln!("SKIP: go not in PATH");
+        return;
+    }
+
+    let topic = "sarama-compat-topic";
+    let server = TestServer::start();
+    let dir = sarama_oracle_dir();
+
+    let out = Command::new("go")
+        .args(["run", "."])
+        .arg(server.bootstrap_servers())
+        .arg(topic)
+        .current_dir(&dir)
+        .output()
+        .expect("failed to spawn go run");
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    print!("{stdout}");
+    if !stderr.is_empty() {
+        eprint!("{stderr}");
+    }
+
+    assert!(
+        out.status.success(),
+        "sarama oracle failed (exit {:?})\nstdout: {stdout}\nstderr: {stderr}",
         out.status.code()
     );
 }
