@@ -8,6 +8,7 @@
 //!   - franz-go (pure-Go Kafka client, no librdkafka dependency)
 //!   - sarama (IBM/sarama pure-Go Kafka client, independent of franz-go)
 //!   - java kafka-clients (Apache reference implementation)
+//!   - kcat (CLI tool; tests offset-based Fetch without a consumer group)
 //!
 //! Tests are skipped when the required runtime (go, java, mvn, …) is absent
 //! from PATH, so they never break a developer's environment. In CI the
@@ -202,5 +203,152 @@ fn test_java_kafka_clients_produce_consume() {
         out.status.success(),
         "java kafka-clients oracle failed (exit {:?})\nstdout: {stdout}\nstderr: {stderr}",
         out.status.code()
+    );
+}
+
+fn kcat_available() -> bool {
+    Command::new("kcat")
+        .arg("-V")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// Run kcat (CLI Kafka tool) against a live heimq instance.
+///
+/// kcat uses librdkafka internally, but its offset-based consumer mode
+/// (`kcat -C -o beginning -c N`) drives the Fetch API without any consumer
+/// group machinery — a different code path from all other oracles. Tests:
+///   1. Produce via `kcat -P` (line-delimited stdin)
+///   2. Consume via raw offset (`-o beginning -c N -e`) — no group protocol
+///   3. Key-value round-trip (`-P -K:` / `-C -K:`)
+///   4. Metadata listing (`kcat -L`) — verifies topic appears in metadata
+#[test]
+fn test_kcat_produce_consume_roundtrip() {
+    if !kcat_available() {
+        eprintln!("SKIP: kcat not in PATH");
+        return;
+    }
+
+    let server = TestServer::start();
+    let bootstrap = server.bootstrap_servers();
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let topic = format!("kcat-compat-{ts}");
+    let kv_topic = format!("kcat-kv-{ts}");
+
+    // --- 1. Plain produce (one message per line) ---
+    let messages = ["alpha", "beta", "gamma", "delta", "epsilon"];
+    let input = messages.join("\n");
+
+    let produce_out = Command::new("kcat")
+        .args(["-b", &bootstrap, "-t", &topic, "-P"])
+        .env("KCAT_SKIP_BOOTSTRAP_LOG", "1")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write as _;
+            child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+            child.wait_with_output()
+        })
+        .expect("failed to spawn kcat -P");
+
+    assert!(
+        produce_out.status.success(),
+        "kcat -P failed: {}",
+        String::from_utf8_lossy(&produce_out.stderr)
+    );
+
+    // --- 2. Offset-based consume (no consumer group) ---
+    let consume_out = Command::new("kcat")
+        .args([
+            "-b", &bootstrap,
+            "-t", &topic,
+            "-C",
+            "-o", "beginning",
+            "-c", &messages.len().to_string(),
+            "-e",
+            "-q",
+        ])
+        .output()
+        .expect("failed to spawn kcat -C");
+
+    assert!(
+        consume_out.status.success(),
+        "kcat -C failed: {}",
+        String::from_utf8_lossy(&consume_out.stderr)
+    );
+
+    let consumed = String::from_utf8_lossy(&consume_out.stdout);
+    let consumed_lines: Vec<&str> = consumed.trim_end_matches('\n').split('\n').collect();
+    assert_eq!(
+        consumed_lines, messages,
+        "kcat offset-consume: messages don't match produced\nconsumed: {consumed:?}"
+    );
+
+    // --- 3. Key-value round-trip ---
+    let kv_messages = ["k1:v1", "k2:v2", "k3:v3"];
+    let kv_input = kv_messages.join("\n");
+
+    Command::new("kcat")
+        .args(["-b", &bootstrap, "-t", &kv_topic, "-P", "-K", ":"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write as _;
+            child.stdin.take().unwrap().write_all(kv_input.as_bytes()).unwrap();
+            child.wait_with_output()
+        })
+        .expect("failed to spawn kcat -P -K:");
+
+    let kv_consume = Command::new("kcat")
+        .args([
+            "-b", &bootstrap,
+            "-t", &kv_topic,
+            "-C",
+            "-o", "beginning",
+            "-c", &kv_messages.len().to_string(),
+            "-e",
+            "-q",
+            "-f", "%k:%s\n",
+        ])
+        .output()
+        .expect("failed to spawn kcat -C -f %k:%s");
+
+    assert!(
+        kv_consume.status.success(),
+        "kcat kv consume failed: {}",
+        String::from_utf8_lossy(&kv_consume.stderr)
+    );
+
+    let kv_consumed = String::from_utf8_lossy(&kv_consume.stdout);
+    let kv_lines: Vec<&str> = kv_consumed.trim_end_matches('\n').split('\n').collect();
+    assert_eq!(
+        kv_lines, kv_messages,
+        "kcat kv round-trip: messages don't match\nconsumed: {kv_consumed:?}"
+    );
+
+    // --- 4. Metadata listing: topic appears in kcat -L output ---
+    let meta_out = Command::new("kcat")
+        .args(["-b", &bootstrap, "-L"])
+        .output()
+        .expect("failed to spawn kcat -L");
+
+    assert!(
+        meta_out.status.success(),
+        "kcat -L failed: {}",
+        String::from_utf8_lossy(&meta_out.stderr)
+    );
+
+    let meta_str = String::from_utf8_lossy(&meta_out.stdout);
+    assert!(
+        meta_str.contains(&topic),
+        "kcat -L: produced topic {topic:?} not found in metadata output:\n{meta_str}"
     );
 }
