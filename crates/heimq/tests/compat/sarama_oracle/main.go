@@ -199,6 +199,19 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	txnTopic := topic + "-txn"
+	if err := check("transactional-produce", func() error {
+		return transactionalProduce(brokers, txnTopic, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("transactional-consume-committed", func() error {
+		return transactionalConsumeCommitted(brokers, txnTopic, cfg)
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -904,6 +917,131 @@ func offsetResume(brokers []string, topic, group string, baseCfg *sarama.Config)
 		}
 		if v != wantVal {
 			return fmt.Errorf("key %s: got %q want %q", key, v, wantVal)
+		}
+	}
+	return nil
+}
+
+// transactionalProduce creates txnTopic, commits 3 records in a transaction,
+// then aborts a second transaction with 2 records.
+func transactionalProduce(brokers []string, topic string, baseCfg *sarama.Config) error {
+	// Create the topic first.
+	admin, err := sarama.NewClusterAdmin(brokers, baseCfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	if err := admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, false); err != nil {
+		admin.Close()
+		return fmt.Errorf("create topic: %w", err)
+	}
+	admin.Close()
+
+	txnID := fmt.Sprintf("sarama-txn-%d", time.Now().UnixNano())
+	txnCfg := sarama.NewConfig()
+	txnCfg.Version = sarama.V2_6_0_0
+	txnCfg.Producer.Return.Successes = true
+	txnCfg.Producer.Return.Errors = true
+	txnCfg.Producer.RequiredAcks = sarama.WaitForAll
+	txnCfg.Producer.Idempotent = true
+	txnCfg.Producer.Transaction.ID = txnID
+	txnCfg.Net.MaxOpenRequests = 1
+
+	producer, err := sarama.NewAsyncProducer(brokers, txnCfg)
+	if err != nil {
+		return fmt.Errorf("new txn producer: %w", err)
+	}
+	defer producer.Close()
+
+	// Committed transaction.
+	if err := producer.BeginTxn(); err != nil {
+		return fmt.Errorf("begin txn: %w", err)
+	}
+	for i := 0; i < 3; i++ {
+		producer.Input() <- &sarama.ProducerMessage{
+			Topic: topic,
+			Key:   sarama.StringEncoder(fmt.Sprintf("tkey-%d", i)),
+			Value: sarama.StringEncoder(fmt.Sprintf("tval-%d", i)),
+		}
+		select {
+		case <-producer.Successes():
+		case err := <-producer.Errors():
+			return fmt.Errorf("committed record %d error: %w", i, err.Err)
+		}
+	}
+	if err := producer.CommitTxn(); err != nil {
+		return fmt.Errorf("commit txn: %w", err)
+	}
+
+	// Aborted transaction.
+	if err := producer.BeginTxn(); err != nil {
+		return fmt.Errorf("begin abort txn: %w", err)
+	}
+	for i := 0; i < 2; i++ {
+		producer.Input() <- &sarama.ProducerMessage{
+			Topic: topic,
+			Key:   sarama.StringEncoder(fmt.Sprintf("akey-%d", i)),
+			Value: sarama.StringEncoder(fmt.Sprintf("aval-%d", i)),
+		}
+		select {
+		case <-producer.Successes():
+		case err := <-producer.Errors():
+			return fmt.Errorf("aborted record %d error: %w", i, err.Err)
+		}
+	}
+	if err := producer.AbortTxn(); err != nil {
+		return fmt.Errorf("abort txn: %w", err)
+	}
+
+	return nil
+}
+
+// transactionalConsumeCommitted reads txnTopic with read_committed isolation
+// and verifies that only the 3 committed records (tkey-0..2) are visible.
+func transactionalConsumeCommitted(brokers []string, topic string, baseCfg *sarama.Config) error {
+	readCfg := sarama.NewConfig()
+	readCfg.Version = sarama.V2_6_0_0
+	readCfg.Consumer.Offsets.Initial = sarama.OffsetOldest
+	readCfg.Consumer.IsolationLevel = sarama.ReadCommitted
+
+	consumer, err := sarama.NewConsumer(brokers, readCfg)
+	if err != nil {
+		return fmt.Errorf("new consumer: %w", err)
+	}
+	defer consumer.Close()
+
+	pc, err := consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
+	if err != nil {
+		return fmt.Errorf("consume partition: %w", err)
+	}
+	defer pc.Close()
+
+	got := make(map[string]string)
+	timeout := time.After(30 * time.Second)
+	for len(got) < 3 {
+		select {
+		case msg := <-pc.Messages():
+			got[string(msg.Key)] = string(msg.Value)
+		case err := <-pc.Errors():
+			return fmt.Errorf("partition error: %w", err.Err)
+		case <-timeout:
+			return fmt.Errorf("timeout: consumed %d/3 committed records; got: %v", len(got), got)
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		key := fmt.Sprintf("tkey-%d", i)
+		wantVal := fmt.Sprintf("tval-%d", i)
+		v, ok := got[key]
+		if !ok {
+			return fmt.Errorf("missing committed record %s", key)
+		}
+		if v != wantVal {
+			return fmt.Errorf("key %s: got %q want %q", key, v, wantVal)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if _, ok := got[fmt.Sprintf("akey-%d", i)]; ok {
+			return fmt.Errorf("aborted record akey-%d leaked into read_committed consumer", i)
 		}
 	}
 	return nil
