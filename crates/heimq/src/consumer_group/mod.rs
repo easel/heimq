@@ -88,6 +88,13 @@ impl ConsumerGroupManager {
     pub fn list_groups(&self) -> Vec<String> {
         self.groups.iter().map(|e| e.key().clone()).collect()
     }
+
+    /// Evict all expired members across all groups.
+    pub fn evict_expired_members(&self) {
+        for entry in self.groups.iter() {
+            entry.value().remove_expired_members();
+        }
+    }
 }
 
 impl GroupCoordinatorBackend for ConsumerGroupManager {

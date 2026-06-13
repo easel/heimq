@@ -188,6 +188,16 @@ impl Server {
         listener: TcpListener,
         max_connections: Option<usize>,
     ) -> Result<()> {
+        let groups = self.consumer_groups.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
+            interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                interval.tick().await;
+                groups.evict_expired_members();
+            }
+        });
+
         let mut served = 0usize;
         loop {
             let result = listener.accept().await;

@@ -1516,3 +1516,54 @@ fn contract_read_uncommitted_observes_aborted_records() {
         aborted.iter().map(|a| a.producer_id.0).collect::<Vec<_>>()
     );
 }
+
+/// Verify that a member whose session_timeout_ms expires is evicted by the
+/// background eviction task and subsequent heartbeats return an error.
+#[test]
+fn contract_session_timeout_evicts_member() {
+    let server = TestServer::start();
+    let group = unique_group("contract-session-timeout");
+
+    // Join group with a very short session timeout (800 ms)
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 0]);
+
+    let mut join_request = JoinGroupRequest::default();
+    join_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    join_request.session_timeout_ms = 800;
+    join_request.rebalance_timeout_ms = 800;
+    join_request.member_id = StrBytes::from_string(String::new());
+    join_request.protocol_type = StrBytes::from_string("consumer".to_string());
+    join_request.protocols = vec![protocol.clone()];
+
+    // First join: get member_id
+    let join_resp: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    assert_eq!(join_resp.error_code, 79, "expected MEMBER_ID_REQUIRED");
+    let member_id = join_resp.member_id.clone();
+
+    // Second join: actual join
+    join_request.member_id = member_id.clone();
+    let join_resp: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
+    assert_eq!(join_resp.error_code, 0, "JoinGroup should succeed");
+    let generation_id = join_resp.generation_id;
+
+    // Immediately heartbeat — should succeed
+    let mut hb = HeartbeatRequest::default();
+    hb.group_id = GroupId(StrBytes::from_string(group.clone()));
+    hb.generation_id = generation_id;
+    hb.member_id = member_id.clone();
+    let hb_resp: HeartbeatResponse = send_request(&server, 12, 1, &hb);
+    assert_eq!(hb_resp.error_code, 0, "immediate heartbeat should succeed");
+
+    // Wait for session_timeout to elapse (1.5× the timeout to account for
+    // the background-eviction task's 500 ms tick interval)
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+
+    // Heartbeat after expiry — should fail with a non-zero error code
+    let hb_resp2: HeartbeatResponse = send_request(&server, 12, 1, &hb);
+    assert_ne!(
+        hb_resp2.error_code, 0,
+        "heartbeat after session timeout must fail (member should have been evicted)"
+    );
+}
