@@ -1,0 +1,35 @@
+name: bench-smoke
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  bench-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install librdkafka build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev default-jdk-headless
+
+      - name: Download Apache Kafka CLI tools
+        run: |
+          curl -fsSL https://downloads.apache.org/kafka/4.3.0/kafka_2.13-4.3.0.tgz -o /tmp/kafka.tgz
+          tar -xzf /tmp/kafka.tgz -C /tmp
+          echo "/tmp/kafka_2.13-4.3.0/bin" >> $GITHUB_PATH
+
+      - name: Build heimq binary
+        run: cargo build -p heimq --bin heimq
+
+      - name: Start heimq
+        run: |
+          ./target/debug/heimq --host 0.0.0.0 --port 9094 --memory-only &
+          echo "HEIMQ_PID=$!" >> $GITHUB_ENV
+          # Wait for heimq to accept connections
+          timeout 15 bash -c 'until nc -z localhost 9094; do sleep 0.2; done'
+
+      - name: Run bench smoke
+        run: BOOTSTRAP=localhost:9094 bash scripts/bench/run-smoke.sh
+
+      - name: Stop heimq
+        if: always()
+        run: kill $HEIMQ_PID 2>/dev/null || true
