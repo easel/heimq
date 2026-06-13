@@ -44,6 +44,8 @@ func run(bootstrap string) error {
 	compGroup := fmt.Sprintf("franz-comp-group-%d", ts)
 	lz4Topic := fmt.Sprintf("franz-lz4-%d", ts)
 	lz4Group := fmt.Sprintf("franz-lz4-group-%d", ts)
+	zstdTopic := fmt.Sprintf("franz-zstd-%d", ts)
+	zstdGroup := fmt.Sprintf("franz-zstd-group-%d", ts)
 	resumeTopic := fmt.Sprintf("franz-resume-%d", ts)
 	resumeGroup := fmt.Sprintf("franz-resume-group-%d", ts)
 
@@ -199,6 +201,18 @@ func run(bootstrap string) error {
 
 	if err := check("consume-lz4-roundtrip", func() error {
 		return consumeCompressedRoundtrip(ctx, bootstrap, lz4Topic, lz4Group)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("produce-zstd-compressed", func() error {
+		return produceWithCodec(ctx, bootstrap, zstdTopic, kgo.ZstdCompression())
+	}); err != nil {
+		return err
+	}
+
+	if err := check("consume-zstd-roundtrip", func() error {
+		return consumeCompressedRoundtrip(ctx, bootstrap, zstdTopic, zstdGroup)
 	}); err != nil {
 		return err
 	}
