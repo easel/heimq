@@ -15,36 +15,35 @@ mod flexible;
 use crate::consumer_group::GroupCoordinatorCapabilities;
 use crate::storage::{BackendCapabilities, OffsetStoreCapabilities};
 
-/// API keys we support
+/// API keys we support, with version ranges per API-001 contract targets.
 ///
-/// Max versions are kept below "flexible versions" boundaries to avoid
-/// needing compact string (varint) encoding. Most flexible versions start at:
-/// - Produce v9, Fetch v12, Metadata v9, etc.
+/// FEAT-006 (flexible-version codec) is implemented: the `kafka-protocol`
+/// crate's decode/encode handles both legacy and flexible encoding transparently
+/// based on the api_version passed to each handler. Maxima here follow the
+/// API-001 per-API target table; future bumps beyond these targets are tracked
+/// in the parking lot.
 pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     // (api_key, min_version, max_version)
-    // Max versions must stay below the flexible-version boundary
-    // for each API (flexible = compact strings + varints + tagged
-    // fields). The handlers parse the legacy layout only.
-    (0, 0, 8),   // Produce (v9+ flexible)
-    (1, 0, 11),  // Fetch (v12+ flexible)
-    (2, 0, 5),   // ListOffsets (v6+ flexible)
-    (3, 0, 8),   // Metadata (v9+ flexible)
-    (8, 0, 7),   // OffsetCommit (v8+ flexible)
-    (9, 0, 5),   // OffsetFetch (v6+ flexible)
-    (10, 0, 2),  // FindCoordinator (v3+ flexible)
-    (11, 0, 5),  // JoinGroup (v6+ flexible)
-    (12, 0, 3),  // Heartbeat (v4+ flexible)
-    (13, 0, 3),  // LeaveGroup (v4+ flexible)
-    (14, 0, 3),  // SyncGroup (v4+ flexible)
-    (18, 0, 2),  // ApiVersions (v3+ flexible for request only; keep v2 to avoid edge cases)
-    (19, 0, 4),  // CreateTopics (v5+ flexible)
-    (20, 0, 3),  // DeleteTopics (v4+ flexible)
-    (22, 0, 3),  // InitProducerId (v2+ flexible; idempotent producers — US-003)
-    (24, 0, 2),  // AddPartitionsToTxn (v3+ flexible)
-    (25, 0, 2),  // AddOffsetsToTxn (v3+ flexible)
-    (26, 0, 2),  // EndTxn (v3+ flexible)
-    (27, 0, 0),  // WriteTxnMarkers (v1+ flexible)
-    (28, 0, 2),  // TxnOffsetCommit (v3+ flexible)
+    (0, 0, 11),  // Produce
+    (1, 0, 17),  // Fetch
+    (2, 0, 9),   // ListOffsets
+    (3, 0, 12),  // Metadata
+    (8, 0, 9),   // OffsetCommit
+    (9, 0, 9),   // OffsetFetch
+    (10, 0, 6),  // FindCoordinator
+    (11, 0, 9),  // JoinGroup
+    (12, 0, 4),  // Heartbeat
+    (13, 0, 5),  // LeaveGroup
+    (14, 0, 5),  // SyncGroup
+    (18, 0, 3),  // ApiVersions
+    (19, 0, 7),  // CreateTopics
+    (20, 0, 6),  // DeleteTopics
+    (22, 0, 5),  // InitProducerId
+    (24, 0, 5),  // AddPartitionsToTxn
+    (25, 0, 4),  // AddOffsetsToTxn
+    (26, 0, 4),  // EndTxn
+    (27, 0, 1),  // WriteTxnMarkers
+    (28, 0, 4),  // TxnOffsetCommit
 ];
 
 /// Check if an API version is supported
@@ -136,8 +135,9 @@ mod tests {
     #[test]
     fn test_api_supported_and_range() {
         assert!(is_api_supported(0, 0));
-        assert!(!is_api_supported(0, 9));
-        assert_eq!(get_api_version_range(0), Some((0, 8)));
+        assert!(is_api_supported(0, 11));
+        assert!(!is_api_supported(0, 12));
+        assert_eq!(get_api_version_range(0), Some((0, 11)));
         assert_eq!(get_api_version_range(999), None);
     }
 

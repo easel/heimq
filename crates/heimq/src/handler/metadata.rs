@@ -2,103 +2,40 @@
 
 use crate::error::Result;
 use crate::storage::{ClusterView, LogBackend};
-use bytes::Buf;
+use bytes::Bytes;
+use kafka_protocol::messages::metadata_request::MetadataRequest;
 use kafka_protocol::messages::metadata_response::{
     MetadataResponseBroker, MetadataResponsePartition, MetadataResponseTopic,
 };
 use kafka_protocol::messages::{BrokerId, MetadataResponse, TopicName};
-use kafka_protocol::protocol::StrBytes;
-use std::io::Cursor;
+use kafka_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
-/// Handle Metadata request
 pub fn handle(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
     cluster_view: &dyn ClusterView,
 ) -> Result<MetadataResponse> {
+    // Empty body is treated as "all topics" request (Kafka spec: null topics array).
+    let request = if body.is_empty() {
+        MetadataRequest::default()
+    } else {
+        let mut buf = Bytes::copy_from_slice(body);
+        match MetadataRequest::decode(&mut buf, api_version) {
+            Ok(r) => r,
+            Err(_) => MetadataRequest::default(),
+        }
+    };
+
     let self_broker = cluster_view.self_broker();
     let mut response = MetadataResponse::default();
 
-    // Add broker information (single node)
     let mut broker = MetadataResponseBroker::default();
     broker.node_id = BrokerId(self_broker.node_id);
     broker.host = StrBytes::from_string(self_broker.host.clone());
     broker.port = self_broker.port as i32;
     response.brokers.push(broker);
-
-    // Parse request to get topic list
-    let topics = parse_topic_list(body, api_version);
-
-    // Get all topics if request is empty, otherwise filter
-    let topic_metadata = if topics.is_empty() {
-        storage.get_all_topic_metadata()
-    } else {
-        topics
-            .iter()
-            .filter_map(|name| {
-                storage
-                    .topic(name)
-                    .map(|t| (name.clone(), t.num_partitions()))
-            })
-            .collect()
-    };
-
-    // Add topic metadata
-    for (topic_name, num_partitions) in topic_metadata {
-        let mut topic = MetadataResponseTopic::default();
-        topic.name = Some(TopicName(StrBytes::from_string(topic_name.clone())));
-        topic.error_code = 0;
-
-        // Add partition metadata
-        for partition_id in 0..num_partitions {
-            let mut partition = MetadataResponsePartition::default();
-            partition.partition_index = partition_id;
-            partition.error_code = 0;
-            partition.leader_id = BrokerId(self_broker.node_id);
-            partition.replica_nodes = vec![BrokerId(self_broker.node_id)];
-            partition.isr_nodes = vec![BrokerId(self_broker.node_id)];
-            topic.partitions.push(partition);
-        }
-
-        response.topics.push(topic);
-    }
-
-    // Handle unknown topics in request
-    for topic_name in topics {
-        if !response.topics.iter().any(|t| {
-            t.name
-                .as_ref()
-                .map(|n| n.0.as_str() == topic_name)
-                .unwrap_or(false)
-        }) {
-            // Auto-create topic if enabled
-            if storage.auto_create_topics() {
-                let topic = storage.get_or_create_topic(&topic_name, storage.default_num_partitions());
-                let mut topic_meta = MetadataResponseTopic::default();
-                topic_meta.name = Some(TopicName(StrBytes::from_string(topic_name)));
-                topic_meta.error_code = 0;
-
-                for partition_id in 0..topic.num_partitions() {
-                    let mut partition = MetadataResponsePartition::default();
-                    partition.partition_index = partition_id;
-                    partition.error_code = 0;
-                    partition.leader_id = BrokerId(self_broker.node_id);
-                    partition.replica_nodes = vec![BrokerId(self_broker.node_id)];
-                    partition.isr_nodes = vec![BrokerId(self_broker.node_id)];
-                    topic_meta.partitions.push(partition);
-                }
-
-                response.topics.push(topic_meta);
-            } else {
-                let mut topic = MetadataResponseTopic::default();
-                topic.name = Some(TopicName(StrBytes::from_string(topic_name)));
-                topic.error_code = 3; // UNKNOWN_TOPIC_OR_PARTITION
-                response.topics.push(topic);
-            }
-        }
-    }
 
     if api_version >= 2 {
         response.cluster_id = Some(StrBytes::from_string(cluster_view.cluster_id()));
@@ -107,42 +44,80 @@ pub fn handle(
         response.controller_id = BrokerId(self_broker.node_id);
     }
 
+    // None means "all topics"; empty Some([]) also means all topics per Kafka spec (v1+)
+    let requested_topics: Option<Vec<String>> = match &request.topics {
+        None => None,
+        Some(topics) if topics.is_empty() => None,
+        Some(topics) => Some(
+            topics
+                .iter()
+                .filter_map(|t| t.name.as_ref().map(|n| n.0.to_string()))
+                .collect(),
+        ),
+    };
+
+    let topic_metadata = match requested_topics {
+        None => storage.get_all_topic_metadata(),
+        Some(names) => names
+            .iter()
+            .filter_map(|name| {
+                storage
+                    .topic(name)
+                    .map(|t| (name.clone(), t.num_partitions()))
+            })
+            .collect(),
+    };
+
+    let mut resolved_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for (topic_name, num_partitions) in &topic_metadata {
+        resolved_names.insert(topic_name.clone());
+        let mut topic = MetadataResponseTopic::default();
+        topic.name = Some(TopicName(StrBytes::from_string(topic_name.clone())));
+        topic.error_code = 0;
+        for partition_id in 0..*num_partitions {
+            let mut partition = MetadataResponsePartition::default();
+            partition.partition_index = partition_id;
+            partition.error_code = 0;
+            partition.leader_id = BrokerId(self_broker.node_id);
+            partition.replica_nodes = vec![BrokerId(self_broker.node_id)];
+            partition.isr_nodes = vec![BrokerId(self_broker.node_id)];
+            topic.partitions.push(partition);
+        }
+        response.topics.push(topic);
+    }
+
+    // Handle unknown topics in explicit request
+    if let Some(names) = request.topics.as_ref() {
+        for t in names {
+            if let Some(name) = &t.name {
+                let s = name.0.to_string();
+                if !resolved_names.contains(&s) {
+                    if storage.auto_create_topics() {
+                        let topic =
+                            storage.get_or_create_topic(&s, storage.default_num_partitions());
+                        let mut topic_meta = MetadataResponseTopic::default();
+                        topic_meta.name = Some(TopicName(StrBytes::from_string(s)));
+                        topic_meta.error_code = 0;
+                        for partition_id in 0..topic.num_partitions() {
+                            let mut partition = MetadataResponsePartition::default();
+                            partition.partition_index = partition_id;
+                            partition.error_code = 0;
+                            partition.leader_id = BrokerId(self_broker.node_id);
+                            partition.replica_nodes = vec![BrokerId(self_broker.node_id)];
+                            partition.isr_nodes = vec![BrokerId(self_broker.node_id)];
+                            topic_meta.partitions.push(partition);
+                        }
+                        response.topics.push(topic_meta);
+                    } else {
+                        let mut topic_meta = MetadataResponseTopic::default();
+                        topic_meta.name = Some(TopicName(StrBytes::from_string(s)));
+                        topic_meta.error_code = 3; // UNKNOWN_TOPIC_OR_PARTITION
+                        response.topics.push(topic_meta);
+                    }
+                }
+            }
+        }
+    }
+
     Ok(response)
-}
-
-/// Parse topic list from request body
-fn parse_topic_list(body: &[u8], _api_version: i16) -> Vec<String> {
-    if body.is_empty() {
-        return Vec::new();
-    }
-
-    let mut cursor = Cursor::new(body);
-    let mut topics = Vec::new();
-
-    // Read array length
-    if cursor.remaining() < 4 {
-        return topics;
-    }
-    let count = cursor.get_i32();
-
-    if count <= 0 {
-        return topics; // All topics requested
-    }
-
-    for _ in 0..count {
-        if cursor.remaining() < 2 {
-            break;
-        }
-
-        let len = cursor.get_i16();
-        if len < 0 || cursor.remaining() < len as usize {
-            break;
-        }
-
-        let mut buf = vec![0u8; len as usize];
-        cursor.copy_to_slice(&mut buf);
-        topics.push(String::from_utf8_lossy(&buf).to_string());
-    }
-
-    topics
 }

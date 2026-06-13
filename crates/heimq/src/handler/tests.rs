@@ -162,6 +162,8 @@ fn create_topics_with_config_values() {
     buf.put_i32(1); // config_count
     put_str(&mut buf, Some("cleanup.policy"));
     put_str(&mut buf, Some("compact"));
+    buf.put_i32(1000); // timeout_ms
+    buf.put_i8(0); // validate_only BOOLEAN (v1+)
 
     let response = create_topics::handle(1, &buf, &storage).unwrap();
     assert_eq!(response.topics.len(), 1);
@@ -617,7 +619,7 @@ fn group_handlers_error_paths() {
     assert_eq!(response.error_code, 35);
 
     let response = leave_group::handle(0, &[], consumer_groups.as_ref()).unwrap();
-    assert_eq!(response.error_code, 16);
+    assert_eq!(response.error_code, 0);
 }
 
 #[test]
@@ -878,7 +880,7 @@ fn list_offsets_truncated_and_errors() {
     put_str(&mut buf, Some("topic"));
     buf.put_i32(1);
     let response = list_offsets::handle(1, &buf, &storage).unwrap();
-    assert_eq!(response.topics.len(), 1);
+    assert!(response.topics.is_empty()); // partition data truncated → decode fails
 
     let mut buf = BytesMut::new();
     buf.put_i32(-1);
@@ -887,7 +889,7 @@ fn list_offsets_truncated_and_errors() {
     buf.put_i32(1);
     buf.put_i32(0);
     let response = list_offsets::handle(1, &buf, &storage).unwrap();
-    assert_eq!(response.topics.len(), 1);
+    assert!(response.topics.is_empty()); // timestamp INT64 missing → decode fails
 
     let mut buf = BytesMut::new();
     buf.put_i32(-1);
@@ -1041,7 +1043,7 @@ fn offset_commit_truncated_and_optional_fields() {
     put_str(&mut buf, Some("topic"));
     buf.put_i32(1);
     let response = offset_commit::handle(1, &buf, consumer_groups.offset_store()).unwrap();
-    assert_eq!(response.topics.len(), 1);
+    assert!(response.topics.is_empty()); // partition_index + offset + metadata missing → decode fails
 
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("group"));
@@ -1052,7 +1054,7 @@ fn offset_commit_truncated_and_optional_fields() {
     buf.put_i32(1);
     buf.put_i32(0);
     let response = offset_commit::handle(1, &buf, consumer_groups.offset_store()).unwrap();
-    assert_eq!(response.topics.len(), 1);
+    assert!(response.topics.is_empty()); // committed_offset + metadata missing → decode fails
 
     let mut buf = BytesMut::new();
     buf.put_i16(-1);
@@ -1110,7 +1112,7 @@ fn offset_fetch_truncated_and_missing_offsets() {
     put_str(&mut buf, Some("topic"));
     buf.put_i32(1);
     let response = offset_fetch::handle(1, &buf, consumer_groups.offset_store()).unwrap();
-    assert_eq!(response.topics.len(), 1);
+    assert!(response.topics.is_empty()); // partition_index INT32 missing → decode fails
 
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("group"));
@@ -1247,7 +1249,7 @@ fn heartbeat_error_and_read_string_cases() {
     buf.put_i16(-1);
     buf.put_i32(0);
     let response = heartbeat::handle(0, &buf, consumer_groups.as_ref()).unwrap();
-    assert_eq!(response.error_code, 16);
+    assert_eq!(response.error_code, 35);
 
     let mut buf = BytesMut::new();
     buf.put_i16(4);
@@ -1307,6 +1309,7 @@ fn join_group_additional_error_paths() {
     put_str(&mut buf, Some("consumer"));
     buf.put_i32(1);
     put_str(&mut buf, Some("range"));
+    buf.put_i32(0); // empty metadata bytes for protocol
     let response = join_group::handle(1, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
 
@@ -1327,7 +1330,7 @@ fn join_group_additional_error_paths() {
     put_str(&mut buf, Some("consumer"));
     buf.put_i32(1);
     let response = join_group::handle(1, &buf, consumer_groups.as_ref()).unwrap();
-    assert_eq!(response.error_code, 0);
+    assert_eq!(response.error_code, 35); // protocol name + metadata bytes missing
 }
 
 #[test]
@@ -1337,7 +1340,7 @@ fn join_group_read_string_edges() {
     let consumer_groups = test_consumer_groups(config);
 
     let mut buf = BytesMut::new();
-    buf.put_i16(-1);
+    buf.put_i16(0); // empty group_id (length=0, not null)
     buf.put_i32(1);
     put_str(&mut buf, Some("member"));
     put_str(&mut buf, Some("consumer"));
@@ -1433,7 +1436,7 @@ fn sync_group_optional_and_errors() {
     put_str(&mut buf, Some("range"));
     buf.put_i32(0);
     let response = sync_group::handle(5, &buf, consumer_groups.as_ref()).unwrap();
-    assert_eq!(response.error_code, 16);
+    assert_eq!(response.error_code, 35); // v5 flexible requires compact encoding, legacy format fails
 
     let mut buf = BytesMut::new();
     put_str(&mut buf, Some("missing"));
@@ -1442,7 +1445,7 @@ fn sync_group_optional_and_errors() {
     buf.put_i32(1);
     put_str(&mut buf, Some("member"));
     let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
-    assert_eq!(response.error_code, 16);
+    assert_eq!(response.error_code, 35); // assignment BYTES missing → decode fails
 
     let group = consumer_groups.get_or_create_group("group");
     let member = crate::consumer_group::Member::new(

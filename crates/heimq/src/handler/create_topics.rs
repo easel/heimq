@@ -2,125 +2,51 @@
 
 use crate::error::Result;
 use crate::storage::LogBackend;
-use bytes::Buf;
+use bytes::Bytes;
+use kafka_protocol::messages::create_topics_request::CreateTopicsRequest;
 use kafka_protocol::messages::create_topics_response::CreatableTopicResult;
 use kafka_protocol::messages::{CreateTopicsResponse, TopicName};
-use kafka_protocol::protocol::StrBytes;
-use std::io::Cursor;
+use kafka_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::info;
 
-/// Handle CreateTopics request
 pub fn handle(
-    _api_version: i16,
+    api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
 ) -> Result<CreateTopicsResponse> {
+    let mut buf = Bytes::copy_from_slice(body);
+    let request = match CreateTopicsRequest::decode(&mut buf, api_version) {
+        Ok(r) => r,
+        Err(_) => return Ok(CreateTopicsResponse::default()),
+    };
+
     let mut response = CreateTopicsResponse::default();
-    let mut cursor = Cursor::new(body);
 
-    // topics array
-    if cursor.remaining() < 4 {
-        return Ok(response);
-    }
-    let topic_count = cursor.get_i32();
-
-    for _ in 0..topic_count {
-        // topic name
-        if cursor.remaining() < 2 {
-            break;
-        }
-        let name_len = cursor.get_i16();
-        if name_len < 0 || cursor.remaining() < name_len as usize {
-            break;
-        }
-        let mut name_buf = vec![0u8; name_len as usize];
-        cursor.copy_to_slice(&mut name_buf);
-        let topic_name = String::from_utf8_lossy(&name_buf).to_string();
-
-        // num_partitions (INT32)
-        if cursor.remaining() < 4 {
-            break;
-        }
-        let num_partitions = cursor.get_i32();
-
-        // replication_factor (INT16)
-        if cursor.remaining() < 2 {
-            break;
-        }
-        let _replication_factor = cursor.get_i16();
-
-        // assignments array - skip for simplicity
-        if cursor.remaining() < 4 {
-            break;
-        }
-        let assignment_count = cursor.get_i32();
-        for _ in 0..assignment_count {
-            if cursor.remaining() < 4 {
-                break;
-            }
-            let _partition_index = cursor.get_i32();
-            if cursor.remaining() < 4 {
-                break;
-            }
-            let broker_count = cursor.get_i32();
-            for _ in 0..broker_count {
-                if cursor.remaining() < 4 {
-                    break;
-                }
-                let _broker_id = cursor.get_i32();
-            }
-        }
-
-        // configs array - skip for simplicity
-        if cursor.remaining() < 4 {
-            break;
-        }
-        let config_count = cursor.get_i32();
-        for _ in 0..config_count {
-            // Skip config name
-            if cursor.remaining() < 2 {
-                break;
-            }
-            let name_len = cursor.get_i16();
-            if name_len > 0 && cursor.remaining() >= name_len as usize {
-                cursor.advance(name_len as usize);
-            }
-            // Skip config value
-            if cursor.remaining() < 2 {
-                break;
-            }
-            let value_len = cursor.get_i16();
-            let skip = value_len.max(0) as usize;
-            let available = cursor.remaining().min(skip);
-            cursor.advance(available);
-        }
+    for topic in &request.topics {
+        let topic_name = topic.name.0.to_string();
+        let partitions = if topic.num_partitions <= 0 {
+            storage.default_num_partitions()
+        } else {
+            topic.num_partitions
+        };
 
         let mut topic_result = CreatableTopicResult::default();
         topic_result.name = TopicName(StrBytes::from_string(topic_name.clone()));
 
-        // Use default partitions if -1
-        let partitions = if num_partitions <= 0 {
-            storage.default_num_partitions()
-        } else {
-            num_partitions
-        };
-
-        // Create the topic
         match storage.create_topic(&topic_name, partitions) {
             Ok(_) => {
                 info!(topic = %topic_name, partitions = partitions, "Created topic");
                 topic_result.error_code = 0;
                 topic_result.num_partitions = partitions;
-                topic_result.replication_factor = 1; // Single node
+                topic_result.replication_factor = 1;
             }
             Err(_) => {
-                // Topic already exists
                 topic_result.error_code = 36; // TOPIC_ALREADY_EXISTS
-                let topic = storage
+                let existing = storage
                     .topic(&topic_name)
                     .expect("topic exists after duplicate create");
-                topic_result.num_partitions = topic.num_partitions();
+                topic_result.num_partitions = existing.num_partitions();
                 topic_result.replication_factor = 1;
             }
         }
