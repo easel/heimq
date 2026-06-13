@@ -3,6 +3,7 @@
 use crate::error::{ErrorCode, Result};
 use crate::producer_state::{ProducerStateManager, SequenceCheck};
 use crate::storage::LogBackend;
+use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
 use heimq_broker::storage::RecordBatchView;
 use kafka_protocol::messages::produce_request::ProduceRequest;
@@ -18,6 +19,7 @@ pub fn handle(
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
     producer_state: &Arc<ProducerStateManager>,
+    transaction_manager: &Arc<TransactionManager>,
 ) -> Result<ProduceResponse> {
     debug!(api_version = api_version, body_len = body.len(), "Handling produce request");
 
@@ -34,7 +36,12 @@ pub fn handle(
     let mut response = ProduceResponse::default();
 
     let caps = storage.capabilities();
-    let transactional_attempted = request.transactional_id.is_some();
+    let txn_id: Option<String> = request
+        .transactional_id
+        .as_ref()
+        .map(|id| id.0.to_string())
+        .filter(|s| !s.is_empty());
+    let transactional_attempted = txn_id.is_some();
     let transactions_unsupported = transactional_attempted && !caps.transactions;
     let max_message_bytes = caps.max_message_bytes;
     let max_batch_bytes = caps.max_batch_bytes;
@@ -128,6 +135,18 @@ pub fn handle(
                                 count = count,
                                 "Produced records"
                             );
+                            // Track transactional produce for LSO calculation (US-004)
+                            if let Ok(view) = RecordBatchView::from_bytes(&records) {
+                                if view.producer_id() != -1 && view.is_transactional() {
+                                    transaction_manager.record_produce(
+                                        txn_id.as_deref(),
+                                        &topic_name,
+                                        partition,
+                                        base_offset,
+                                        view.producer_id(),
+                                    );
+                                }
+                            }
                             partition_response.base_offset = base_offset;
                             partition_response.error_code = 0;
                             partition_response.log_append_time_ms =

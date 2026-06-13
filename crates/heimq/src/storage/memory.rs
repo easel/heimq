@@ -32,6 +32,8 @@ impl MemoryLog {
             config,
             BackendCapabilities {
                 name: "in-memory",
+                transactions: true,
+                idempotent_producer: true,
                 ..BackendCapabilities::minimal()
             },
         )

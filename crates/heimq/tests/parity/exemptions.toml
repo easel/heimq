@@ -13,3 +13,11 @@ scope   = "workloads/transactions"
 reason  = "In-memory transactional state is not persisted; PRD explicitly allows loss on restart"
 prd_ref = "PRD non-goal #1"
 status  = "future"
+
+[[exemption]]
+id      = "txn-produce-offset-epoch-fence"
+field   = "record.offset"
+scope   = "transactional_produce_roundtrip"
+reason  = "Redpanda writes an internal epoch-fence record at offset 0 before user data, shifting all committed record offsets by +1. heimq does not write this internal record. Key/value content is identical."
+prd_ref = "PRD non-goal #1 (internal broker implementation details)"
+status  = "active"

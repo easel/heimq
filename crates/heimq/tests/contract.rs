@@ -821,3 +821,109 @@ fn contract_out_of_order_sequence_returns_error() {
         "out-of-order sequence must return error 45"
     );
 }
+
+// @covers US-004-AC1
+#[test]
+fn contract_init_producer_id_with_transactional_id() {
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+
+    let mut request = InitProducerIdRequest::default();
+    request.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("test-txn-id-1".to_string()),
+    ));
+    request.transaction_timeout_ms = 60000;
+
+    let response: InitProducerIdResponse = send_request(&server, 22, 0, &request);
+    assert_eq!(response.error_code, 0, "InitProducerId with transactional_id should succeed");
+    assert!(response.producer_id.0 >= 0, "producer_id must be non-negative");
+    assert_eq!(response.producer_epoch, 0, "initial epoch must be 0");
+
+    // Second call with same transactional_id should bump the epoch
+    let response2: InitProducerIdResponse = send_request(&server, 22, 0, &request);
+    assert_eq!(response2.error_code, 0, "Re-init with same transactional_id should succeed");
+    assert_eq!(
+        response.producer_id.0, response2.producer_id.0,
+        "same producer_id for same transactional_id"
+    );
+    assert_eq!(response2.producer_epoch, 1, "epoch should be bumped on re-init");
+}
+
+// @covers US-004-AC2 US-004-AC9
+#[test]
+fn contract_add_partitions_to_txn_basic() {
+    use kafka_protocol::messages::add_partitions_to_txn_request::{
+        AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
+    };
+    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-txn-partitions");
+    create_topic(&server, &topic, 1);
+
+    // Init transactional producer
+    let mut init_req = InitProducerIdRequest::default();
+    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-add-parts".to_string()),
+    ));
+    init_req.transaction_timeout_ms = 60000;
+    let init_resp: InitProducerIdResponse = send_request(&server, 22, 0, &init_req);
+    assert_eq!(init_resp.error_code, 0);
+    let producer_id = init_resp.producer_id;
+    let epoch = init_resp.producer_epoch;
+
+    // AddPartitionsToTxn
+    let mut add_topic = AddPartitionsToTxnTopic::default();
+    add_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    add_topic.partitions = vec![0];
+
+    let mut add_req = AddPartitionsToTxnRequest::default();
+    add_req.v3_and_below_transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-add-parts".to_string()));
+    add_req.v3_and_below_producer_id = producer_id;
+    add_req.v3_and_below_producer_epoch = epoch;
+    add_req.v3_and_below_topics = vec![add_topic];
+
+    let add_resp: AddPartitionsToTxnResponse = send_request(&server, 24, 0, &add_req);
+    assert_eq!(
+        add_resp.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code,
+        0,
+        "AddPartitionsToTxn should succeed"
+    );
+}
+
+// @covers US-004 EndTxn basic flow
+#[test]
+fn contract_end_txn_basic() {
+    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
+    use kafka_protocol::messages::end_txn_response::EndTxnResponse;
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+
+    let mut init_req = InitProducerIdRequest::default();
+    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-end-basic".to_string()),
+    ));
+    init_req.transaction_timeout_ms = 60000;
+    let init_resp: InitProducerIdResponse = send_request(&server, 22, 0, &init_req);
+    assert_eq!(init_resp.error_code, 0);
+
+    let mut end_req = EndTxnRequest::default();
+    end_req.transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-end-basic".to_string()));
+    end_req.producer_id = init_resp.producer_id;
+    end_req.producer_epoch = init_resp.producer_epoch;
+    end_req.committed = true;
+
+    let end_resp: EndTxnResponse = send_request(&server, 26, 0, &end_req);
+    assert_eq!(end_resp.error_code, 0, "EndTxn commit should succeed");
+}

@@ -3,6 +3,7 @@ use crate::consumer_group::{GroupState, Member};
 use crate::producer_state::ProducerStateManager;
 use crate::storage::SingleNodeClusterView;
 use crate::test_support::{encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage};
+use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
 use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
 use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
@@ -249,7 +250,7 @@ fn produce_empty_null_and_unknown_topic() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new()).unwrap();
+    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 0);
 
     let mut null_partition = PartitionProduceData::default();
@@ -264,7 +265,7 @@ fn produce_empty_null_and_unknown_topic() {
     null_request.topic_data = vec![null_topic];
 
     let body = encode_body(&null_request, 2);
-    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new()).unwrap();
+    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 87);
 
     let storage_no_auto = test_storage(false);
@@ -280,10 +281,10 @@ fn produce_empty_null_and_unknown_topic() {
     bad_request.topic_data = vec![bad_topic];
 
     let body = encode_body(&bad_request, 2);
-    let response = produce::handle(2, &body, &storage_no_auto, &ProducerStateManager::new()).unwrap();
+    let response = produce::handle(2, &body, &storage_no_auto, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 3);
 
-    let response = produce::handle(2, &[0, 1, 2], &storage, &ProducerStateManager::new()).unwrap();
+    let response = produce::handle(2, &[0, 1, 2], &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
     assert!(response.responses.is_empty());
 }
 
@@ -312,17 +313,17 @@ fn fetch_offsets_and_errors() {
     request.topics = vec![topic];
 
     let body = encode_body(&request, 3);
-    let response = fetch::handle(3, &body, &storage).unwrap();
+    let response = fetch::handle(3, &body, &storage, &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partitions[0].error_code, 0);
 
     request.topics[0].partitions[0].fetch_offset = 1;
     let body = encode_body(&request, 3);
-    let response = fetch::handle(3, &body, &storage).unwrap();
+    let response = fetch::handle(3, &body, &storage, &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partitions[0].error_code, 0);
 
     request.topics[0].partitions[0].fetch_offset = -1;
     let body = encode_body(&request, 3);
-    let response = fetch::handle(3, &body, &storage).unwrap();
+    let response = fetch::handle(3, &body, &storage, &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partitions[0].error_code, 1);
 
     let mut missing_topic = FetchTopic::default();
@@ -336,10 +337,10 @@ fn fetch_offsets_and_errors() {
     request_missing.topics = vec![missing_topic];
 
     let body = encode_body(&request_missing, 3);
-    let response = fetch::handle(3, &body, &storage).unwrap();
+    let response = fetch::handle(3, &body, &storage, &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partitions[0].error_code, 3);
 
-    let response = fetch::handle(3, &[], &storage).unwrap();
+    let response = fetch::handle(3, &[], &storage, &TransactionManager::new()).unwrap();
     assert!(response.responses.is_empty());
 }
 
@@ -771,9 +772,9 @@ fn delete_topics_truncated_inputs() {
 fn fetch_truncated_inputs() {
     let storage = test_storage(true);
     // All malformed / truncated inputs must not panic — they return empty responses.
-    let response = fetch::handle(3, &[], &storage).unwrap();
+    let response = fetch::handle(3, &[], &storage, &TransactionManager::new()).unwrap();
     assert!(response.responses.is_empty());
-    let response = fetch::handle(3, &[0xFF, 0x00], &storage).unwrap();
+    let response = fetch::handle(3, &[0xFF, 0x00], &storage, &TransactionManager::new()).unwrap();
     assert!(response.responses.is_empty());
 }
 
@@ -805,7 +806,7 @@ fn fetch_optional_fields_and_records() {
     req.topics = vec![ft];
 
     let body = encode_body(&req, 7);
-    let response = fetch::handle(7, &body, &storage).unwrap();
+    let response = fetch::handle(7, &body, &storage, &TransactionManager::new()).unwrap();
     assert!(response.responses[0].partitions[0].records.is_some());
 }
 
@@ -830,7 +831,7 @@ fn fetch_sets_log_start_offset() {
     buf.put_i64(0); // log_start_offset (v5+)
     buf.put_i32(1024); // partition_max_bytes
 
-    let response = fetch::handle(5, &buf, &storage).unwrap();
+    let response = fetch::handle(5, &buf, &storage, &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partitions[0].log_start_offset, 0);
 }
 
@@ -1156,7 +1157,7 @@ fn produce_oversize_batch_rejected_with_message_too_large() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new()).unwrap();
+    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
     assert_eq!(
         response.responses[0].partition_responses[0].error_code,
         10,
@@ -1178,7 +1179,7 @@ fn produce_oversize_batch_rejected_with_message_too_large() {
     tx_request.timeout_ms = 1000;
     tx_request.topic_data = vec![tx_topic];
     let body = encode_body(&tx_request, 3);
-    let response = produce::handle(3, &body, &storage, &ProducerStateManager::new()).unwrap();
+    let response = produce::handle(3, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
     assert_eq!(
         response.responses[0].partition_responses[0].error_code,
         48,
@@ -1207,7 +1208,7 @@ fn produce_appends_records() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new()).unwrap();
+    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 0);
 }
 

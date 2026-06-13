@@ -2,10 +2,11 @@
 
 use crate::error::{ErrorCode, Result};
 use crate::storage::LogBackend;
+use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
 use kafka_protocol::messages::fetch_request::FetchRequest;
-use kafka_protocol::messages::fetch_response::{FetchableTopicResponse, PartitionData};
-use kafka_protocol::messages::{FetchResponse, TopicName};
+use kafka_protocol::messages::fetch_response::{AbortedTransaction, FetchableTopicResponse, PartitionData};
+use kafka_protocol::messages::{FetchResponse, ProducerId, TopicName};
 use kafka_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::debug;
@@ -15,6 +16,7 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
+    transaction_manager: &Arc<TransactionManager>,
 ) -> Result<FetchResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match FetchRequest::decode(&mut buf, api_version) {
@@ -26,6 +28,8 @@ pub fn handle(
     };
 
     let max_bytes = request.max_bytes as usize;
+    // isolation_level: 0 = READ_UNCOMMITTED, 1 = READ_COMMITTED (available from v4)
+    let isolation_level = request.isolation_level;
     let mut response = FetchResponse::default();
 
     for topic in request.topics {
@@ -51,10 +55,34 @@ pub fn handle(
                         "Fetched records"
                     );
                     partition_data.error_code = 0;
-                    partition_data.high_watermark = high_watermark;
                     partition_data.log_start_offset = storage
                         .log_start_offset(&topic_name, partition)
                         .unwrap_or(-1);
+
+                    // For READ_COMMITTED (isolation_level=1), use LSO as high_watermark
+                    // and include aborted transaction list.
+                    if isolation_level == 1 {
+                        let lso = transaction_manager.get_lso(&topic_name, partition, high_watermark);
+                        partition_data.high_watermark = lso;
+                        partition_data.last_stable_offset = lso;
+                        let aborted = transaction_manager
+                            .get_aborted_transactions(&topic_name, partition, fetch_offset);
+                        if !aborted.is_empty() {
+                            partition_data.aborted_transactions = Some(
+                                aborted
+                                    .into_iter()
+                                    .map(|(pid, first_offset)| {
+                                        AbortedTransaction::default()
+                                            .with_producer_id(ProducerId(pid))
+                                            .with_first_offset(first_offset)
+                                    })
+                                    .collect(),
+                            );
+                        }
+                    } else {
+                        partition_data.high_watermark = high_watermark;
+                    }
+
                     if !records.is_empty() {
                         partition_data.records = Some(Bytes::from(records).into());
                     }

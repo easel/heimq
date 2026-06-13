@@ -9,6 +9,7 @@ use crate::storage::{
     dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store, ClusterView,
     LogBackend, SingleNodeClusterView,
 };
+use crate::transaction_state::TransactionManager;
 use bytes::{Buf, Bytes, BytesMut};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -29,6 +30,8 @@ pub struct Server {
     /// Shared idempotent producer state; one instance per server, cloned
     /// into each per-connection Router so producer IDs are globally unique.
     producer_state: Arc<ProducerStateManager>,
+    /// Shared transaction manager; one instance per server for EOS semantics.
+    transaction_manager: Arc<TransactionManager>,
 }
 
 impl Server {
@@ -82,6 +85,7 @@ impl Server {
             cluster_view,
             advertised_apis,
             producer_state: ProducerStateManager::new(),
+            transaction_manager: TransactionManager::new(),
         })
     }
 
@@ -135,7 +139,8 @@ impl Server {
                     self.cluster_view.clone(),
                     self.advertised_apis.clone(),
                 )
-                .with_producer_state(self.producer_state.clone());
+                .with_producer_state(self.producer_state.clone())
+                .with_transaction_manager(self.transaction_manager.clone());
 
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(Box::new(socket), router).await {

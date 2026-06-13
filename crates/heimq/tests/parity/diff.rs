@@ -135,7 +135,7 @@ fn maybe_diff<T>(
     if h == r {
         return;
     }
-    let exemption = exemptions.find(field).map(str::to_string);
+    let exemption = exemptions.find(field, workload).map(str::to_string);
     out.push(DiffRecord {
         workload: workload.to_string(),
         step,
@@ -159,7 +159,7 @@ fn maybe_diff_bytes(
     if h == r {
         return;
     }
-    let exemption = exemptions.find(field).map(str::to_string);
+    let exemption = exemptions.find(field, workload).map(str::to_string);
     let to_val = |b: Option<&[u8]>| match b {
         None => serde_json::Value::Null,
         Some(b) => serde_json::Value::String(String::from_utf8_lossy(b).into_owned()),

@@ -6,6 +6,7 @@ use crate::handler::*;
 use crate::producer_state::ProducerStateManager;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend};
+use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
 use kafka_protocol::protocol::Encodable;
 use std::sync::Arc;
@@ -20,6 +21,7 @@ pub struct Router {
     /// computed at startup from each backend's capability descriptor.
     advertised_apis: Arc<Vec<(i16, i16, i16)>>,
     producer_state: Arc<ProducerStateManager>,
+    transaction_manager: Arc<TransactionManager>,
 }
 
 impl Router {
@@ -48,11 +50,17 @@ impl Router {
             cluster_view,
             advertised_apis,
             producer_state: ProducerStateManager::new(),
+            transaction_manager: TransactionManager::new(),
         }
     }
 
     pub fn with_producer_state(mut self, producer_state: Arc<ProducerStateManager>) -> Self {
         self.producer_state = producer_state;
+        self
+    }
+
+    pub fn with_transaction_manager(mut self, transaction_manager: Arc<TransactionManager>) -> Self {
+        self.transaction_manager = transaction_manager;
         self
     }
 
@@ -83,6 +91,11 @@ impl Router {
             19 => self.handle_create_topics(&header, &body),
             20 => self.handle_delete_topics(&header, &body),
             22 => self.handle_init_producer_id(&header, &body),
+            24 => self.handle_add_partitions_to_txn(&header, &body),
+            25 => self.handle_add_offsets_to_txn(&header, &body),
+            26 => self.handle_end_txn(&header, &body),
+            27 => self.handle_write_txn_markers(&header, &body),
+            28 => self.handle_txn_offset_commit(&header, &body),
             _ => {
                 warn!(api_key = header.api_key, "Unsupported API");
                 self.handle_unsupported(&header)
@@ -126,24 +139,68 @@ impl Router {
     }
 
     fn handle_init_producer_id(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
         self.handle_and_encode(
             header,
-            Box::new(|| init_producer_id::handle(header.api_version, body)),
+            Box::new(|| init_producer_id::handle(header.api_version, body, &tm)),
         )
     }
 
     fn handle_produce(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         let ps = self.producer_state.clone();
+        let tm = self.transaction_manager.clone();
         self.handle_and_encode(
             header,
-            Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps)),
+            Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps, &tm)),
         )
     }
 
     fn handle_fetch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
         self.handle_and_encode(
             header,
-            Box::new(|| fetch::handle(header.api_version, body, &self.storage)),
+            Box::new(|| fetch::handle(header.api_version, body, &self.storage, &tm)),
+        )
+    }
+
+    fn handle_add_partitions_to_txn(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
+        self.handle_and_encode(
+            header,
+            Box::new(|| add_partitions_to_txn::handle(header.api_version, body, &tm)),
+        )
+    }
+
+    fn handle_add_offsets_to_txn(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
+        self.handle_and_encode(
+            header,
+            Box::new(|| add_offsets_to_txn::handle(header.api_version, body, &tm)),
+        )
+    }
+
+    fn handle_end_txn(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
+        let store = self.consumer_groups.offset_store();
+        self.handle_and_encode(
+            header,
+            Box::new(|| end_txn::handle(header.api_version, body, &self.storage, &store, &tm)),
+        )
+    }
+
+    fn handle_write_txn_markers(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
+        self.handle_and_encode(
+            header,
+            Box::new(|| write_txn_markers::handle(header.api_version, body, &self.storage, &tm)),
+        )
+    }
+
+    fn handle_txn_offset_commit(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
+        self.handle_and_encode(
+            header,
+            Box::new(|| txn_offset_commit::handle(header.api_version, body, &tm)),
         )
     }
 

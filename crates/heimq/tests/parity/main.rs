@@ -66,7 +66,7 @@ async fn run() -> Result<()> {
     }
 
     if any_fail {
-        std::process::exit(1);
+        anyhow::bail!("one or more parity workloads had unmatched diffs");
     }
     Ok(())
 }

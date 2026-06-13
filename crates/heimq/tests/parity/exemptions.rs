@@ -23,11 +23,15 @@ pub struct Exemptions {
 }
 
 impl Exemptions {
-    /// Find an active exemption by exact field name. Returns the exemption id.
-    pub fn find(&self, field: &str) -> Option<&str> {
+    /// Find an active exemption by field and workload. Scope "all" matches any workload.
+    pub fn find(&self, field: &str, workload: &str) -> Option<&str> {
         self.entries
             .iter()
-            .find(|e| e.field == field && e.status == "active")
+            .find(|e| {
+                e.field == field
+                    && e.status == "active"
+                    && (e.scope == "all" || e.scope == workload)
+            })
             .map(|e| e.id.as_str())
     }
 }

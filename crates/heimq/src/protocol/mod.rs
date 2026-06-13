@@ -40,6 +40,11 @@ pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     (19, 0, 4),  // CreateTopics (v5+ flexible)
     (20, 0, 3),  // DeleteTopics (v4+ flexible)
     (22, 0, 3),  // InitProducerId (v2+ flexible; idempotent producers — US-003)
+    (24, 0, 2),  // AddPartitionsToTxn (v3+ flexible)
+    (25, 0, 2),  // AddOffsetsToTxn (v3+ flexible)
+    (26, 0, 2),  // EndTxn (v3+ flexible)
+    (27, 0, 0),  // WriteTxnMarkers (v1+ flexible)
+    (28, 0, 2),  // TxnOffsetCommit (v3+ flexible)
 ];
 
 /// Check if an API version is supported
@@ -84,8 +89,8 @@ fn capability_gate(api_key: i16) -> CapabilityGate {
         8 | 9 => CapabilityGate::OffsetStore,
         // Group-coordinator APIs.
         10 | 11 | 12 | 13 | 14 => CapabilityGate::GroupCoordinator,
-        // InitProducerId and ApiVersions are always available.
-        22 | _ => CapabilityGate::Always,
+        // Transaction APIs and InitProducerId and ApiVersions are always available.
+        22 | 24 | 25 | 26 | 27 | 28 | _ => CapabilityGate::Always,
     }
 }
 

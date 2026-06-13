@@ -10,6 +10,7 @@ pub mod producer_state;
 pub mod protocol;
 pub mod server;
 pub mod storage;
+pub mod transaction_state;
 
 // Test support module - available during tests and when test-support feature is enabled
 #[cfg(any(test, feature = "test-support"))]
