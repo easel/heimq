@@ -65,6 +65,77 @@ impl Router {
     }
 
     /// Route a request and return the response
+    /// Async variant of [`route`] that honours `max_wait_ms` on Fetch (API 1).
+    ///
+    /// For all other API keys this behaves identically to [`route`].
+    pub async fn route_async(&self, data: &[u8]) -> Result<Bytes> {
+        // Fast path: non-Fetch requests are always synchronous.
+        if let Ok((ref header, _)) = decode_request(data) {
+            if header.api_key == 1 {
+                return self.handle_fetch_long_poll(data).await;
+            }
+        }
+        self.route(data)
+    }
+
+    /// Long-poll implementation for Fetch (API 1).
+    ///
+    /// Decodes `max_wait_ms` from the request. If the first fetch attempt
+    /// returns no records and `max_wait_ms > 0`, sleeps for up to that
+    /// duration (capped at 500 ms) then retries once before responding.
+    async fn handle_fetch_long_poll(&self, data: &[u8]) -> Result<Bytes> {
+        use bytes::Bytes as RawBytes;
+        use kafka_protocol::messages::fetch_request::FetchRequest;
+        use kafka_protocol::protocol::Decodable;
+
+        // Decode max_wait_ms from the raw request body (skip 8-byte header + 2-byte client_id_len).
+        let max_wait_ms: u32 = if data.len() >= 10 {
+            let (header, body) = match decode_request(data) {
+                Ok(r) => r,
+                Err(_) => return self.route(data),
+            };
+            if let Ok(req) = FetchRequest::decode(&mut RawBytes::copy_from_slice(&body), header.api_version) {
+                req.max_wait_ms.max(0) as u32
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
+        let first = self.route(data)?;
+        if max_wait_ms == 0 || self.fetch_response_has_records(&first) {
+            return Ok(first);
+        }
+
+        // No records yet and the client is willing to wait — sleep then retry.
+        let wait = std::time::Duration::from_millis(max_wait_ms.min(500) as u64);
+        tokio::time::sleep(wait).await;
+        self.route(data)
+    }
+
+    /// Returns `true` if any partition in the encoded Fetch response contains records.
+    fn fetch_response_has_records(&self, encoded: &Bytes) -> bool {
+        use kafka_protocol::messages::FetchResponse;
+        use kafka_protocol::protocol::Decodable;
+        // The first 4 bytes are the length prefix, next 4 are correlation_id.
+        if encoded.len() < 8 {
+            return false;
+        }
+        // Try v4 (the most common version we advertise).
+        let body = encoded.slice(8..);
+        for version in [4i16, 3, 2, 1, 0] {
+            if let Ok(resp) = FetchResponse::decode(&mut body.clone(), version) {
+                return resp.responses.iter().any(|t| {
+                    t.partitions.iter().any(|p| {
+                        p.records.as_ref().map_or(false, |r| !r.is_empty())
+                    })
+                });
+            }
+        }
+        false
+    }
+
     pub fn route(&self, data: &[u8]) -> Result<Bytes> {
         let (header, body) = decode_request(data)?;
 

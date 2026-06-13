@@ -350,7 +350,7 @@ async fn run_writer(
 ) -> Result<()> {
     let mut consecutive_errors: usize = 0;
     while let Some(frame) = rx.recv().await {
-        match router.route(&frame) {
+        match router.route_async(&frame).await {
             Ok(response) => {
                 stream.write_all(&response).await?;
                 consecutive_errors = 0;

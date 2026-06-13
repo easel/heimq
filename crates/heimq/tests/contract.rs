@@ -1567,3 +1567,55 @@ fn contract_session_timeout_evicts_member() {
         "heartbeat after session timeout must fail (member should have been evicted)"
     );
 }
+
+/// Verify that Fetch with max_wait_ms > 0 on an empty partition actually
+/// waits at least half that duration before returning an empty response.
+#[test]
+fn contract_fetch_long_poll_waits_on_empty_partition() {
+    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+    use kafka_protocol::messages::fetch_response::FetchResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-long-poll");
+
+    // Create a topic so the partition exists.
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // Build a Fetch request for offset 0 with 300 ms max_wait_ms.
+    let mut fetch_part = FetchPartition::default();
+    fetch_part.partition = 0;
+    fetch_part.fetch_offset = 0;
+    fetch_part.partition_max_bytes = 1024 * 1024;
+
+    let mut fetch_topic_req = FetchTopic::default();
+    fetch_topic_req.topic = TopicName(StrBytes::from_string(topic.clone()));
+    fetch_topic_req.partitions = vec![fetch_part];
+
+    let mut fetch_req = FetchRequest::default();
+    fetch_req.replica_id = BrokerId(-1);
+    fetch_req.max_wait_ms = 300;
+    fetch_req.min_bytes = 1;
+    fetch_req.max_bytes = 1024 * 1024;
+    fetch_req.isolation_level = 0;
+    fetch_req.topics = vec![fetch_topic_req];
+
+    let start = std::time::Instant::now();
+    let fetch_resp: FetchResponse = send_request(&server, 1, 4, &fetch_req);
+    let elapsed = start.elapsed();
+
+    assert_eq!(fetch_resp.responses[0].partitions[0].error_code, 0);
+    // Records should be absent (partition is empty).
+    let has_records = fetch_resp.responses[0].partitions[0]
+        .records
+        .as_ref()
+        .map_or(false, |r| !r.is_empty());
+    assert!(!has_records, "expected no records on empty partition");
+
+    // Server should have waited at least 150 ms (half of max_wait_ms).
+    assert!(
+        elapsed >= std::time::Duration::from_millis(150),
+        "long-poll should wait at least 150 ms; elapsed = {:?}",
+        elapsed
+    );
+}
