@@ -119,7 +119,25 @@ impl Router {
 
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
-            if self.storage_has_data(&topics) || tokio::time::Instant::now() >= deadline {
+            let now = tokio::time::Instant::now();
+            // Check data BEFORE deadline. When the sleep overshoots the deadline
+            // and data arrived in that window, coalesce instead of returning a
+            // single-message partial batch (which rdkafka drops after seek_to_end).
+            if self.storage_has_data(&topics) {
+                // Adaptive coalesce: wait until HW stabilises across a 50 ms
+                // interval or 200 ms has elapsed, then return the full batch.
+                let mut prev = self.topic_hws(&topics);
+                for _ in 0..4 {
+                    tokio::time::sleep(std::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
+                    let curr = self.topic_hws(&topics);
+                    if curr == prev {
+                        break;
+                    }
+                    prev = curr;
+                }
+                return self.route(data);
+            }
+            if now >= deadline {
                 return self.route(data);
             }
         }
@@ -134,6 +152,16 @@ impl Router {
                 .map(|hw| hw > *fetch_offset)
                 .unwrap_or(false)
         })
+    }
+
+    /// Returns current high watermarks for each (topic, partition) tuple.
+    fn topic_hws(&self, topics: &[(String, i32, i64)]) -> Vec<i64> {
+        topics
+            .iter()
+            .map(|(topic, partition, _)| {
+                self.storage.high_watermark(topic, *partition).unwrap_or(-1)
+            })
+            .collect()
     }
 
     pub fn route(&self, data: &[u8]) -> Result<Bytes> {

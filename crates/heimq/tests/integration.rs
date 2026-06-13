@@ -959,8 +959,15 @@ async fn test_rdkafka_seek_to_end() {
         }
     }
 
-    // Produce new messages after the seek; consumer must see only these.
-    let mut new_payloads: Vec<String> = Vec::new();
+    // rdkafka discards the first Fetch response after seek_to_end (uses it
+    // internally to confirm the seek position). We must ensure that first
+    // response is empty before produces start; otherwise rdkafka advances
+    // its position past the messages and they are never delivered.
+    // The server caps long-polls at 500ms, so sleeping 200ms here gives the
+    // original seek Fetch time to expire and return empty with HW==seek_offset.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Produce 5 messages after the seek.
     for i in 0..5 {
         let payload = format!("after-seek-{}", i);
         let record = FutureRecord::to(&topic).payload(&payload).key("key");
@@ -968,37 +975,27 @@ async fn test_rdkafka_seek_to_end() {
             .send(record, Duration::from_secs(5))
             .await
             .expect("Failed to produce post-seek");
-        new_payloads.push(payload);
     }
 
+    // Collect all 5 post-seek messages.
     let mut got: Vec<String> = Vec::new();
     let start = std::time::Instant::now();
-    while got.len() < new_payloads.len() && start.elapsed() < timeout {
-        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(100)) {
-            let payload = msg
-                .payload()
-                .map(|p| String::from_utf8_lossy(p).to_string())
-                .expect("message should have payload");
-            assert!(
-                payload.starts_with("after-seek-"),
-                "Should not receive pre-seek message: {}",
-                payload
-            );
-            // All post-seek offsets must be >= 10 (the pre-seek high watermark).
-            assert!(
-                msg.offset() >= 10,
-                "Post-seek offset must be >= 10, got {}",
-                msg.offset()
-            );
-            got.push(payload);
+    while got.len() < 5 && start.elapsed() < timeout {
+        match consumer.poll(Duration::from_millis(100)) {
+            Some(Ok(msg)) => {
+                let p = msg
+                    .payload()
+                    .map(|b| String::from_utf8_lossy(b).to_string())
+                    .expect("payload");
+                assert!(p.starts_with("after-seek-"), "unexpected payload: {}", p);
+                assert!(msg.offset() >= 10, "offset {} < 10", msg.offset());
+                got.push(p);
+            }
+            Some(Err(e)) => eprintln!("[seek-to-end] consumer error: {:?}", e),
+            None => {}
         }
     }
-    assert_eq!(
-        got.len(),
-        new_payloads.len(),
-        "Should receive exactly the {} post-seek messages",
-        new_payloads.len()
-    );
+    assert_eq!(got.len(), 5, "Should receive exactly the 5 post-seek messages");
 }
 
 #[tokio::test]
