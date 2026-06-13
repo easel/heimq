@@ -212,6 +212,12 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	if err := check("transactional-consume-uncommitted", func() error {
+		return transactionalConsumeUncommitted(brokers, txnTopic)
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -992,6 +998,53 @@ func transactionalProduce(brokers []string, topic string, baseCfg *sarama.Config
 		return fmt.Errorf("abort txn: %w", err)
 	}
 
+	return nil
+}
+
+// transactionalConsumeUncommitted reads txnTopic with read_uncommitted isolation
+// and verifies that BOTH committed (tkey-*) and aborted (akey-*) records appear.
+func transactionalConsumeUncommitted(brokers []string, topic string) error {
+	readCfg := sarama.NewConfig()
+	readCfg.Version = sarama.V2_6_0_0
+	readCfg.Consumer.Offsets.Initial = sarama.OffsetOldest
+	readCfg.Consumer.IsolationLevel = sarama.ReadUncommitted
+
+	consumer, err := sarama.NewConsumer(brokers, readCfg)
+	if err != nil {
+		return fmt.Errorf("new consumer: %w", err)
+	}
+	defer consumer.Close()
+
+	pc, err := consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
+	if err != nil {
+		return fmt.Errorf("consume partition: %w", err)
+	}
+	defer pc.Close()
+
+	got := make(map[string]string)
+	timeout := time.After(30 * time.Second)
+	// Expect 5 records: 3 committed (tkey-0..2) + 2 aborted (akey-0..1).
+	for len(got) < 5 {
+		select {
+		case msg := <-pc.Messages():
+			got[string(msg.Key)] = string(msg.Value)
+		case err := <-pc.Errors():
+			return fmt.Errorf("partition error: %w", err.Err)
+		case <-timeout:
+			return fmt.Errorf("timeout: read_uncommitted consumed %d/5 records; got: %v", len(got), got)
+		}
+	}
+
+	for i := 0; i < 3; i++ {
+		if _, ok := got[fmt.Sprintf("tkey-%d", i)]; !ok {
+			return fmt.Errorf("missing committed record tkey-%d", i)
+		}
+	}
+	for i := 0; i < 2; i++ {
+		if _, ok := got[fmt.Sprintf("akey-%d", i)]; !ok {
+			return fmt.Errorf("read_uncommitted missing aborted record akey-%d", i)
+		}
+	}
 	return nil
 }
 
