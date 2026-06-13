@@ -730,3 +730,94 @@ fn contract_consumer_group_lifecycle() {
     let leave_response: LeaveGroupResponse = send_request(&server, 13, 1, &leave_request);
     assert_eq!(leave_response.error_code, 0, "LeaveGroup should succeed");
 }
+
+fn new_idempotent_record(offset: i64, producer_id: i64, producer_epoch: i16) -> Record {
+    Record {
+        transactional: false,
+        control: false,
+        partition_leader_epoch: 0,
+        producer_id,
+        producer_epoch,
+        timestamp_type: TimestampType::Creation,
+        timestamp: offset,
+        sequence: offset as i32,
+        offset,
+        key: Some(format!("key-{offset}").into()),
+        value: Some(format!("val-{offset}").into()),
+        headers: Default::default(),
+    }
+}
+
+// @covers US-003-AC1
+#[test]
+fn contract_init_producer_id_returns_valid_id() {
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+
+    let server = TestServer::start();
+    let request = InitProducerIdRequest::default();
+    let response: InitProducerIdResponse = send_request(&server, 22, 0, &request);
+
+    assert_eq!(response.error_code, 0, "InitProducerId should succeed");
+    assert!(response.producer_id.0 >= 0, "producer_id must be non-negative");
+    assert_eq!(response.producer_epoch, 0, "initial epoch must be 0");
+
+    // Second call returns a different producer_id.
+    let response2: InitProducerIdResponse = send_request(&server, 22, 0, &request);
+    assert_eq!(response2.error_code, 0);
+    assert_ne!(
+        response.producer_id.0, response2.producer_id.0,
+        "each InitProducerId call must return a unique producer_id"
+    );
+}
+
+// @covers US-003-AC4
+#[test]
+fn contract_out_of_order_sequence_returns_error() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-idempotent-ooo");
+
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+
+    // Get a producer ID.
+    let pid_resp: InitProducerIdResponse =
+        send_request(&server, 22, 0, &InitProducerIdRequest::default());
+    assert_eq!(pid_resp.error_code, 0);
+    let producer_id = pid_resp.producer_id.0;
+
+    // First batch: base_sequence=0 (should succeed).
+    let batch0 = {
+        let mut buf = BytesMut::new();
+        RecordBatchEncoder::encode(
+            &mut buf,
+            &[new_idempotent_record(0, producer_id, 0)],
+            &RecordEncodeOptions { version: 2, compression: Compression::None },
+        )
+        .expect("encode batch 0");
+        buf.freeze()
+    };
+    let resp0 = produce_batch(&server, &topic, batch0);
+    assert_eq!(
+        resp0.responses[0].partition_responses[0].error_code, 0,
+        "first idempotent batch should succeed"
+    );
+
+    // Second batch with base_sequence=5 (skips 1..4 → out of order).
+    let batch_ooo = {
+        let mut buf = BytesMut::new();
+        RecordBatchEncoder::encode(
+            &mut buf,
+            &[new_idempotent_record(5, producer_id, 0)],
+            &RecordEncodeOptions { version: 2, compression: Compression::None },
+        )
+        .expect("encode batch ooo");
+        buf.freeze()
+    };
+    let resp_ooo = produce_batch(&server, &topic, batch_ooo);
+    assert_eq!(
+        resp_ooo.responses[0].partition_responses[0].error_code,
+        45, // OUT_OF_ORDER_SEQUENCE_NUMBER
+        "out-of-order sequence must return error 45"
+    );
+}

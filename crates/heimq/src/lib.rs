@@ -6,6 +6,7 @@ pub mod config;
 pub mod consumer_group;
 pub mod error;
 pub mod handler;
+pub mod producer_state;
 pub mod protocol;
 pub mod server;
 pub mod storage;

@@ -164,6 +164,12 @@ impl<'a> RecordBatchView<'a> {
         self.record_count
     }
 
+    /// The base sequence number of this batch (first record's sequence).
+    /// Returns -1 for non-idempotent batches (producer_id == -1).
+    pub fn base_sequence(&self) -> i32 {
+        self.records.first().map(|r| r.sequence).unwrap_or(-1)
+    }
+
     /// Iterate records as borrowed `RecordView`s.
     pub fn records(&self) -> impl Iterator<Item = RecordView<'_>> + '_ {
         let base_offset = self.base_offset;

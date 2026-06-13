@@ -1,5 +1,6 @@
 use super::*;
 use crate::consumer_group::{GroupState, Member};
+use crate::producer_state::ProducerStateManager;
 use crate::storage::SingleNodeClusterView;
 use crate::test_support::{encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage};
 use bytes::{BufMut, Bytes, BytesMut};
@@ -248,7 +249,7 @@ fn produce_empty_null_and_unknown_topic() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage).unwrap();
+    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new()).unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 0);
 
     let mut null_partition = PartitionProduceData::default();
@@ -263,7 +264,7 @@ fn produce_empty_null_and_unknown_topic() {
     null_request.topic_data = vec![null_topic];
 
     let body = encode_body(&null_request, 2);
-    let response = produce::handle(2, &body, &storage).unwrap();
+    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new()).unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 87);
 
     let storage_no_auto = test_storage(false);
@@ -279,10 +280,10 @@ fn produce_empty_null_and_unknown_topic() {
     bad_request.topic_data = vec![bad_topic];
 
     let body = encode_body(&bad_request, 2);
-    let response = produce::handle(2, &body, &storage_no_auto).unwrap();
+    let response = produce::handle(2, &body, &storage_no_auto, &ProducerStateManager::new()).unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 3);
 
-    let response = produce::handle(2, &[0, 1, 2], &storage).unwrap();
+    let response = produce::handle(2, &[0, 1, 2], &storage, &ProducerStateManager::new()).unwrap();
     assert!(response.responses.is_empty());
 }
 
@@ -1155,7 +1156,7 @@ fn produce_oversize_batch_rejected_with_message_too_large() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage).unwrap();
+    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new()).unwrap();
     assert_eq!(
         response.responses[0].partition_responses[0].error_code,
         10,
@@ -1177,7 +1178,7 @@ fn produce_oversize_batch_rejected_with_message_too_large() {
     tx_request.timeout_ms = 1000;
     tx_request.topic_data = vec![tx_topic];
     let body = encode_body(&tx_request, 3);
-    let response = produce::handle(3, &body, &storage).unwrap();
+    let response = produce::handle(3, &body, &storage, &ProducerStateManager::new()).unwrap();
     assert_eq!(
         response.responses[0].partition_responses[0].error_code,
         48,
@@ -1206,7 +1207,7 @@ fn produce_appends_records() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage).unwrap();
+    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new()).unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 0);
 }
 

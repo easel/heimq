@@ -1,8 +1,10 @@
 //! Produce request handler (API Key 0)
 
 use crate::error::{ErrorCode, Result};
+use crate::producer_state::{ProducerStateManager, SequenceCheck};
 use crate::storage::LogBackend;
 use bytes::Bytes;
+use heimq_broker::storage::RecordBatchView;
 use kafka_protocol::messages::produce_request::ProduceRequest;
 use kafka_protocol::messages::produce_response::{PartitionProduceResponse, TopicProduceResponse};
 use kafka_protocol::messages::{ProduceResponse, TopicName};
@@ -15,6 +17,7 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
+    producer_state: &Arc<ProducerStateManager>,
 ) -> Result<ProduceResponse> {
     debug!(api_version = api_version, body_len = body.len(), "Handling produce request");
 
@@ -72,6 +75,49 @@ pub fn handle(
                         topic_response.partition_responses.push(partition_response);
                         continue;
                     }
+
+                    // Idempotent sequence validation (US-003-AC2, AC3, AC4).
+                    // Only fires when producer_id != -1 (idempotent producer).
+                    if let Ok(view) = RecordBatchView::from_bytes(&records) {
+                        if view.producer_id() != -1 {
+                            let rc = view.record_count() as i32;
+                            match producer_state.validate(
+                                view.producer_id(),
+                                view.producer_epoch(),
+                                &topic_name,
+                                partition,
+                                view.base_sequence(),
+                                rc,
+                            ) {
+                                SequenceCheck::Accept => {}
+                                SequenceCheck::Duplicate => {
+                                    debug!(
+                                        topic = %topic_name, partition,
+                                        producer_id = view.producer_id(),
+                                        base_seq = view.base_sequence(),
+                                        "Duplicate sequence"
+                                    );
+                                    partition_response.error_code = 46; // DUPLICATE_SEQUENCE_NUMBER
+                                    partition_response.base_offset = -1;
+                                    topic_response.partition_responses.push(partition_response);
+                                    continue;
+                                }
+                                SequenceCheck::OutOfOrder => {
+                                    warn!(
+                                        topic = %topic_name, partition,
+                                        producer_id = view.producer_id(),
+                                        base_seq = view.base_sequence(),
+                                        "Out-of-order sequence"
+                                    );
+                                    partition_response.error_code = 45; // OUT_OF_ORDER_SEQUENCE_NUMBER
+                                    partition_response.base_offset = -1;
+                                    topic_response.partition_responses.push(partition_response);
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
                     // Append to storage
                     match storage.append(&topic_name, partition, &records) {
                         Ok((base_offset, count)) => {

@@ -3,6 +3,7 @@
 use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::handler::*;
+use crate::producer_state::ProducerStateManager;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend};
 use bytes::{BufMut, Bytes, BytesMut};
@@ -18,6 +19,7 @@ pub struct Router {
     /// Effective set of `(api_key, min, max)` advertised by ApiVersions,
     /// computed at startup from each backend's capability descriptor.
     advertised_apis: Arc<Vec<(i16, i16, i16)>>,
+    producer_state: Arc<ProducerStateManager>,
 }
 
 impl Router {
@@ -45,7 +47,13 @@ impl Router {
             consumer_groups,
             cluster_view,
             advertised_apis,
+            producer_state: ProducerStateManager::new(),
         }
+    }
+
+    pub fn with_producer_state(mut self, producer_state: Arc<ProducerStateManager>) -> Self {
+        self.producer_state = producer_state;
+        self
     }
 
     /// Route a request and return the response
@@ -74,6 +82,7 @@ impl Router {
             18 => self.handle_api_versions(&header, &body),
             19 => self.handle_create_topics(&header, &body),
             20 => self.handle_delete_topics(&header, &body),
+            22 => self.handle_init_producer_id(&header, &body),
             _ => {
                 warn!(api_key = header.api_key, "Unsupported API");
                 self.handle_unsupported(&header)
@@ -116,10 +125,18 @@ impl Router {
         )
     }
 
-    fn handle_produce(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+    fn handle_init_producer_id(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| produce::handle(header.api_version, body, &self.storage)),
+            Box::new(|| init_producer_id::handle(header.api_version, body)),
+        )
+    }
+
+    fn handle_produce(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ps = self.producer_state.clone();
+        self.handle_and_encode(
+            header,
+            Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps)),
         )
     }
 

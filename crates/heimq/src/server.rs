@@ -3,6 +3,7 @@
 use crate::config::Config;
 use crate::consumer_group::{ConsumerGroupManager, GroupCoordinatorBackend};
 use crate::error::Result;
+use crate::producer_state::ProducerStateManager;
 use crate::protocol::{compute_supported_apis, Router};
 use crate::storage::{
     dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store, ClusterView,
@@ -25,6 +26,9 @@ pub struct Server {
     /// startup by intersecting static protocol support with each backend's
     /// capability descriptor.
     advertised_apis: Arc<Vec<(i16, i16, i16)>>,
+    /// Shared idempotent producer state; one instance per server, cloned
+    /// into each per-connection Router so producer IDs are globally unique.
+    producer_state: Arc<ProducerStateManager>,
 }
 
 impl Server {
@@ -77,6 +81,7 @@ impl Server {
             consumer_groups,
             cluster_view,
             advertised_apis,
+            producer_state: ProducerStateManager::new(),
         })
     }
 
@@ -129,7 +134,8 @@ impl Server {
                     self.consumer_groups.clone(),
                     self.cluster_view.clone(),
                     self.advertised_apis.clone(),
-                );
+                )
+                .with_producer_state(self.producer_state.clone());
 
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(Box::new(socket), router).await {

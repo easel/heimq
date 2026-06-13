@@ -6,6 +6,7 @@ pub mod delete_topics;
 pub mod fetch;
 pub mod find_coordinator;
 pub mod heartbeat;
+pub mod init_producer_id;
 pub mod join_group;
 pub mod leave_group;
 pub mod list_offsets;

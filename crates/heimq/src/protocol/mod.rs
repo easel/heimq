@@ -39,6 +39,7 @@ pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     (18, 0, 2),  // ApiVersions (v3+ flexible for request only; keep v2 to avoid edge cases)
     (19, 0, 4),  // CreateTopics (v5+ flexible)
     (20, 0, 3),  // DeleteTopics (v4+ flexible)
+    (22, 0, 3),  // InitProducerId (v2+ flexible; idempotent producers — US-003)
 ];
 
 /// Check if an API version is supported
@@ -83,8 +84,8 @@ fn capability_gate(api_key: i16) -> CapabilityGate {
         8 | 9 => CapabilityGate::OffsetStore,
         // Group-coordinator APIs.
         10 | 11 | 12 | 13 | 14 => CapabilityGate::GroupCoordinator,
-        // ApiVersions itself, and anything else, is always available.
-        _ => CapabilityGate::Always,
+        // InitProducerId and ApiVersions are always available.
+        22 | _ => CapabilityGate::Always,
     }
 }
 
