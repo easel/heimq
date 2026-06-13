@@ -286,17 +286,17 @@ AddOffsetsToTxn (25), EndTxn (26), WriteTxnMarkers (27), TxnOffsetCommit
 
 #### P0 — Idempotent producer
 - [ ] `enable.idempotence=true` retried batch is de-duped (no duplicate visible to consumer).
-- [ ] Out-of-order sequence returns `OUT_OF_ORDER_SEQUENCE_NUMBER`.
-- [ ] Duplicate sequence returns `DUPLICATE_SEQUENCE_NUMBER` (or is silently de-duped per Kafka semantics).
-- [ ] `InitProducerId` returns producerId/epoch; epoch bumps on re-init.
+- [x] Out-of-order sequence returns `OUT_OF_ORDER_SEQUENCE_NUMBER`. (`contract_out_of_order_sequence_returns_error`)
+- [x] Duplicate sequence returns `DUPLICATE_SEQUENCE_NUMBER` (or is silently de-duped per Kafka semantics). (`contract_duplicate_sequence_returns_error`)
+- [x] `InitProducerId` returns producerId/epoch; epoch bumps on re-init. (`contract_init_producer_id_with_transactional_id`)
 
 #### P0 — Transactions
-- [ ] Committed transaction is visible to `read_committed` consumers.
-- [ ] Aborted transaction is invisible to `read_committed` consumers.
+- [x] Committed transaction is visible to `read_committed` consumers. (`contract_transactional_produce_commit_fetch`)
+- [x] Aborted transaction is invisible to `read_committed` consumers — server populates `aborted_transactions` list. (`contract_aborted_transaction_invisible_to_read_committed`)
 - [ ] `read_uncommitted` consumer observes both.
-- [ ] Stale producer epoch returns `INVALID_PRODUCER_EPOCH`.
+- [x] Stale producer epoch returns `INVALID_PRODUCER_EPOCH`. (`contract_stale_epoch_returns_invalid_producer_epoch`)
 - [ ] `transaction.timeout.ms` is enforced; expired transactions are aborted.
-- [ ] `TxnOffsetCommit` participates in transaction lifecycle for EOS consumer.
+- [x] `TxnOffsetCommit` participates in transaction lifecycle for EOS consumer. (`contract_txn_offset_commit_basic`)
 
 ### Phase 8: Differential Parity Harness (P0, FEAT-003)
 

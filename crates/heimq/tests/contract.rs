@@ -1027,7 +1027,6 @@ fn contract_write_txn_markers_basic() {
         WriteTxnMarkersRequest, WritableTxnMarker, WritableTxnMarkerTopic,
     };
     use kafka_protocol::messages::write_txn_markers_response::WriteTxnMarkersResponse;
-    use kafka_protocol::messages::ProducerId;
     use kafka_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
@@ -1186,4 +1185,215 @@ fn contract_transactional_produce_commit_fetch() {
     let records: Vec<Record> = batches.into_iter().flat_map(|b| b.records).collect();
     assert!(!records.is_empty(), "committed transactional records must be fetchable");
     assert_eq!(records[0].value, Some(bytes::Bytes::from("txn-val")));
+}
+
+// @covers US-003-AC4 (duplicate sequence)
+#[test]
+fn contract_duplicate_sequence_returns_error() {
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-idempotent-dup");
+
+    let pid_resp: InitProducerIdResponse =
+        send_request(&server, 22, 0, &InitProducerIdRequest::default());
+    assert_eq!(pid_resp.error_code, 0);
+    let producer_id = pid_resp.producer_id.0;
+
+    let encode_batch = |seq: i64| {
+        let mut buf = BytesMut::new();
+        RecordBatchEncoder::encode(
+            &mut buf,
+            &[new_idempotent_record(seq, producer_id, 0)],
+            &RecordEncodeOptions { version: 2, compression: Compression::None },
+        )
+        .expect("encode batch");
+        buf.freeze()
+    };
+
+    // First produce at sequence 0: should succeed.
+    let resp0 = produce_batch(&server, &topic, encode_batch(0));
+    assert_eq!(resp0.responses[0].partition_responses[0].error_code, 0, "first batch should succeed");
+
+    // Retry with same sequence 0: should return DUPLICATE_SEQUENCE_NUMBER.
+    let resp_dup = produce_batch(&server, &topic, encode_batch(0));
+    assert_eq!(
+        resp_dup.responses[0].partition_responses[0].error_code,
+        46, // DUPLICATE_SEQUENCE_NUMBER
+        "duplicate sequence must return error 46"
+    );
+}
+
+// @covers US-004 (stale producer epoch fencing)
+#[test]
+fn contract_stale_epoch_returns_invalid_producer_epoch() {
+    use kafka_protocol::messages::add_partitions_to_txn_request::{
+        AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
+    };
+    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-stale-epoch");
+    create_topic(&server, &topic, 1);
+
+    let mut init_req = InitProducerIdRequest::default();
+    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-stale-epoch".to_string()),
+    ));
+    init_req.transaction_timeout_ms = 60000;
+
+    // First init: epoch=0
+    let resp0: InitProducerIdResponse = send_request(&server, 22, 0, &init_req);
+    assert_eq!(resp0.error_code, 0);
+    let stale_epoch = resp0.producer_epoch;
+    assert_eq!(stale_epoch, 0);
+
+    // Re-init: epoch bumped to 1 (fences the old epoch).
+    let resp1: InitProducerIdResponse = send_request(&server, 22, 0, &init_req);
+    assert_eq!(resp1.error_code, 0);
+    assert_eq!(resp1.producer_epoch, 1, "epoch must be bumped on re-init");
+
+    // Try AddPartitionsToTxn with the stale epoch: must return INVALID_PRODUCER_EPOCH.
+    let mut add_topic = AddPartitionsToTxnTopic::default();
+    add_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    add_topic.partitions = vec![0];
+
+    let mut add_req = AddPartitionsToTxnRequest::default();
+    add_req.v3_and_below_transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-stale-epoch".to_string()));
+    add_req.v3_and_below_producer_id = resp0.producer_id;
+    add_req.v3_and_below_producer_epoch = stale_epoch; // stale: 0 instead of 1
+    add_req.v3_and_below_topics = vec![add_topic];
+
+    let add_resp: AddPartitionsToTxnResponse = send_request(&server, 24, 0, &add_req);
+    assert_eq!(
+        add_resp.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code,
+        47, // INVALID_PRODUCER_EPOCH
+        "stale epoch must be rejected with error 47"
+    );
+}
+
+// @covers US-004 (aborted transaction invisible to read_committed)
+#[test]
+fn contract_aborted_transaction_invisible_to_read_committed() {
+    use kafka_protocol::messages::add_partitions_to_txn_request::{
+        AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
+    };
+    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
+    use kafka_protocol::messages::end_txn_response::EndTxnResponse;
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-txn-abort");
+    create_topic(&server, &topic, 1);
+
+    // InitProducerId
+    let mut init_req = InitProducerIdRequest::default();
+    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-abort-test".to_string()),
+    ));
+    init_req.transaction_timeout_ms = 60000;
+    let init_resp: InitProducerIdResponse = send_request(&server, 22, 0, &init_req);
+    assert_eq!(init_resp.error_code, 0);
+    let pid = init_resp.producer_id.0;
+    let epoch = init_resp.producer_epoch;
+
+    // AddPartitionsToTxn
+    let mut add_topic = AddPartitionsToTxnTopic::default();
+    add_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    add_topic.partitions = vec![0];
+    let mut add_req = AddPartitionsToTxnRequest::default();
+    add_req.v3_and_below_transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-abort-test".to_string()));
+    add_req.v3_and_below_producer_id = init_resp.producer_id;
+    add_req.v3_and_below_producer_epoch = epoch;
+    add_req.v3_and_below_topics = vec![add_topic];
+    let add_resp: AddPartitionsToTxnResponse = send_request(&server, 24, 0, &add_req);
+    assert_eq!(add_resp.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code, 0);
+
+    // Transactional produce
+    let txn_record = Record {
+        transactional: true,
+        control: false,
+        partition_leader_epoch: 0,
+        producer_id: pid,
+        producer_epoch: epoch,
+        timestamp_type: TimestampType::Creation,
+        timestamp: 0,
+        sequence: 0,
+        offset: 0,
+        key: Some("abort-key".into()),
+        value: Some("abort-val".into()),
+        headers: Default::default(),
+    };
+    let mut txn_buf = BytesMut::new();
+    RecordBatchEncoder::encode(
+        &mut txn_buf,
+        &[txn_record],
+        &RecordEncodeOptions { version: 2, compression: Compression::None },
+    ).expect("encode txn batch");
+
+    let mut pdata = PartitionProduceData::default();
+    pdata.index = 0;
+    pdata.records = Some(txn_buf.freeze());
+    let mut tdata = TopicProduceData::default();
+    tdata.name = TopicName(StrBytes::from_string(topic.clone()));
+    tdata.partition_data = vec![pdata];
+    let mut produce_req = ProduceRequest::default();
+    produce_req.acks = 1;
+    produce_req.timeout_ms = 1000;
+    produce_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-abort-test".to_string()),
+    ));
+    produce_req.topic_data = vec![tdata];
+    let produce_resp: ProduceResponse = send_request(&server, 0, 3, &produce_req);
+    assert_eq!(produce_resp.responses[0].partition_responses[0].error_code, 0);
+
+    // EndTxn with committed=false (ABORT)
+    let mut end_req = EndTxnRequest::default();
+    end_req.transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-abort-test".to_string()));
+    end_req.producer_id = init_resp.producer_id;
+    end_req.producer_epoch = epoch;
+    end_req.committed = false;
+    let end_resp: EndTxnResponse = send_request(&server, 26, 0, &end_req);
+    assert_eq!(end_resp.error_code, 0, "EndTxn abort should succeed");
+
+    // Fetch with isolation_level=1 (READ_COMMITTED): aborted record must be invisible.
+    let mut fetch_partition = FetchPartition::default();
+    fetch_partition.partition = 0;
+    fetch_partition.fetch_offset = 0;
+    fetch_partition.partition_max_bytes = 1024 * 1024;
+    let mut fetch_topic = FetchTopic::default();
+    fetch_topic.topic = TopicName(StrBytes::from_string(topic.clone()));
+    fetch_topic.partitions = vec![fetch_partition];
+    let mut fetch_req = FetchRequest::default();
+    fetch_req.replica_id = BrokerId(-1);
+    fetch_req.max_wait_ms = 0;
+    fetch_req.min_bytes = 0;
+    fetch_req.max_bytes = 1024 * 1024;
+    fetch_req.isolation_level = 1; // READ_COMMITTED
+    fetch_req.topics = vec![fetch_topic];
+
+    let fetch_resp: FetchResponse = send_request(&server, 1, 4, &fetch_req);
+    let part = &fetch_resp.responses[0].partitions[0];
+    assert_eq!(part.error_code, 0);
+    // For read_committed, the server populates `aborted_transactions` so
+    // Kafka consumer libraries can filter aborted records client-side.
+    // The raw record bytes are still returned (the protocol contract);
+    // what must be non-null is the aborted_transactions list.
+    let aborted = part.aborted_transactions.as_deref().unwrap_or_default();
+    assert!(
+        aborted.iter().any(|a| a.producer_id.0 == pid),
+        "read_committed response must include aborted_transactions entry for producer_id={}; got {:?}",
+        pid, aborted.iter().map(|a| a.producer_id.0).collect::<Vec<_>>()
+    );
 }
