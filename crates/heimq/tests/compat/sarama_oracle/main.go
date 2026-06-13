@@ -52,6 +52,12 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	if err := check("offset-delete", func() error {
+		return deleteConsumerGroupOffset(brokers, group, topic, 0, cfg)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("list-groups", func() error {
 		return listGroups(brokers, group, cfg)
 	}); err != nil {
@@ -366,6 +372,17 @@ func describeGroups(brokers []string, wantGroup string, cfg *sarama.Config) erro
 		}
 	}
 	return fmt.Errorf("group %q missing from describe response", wantGroup)
+}
+
+// deleteConsumerGroupOffset uses sarama ClusterAdmin to exercise OffsetDelete (API 47).
+func deleteConsumerGroupOffset(brokers []string, group, topic string, partition int32, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	return admin.DeleteConsumerGroupOffset(group, topic, partition)
 }
 
 // deleteGroups uses sarama ClusterAdmin to exercise DeleteGroups (API 42).
