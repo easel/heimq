@@ -9,6 +9,7 @@
 //!   - sarama (IBM/sarama pure-Go Kafka client, independent of franz-go)
 //!   - java kafka-clients (Apache reference implementation)
 //!   - kcat (CLI tool; tests offset-based Fetch without a consumer group)
+//!   - KafkaJS (pure-JavaScript Kafka client, implements protocol from scratch)
 //!
 //! Tests are skipped when the required runtime (go, java, mvn, …) is absent
 //! from PATH, so they never break a developer's environment. In CI the
@@ -350,5 +351,74 @@ fn test_kcat_produce_consume_roundtrip() {
     assert!(
         meta_str.contains(&topic),
         "kcat -L: produced topic {topic:?} not found in metadata output:\n{meta_str}"
+    );
+}
+
+fn node_available() -> bool {
+    Command::new("node")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn kafkajs_oracle_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("compat")
+        .join("kafkajs_oracle")
+}
+
+fn kafkajs_installed() -> bool {
+    kafkajs_oracle_dir()
+        .join("node_modules")
+        .join("kafkajs")
+        .exists()
+}
+
+/// Run the KafkaJS oracle against a live heimq instance.
+///
+/// KafkaJS is a pure-JavaScript Kafka client that implements the protocol
+/// from scratch — no librdkafka, no Go runtime, no JVM. It provides a 6th
+/// independent client implementation alongside rdkafka (C), franz-go (Go),
+/// sarama (Go), the Java reference client, and kcat. Tests: create-topic,
+/// produce, consume-via-group, produce-with-headers, consume-headers-roundtrip,
+/// fetch-topic-offsets, describe-groups, delete-groups, delete-topic.
+#[test]
+fn test_kafkajs_produce_consume_consumer_group() {
+    if !node_available() {
+        eprintln!("SKIP: node not in PATH");
+        return;
+    }
+    if !kafkajs_installed() {
+        eprintln!("SKIP: kafkajs not installed (run `npm install` in tests/compat/kafkajs_oracle/)");
+        return;
+    }
+
+    let server = TestServer::start();
+    let dir = kafkajs_oracle_dir();
+
+    let out = Command::new("node")
+        .arg("main.js")
+        .arg(server.bootstrap_servers())
+        .current_dir(&dir)
+        .output()
+        .expect("failed to spawn node kafkajs oracle");
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    print!("{stdout}");
+    let non_log_stderr: Vec<&str> = stderr
+        .lines()
+        .filter(|l| !l.trim_start().starts_with('{'))
+        .collect();
+    if !non_log_stderr.is_empty() {
+        eprint!("{}", non_log_stderr.join("\n"));
+    }
+
+    assert!(
+        out.status.success(),
+        "kafkajs oracle failed (exit {:?})\nstdout: {stdout}\nstderr: {stderr}",
+        out.status.code()
     );
 }
