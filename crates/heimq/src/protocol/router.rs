@@ -94,9 +94,11 @@ impl Router {
             33 => self.handle_alter_configs(&header, &body),
             42 => self.handle_delete_groups(&header, &body),
             44 => self.handle_incremental_alter_configs(&header, &body),
+            60 => self.handle_describe_cluster(&header, &body),
             47 => self.handle_offset_delete(&header, &body),
             19 => self.handle_create_topics(&header, &body),
             20 => self.handle_delete_topics(&header, &body),
+            21 => self.handle_delete_records(&header, &body),
             22 => self.handle_init_producer_id(&header, &body),
             24 => self.handle_add_partitions_to_txn(&header, &body),
             25 => self.handle_add_offsets_to_txn(&header, &body),
@@ -232,6 +234,13 @@ impl Router {
         )
     }
 
+    fn handle_delete_records(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| delete_records::handle(header.api_version, body, &self.storage)),
+        )
+    }
+
     fn handle_find_coordinator(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
@@ -316,6 +325,13 @@ impl Router {
         self.handle_and_encode(
             header,
             Box::new(|| incremental_alter_configs::handle(header.api_version, body)),
+        )
+    }
+
+    fn handle_describe_cluster(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| describe_cluster::handle(header.api_version, body, self.cluster_view.as_ref())),
         )
     }
 

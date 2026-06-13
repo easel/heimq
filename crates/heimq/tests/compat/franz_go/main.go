@@ -16,6 +16,7 @@ import (
 
 	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/kmsg"
 )
 
 func main() {
@@ -88,6 +89,12 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("describe-cluster", func() error {
+		return describeCluster(ctx, bootstrap)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("alter-configs", func() error {
 		return alterConfigs(ctx, bootstrap, topic)
 	}); err != nil {
@@ -102,6 +109,12 @@ func run(bootstrap string) error {
 
 	if err := check("list-offsets", func() error {
 		return listOffsets(ctx, bootstrap, topic, 5)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("delete-records", func() error {
+		return deleteRecords(ctx, bootstrap, topic)
 	}); err != nil {
 		return err
 	}
@@ -487,6 +500,27 @@ func offsetDelete(ctx context.Context, bootstrap, topic, group string) error {
 	return nil
 }
 
+// deleteRecords exercises DeleteRecords (API 21) by truncating at offset 2.
+func deleteRecords(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	offsets := make(kadm.Offsets)
+	offsets.Add(kadm.Offset{Topic: topic, Partition: 0, At: 2})
+	resp, err := adm.DeleteRecords(ctx, offsets)
+	if err != nil {
+		return fmt.Errorf("delete records rpc: %w", err)
+	}
+	if err := resp.Error(); err != nil {
+		return fmt.Errorf("delete records response: %w", err)
+	}
+	return nil
+}
+
 func deleteGroups(ctx context.Context, bootstrap, group string) error {
 	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
 	if err != nil {
@@ -521,6 +555,31 @@ func alterConfigs(ctx context.Context, bootstrap, topic string) error {
 	}
 	if _, err := resp.On(topic, func(r *kadm.AlterConfigsResponse) error { return r.Err }); err != nil {
 		return fmt.Errorf("alter configs response for %q: %w", topic, err)
+	}
+	return nil
+}
+
+// describeCluster exercises DescribeCluster (API 60) via raw kmsg.
+func describeCluster(ctx context.Context, bootstrap string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	resp, err := cl.Request(ctx, &kmsg.DescribeClusterRequest{})
+	if err != nil {
+		return fmt.Errorf("describe cluster rpc: %w", err)
+	}
+	dcr, ok := resp.(*kmsg.DescribeClusterResponse)
+	if !ok {
+		return fmt.Errorf("unexpected response type %T", resp)
+	}
+	if dcr.ErrorCode != 0 {
+		return fmt.Errorf("describe cluster error_code=%d", dcr.ErrorCode)
+	}
+	if len(dcr.Brokers) == 0 {
+		return fmt.Errorf("describe cluster returned no brokers")
 	}
 	return nil
 }
