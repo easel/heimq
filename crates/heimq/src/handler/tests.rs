@@ -1,5 +1,6 @@
 use super::*;
 use crate::consumer_group::{GroupState, Member};
+use crate::storage::SingleNodeClusterView;
 use crate::test_support::{encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage};
 use bytes::{BufMut, Bytes, BytesMut};
 use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
@@ -65,7 +66,7 @@ fn metadata_all_topics_and_unknown_topic() {
     storage.create_topic("t1", 1).unwrap();
 
     let body = encode_body(&MetadataRequest::default(), 1);
-    let response = metadata::handle(1, &body, &storage, &config).unwrap();
+    let response = metadata::handle(1, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(response.topics.iter().any(|t| t.name.as_ref().map(|n| n.0.as_str()) == Some("t1")));
 
     let config_no_auto = test_config(false);
@@ -75,7 +76,7 @@ fn metadata_all_topics_and_unknown_topic() {
     let mut request = MetadataRequest::default();
     request.topics = Some(vec![topic]);
     let body = encode_body(&request, 4);
-    let response = metadata::handle(4, &body, &storage_no_auto, &config_no_auto).unwrap();
+    let response = metadata::handle(4, &body, &storage_no_auto, &SingleNodeClusterView::new(&config_no_auto)).unwrap();
     let missing = response.topics.first().unwrap();
     assert_eq!(missing.error_code, 3);
 }
@@ -94,7 +95,7 @@ fn metadata_mixed_existing_and_missing_topics() {
     let mut request = MetadataRequest::default();
     request.topics = Some(vec![existing, missing]);
     let body = encode_body(&request, 4);
-    let response = metadata::handle(4, &body, &storage, &config).unwrap();
+    let response = metadata::handle(4, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(response
         .topics
         .iter()
@@ -115,7 +116,7 @@ fn metadata_version_zero_parses_topics() {
     buf.put_i32(1);
     put_str(&mut buf, Some("meta-v0"));
 
-    let response = metadata::handle(0, &buf, &storage, &config).unwrap();
+    let response = metadata::handle(0, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert_eq!(response.topics.len(), 1);
     assert!(response.cluster_id.is_none());
 }
@@ -346,7 +347,7 @@ fn find_coordinator_single_node() {
     let mut config = (*test_config(true)).clone();
     config.host = "0.0.0.0".to_string();
     let config = Arc::new(config);
-    let response = find_coordinator::handle(0, &[], &config).unwrap();
+    let response = find_coordinator::handle(0, &[], &SingleNodeClusterView::new(&config)).unwrap();
     assert_eq!(response.error_code, 0);
     assert_eq!(response.node_id.0, config.broker_id);
     assert_eq!(response.host.to_string(), "127.0.0.1");
@@ -623,7 +624,7 @@ fn find_coordinator_request_ignored() {
     let mut request = FindCoordinatorRequest::default();
     request.key = StrBytes::from_string("group".to_string());
     let body = encode_body(&request, 1);
-    let response = find_coordinator::handle(1, &body, &config).unwrap();
+    let response = find_coordinator::handle(1, &body, &SingleNodeClusterView::new(&config)).unwrap();
     assert_eq!(response.error_code, 0);
 }
 
@@ -1033,30 +1034,30 @@ fn metadata_parsing_edges() {
     let mut body = BytesMut::new();
     body.put_i32(1);
     put_str(&mut body, Some("newtopic"));
-    let response = metadata::handle(1, &body, &storage, &config).unwrap();
+    let response = metadata::handle(1, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(response.topics.iter().any(|t| t.name.as_ref().map(|n| n.0.as_str()) == Some("newtopic")));
 
-    let response = metadata::handle(1, &[], &storage, &config).unwrap();
+    let response = metadata::handle(1, &[], &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.brokers.is_empty());
 
-    let response = metadata::handle(1, &[0], &storage, &config).unwrap();
+    let response = metadata::handle(1, &[0], &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i32(0);
-    let response = metadata::handle(1, &buf, &storage, &config).unwrap();
+    let response = metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i32(1);
-    let response = metadata::handle(1, &buf, &storage, &config).unwrap();
+    let response = metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i32(1);
     buf.put_i16(4);
     buf.extend_from_slice(b"ab");
-    let response = metadata::handle(1, &buf, &storage, &config).unwrap();
+    let response = metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.topics.is_empty());
 }
 

@@ -1,11 +1,10 @@
 //! Request routing
 
-use crate::config::Config;
-use crate::consumer_group::{ConsumerGroupManager, GroupCoordinatorBackend};
+use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::handler::*;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
-use crate::storage::LogBackend;
+use crate::storage::{ClusterView, LogBackend};
 use bytes::Bytes;
 use kafka_protocol::protocol::Encodable;
 use std::sync::Arc;
@@ -14,8 +13,8 @@ use tracing::{debug, warn};
 /// Routes requests to appropriate handlers
 pub struct Router {
     storage: Arc<dyn LogBackend>,
-    consumer_groups: Arc<ConsumerGroupManager>,
-    config: Arc<Config>,
+    consumer_groups: Arc<dyn GroupCoordinatorBackend>,
+    cluster_view: Arc<dyn ClusterView>,
     /// Effective set of `(api_key, min, max)` advertised by ApiVersions,
     /// computed at startup from each backend's capability descriptor.
     advertised_apis: Arc<Vec<(i16, i16, i16)>>,
@@ -24,27 +23,27 @@ pub struct Router {
 impl Router {
     pub fn new(
         storage: Arc<dyn LogBackend>,
-        consumer_groups: Arc<ConsumerGroupManager>,
-        config: Arc<Config>,
+        consumer_groups: Arc<dyn GroupCoordinatorBackend>,
+        cluster_view: Arc<dyn ClusterView>,
     ) -> Self {
         let advertised_apis = Arc::new(crate::protocol::compute_supported_apis(
             storage.capabilities(),
             consumer_groups.offset_store().capabilities(),
             consumer_groups.capabilities(),
         ));
-        Self::with_advertised_apis(storage, consumer_groups, config, advertised_apis)
+        Self::with_advertised_apis(storage, consumer_groups, cluster_view, advertised_apis)
     }
 
     pub fn with_advertised_apis(
         storage: Arc<dyn LogBackend>,
-        consumer_groups: Arc<ConsumerGroupManager>,
-        config: Arc<Config>,
+        consumer_groups: Arc<dyn GroupCoordinatorBackend>,
+        cluster_view: Arc<dyn ClusterView>,
         advertised_apis: Arc<Vec<(i16, i16, i16)>>,
     ) -> Self {
         Self {
             storage,
             consumer_groups,
-            config,
+            cluster_view,
             advertised_apis,
         }
     }
@@ -113,7 +112,7 @@ impl Router {
     fn handle_metadata(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| metadata::handle(header.api_version, body, &self.storage, &self.config)),
+            Box::new(|| metadata::handle(header.api_version, body, &self.storage, self.cluster_view.as_ref())),
         )
     }
 
@@ -155,7 +154,7 @@ impl Router {
     fn handle_find_coordinator(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| find_coordinator::handle(header.api_version, body, &self.config)),
+            Box::new(|| find_coordinator::handle(header.api_version, body, self.cluster_view.as_ref())),
         )
     }
 
@@ -191,11 +190,8 @@ impl Router {
         self.handle_and_encode(
             header,
             Box::new(|| {
-                offset_commit::handle(
-                    header.api_version,
-                    body,
-                    self.consumer_groups.offset_store(),
-                )
+                let store = self.consumer_groups.offset_store();
+                offset_commit::handle(header.api_version, body, &store)
             }),
         )
     }
@@ -204,11 +200,8 @@ impl Router {
         self.handle_and_encode(
             header,
             Box::new(|| {
-                offset_fetch::handle(
-                    header.api_version,
-                    body,
-                    self.consumer_groups.offset_store(),
-                )
+                let store = self.consumer_groups.offset_store();
+                offset_fetch::handle(header.api_version, body, &store)
             }),
         )
     }
@@ -224,6 +217,7 @@ impl Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::SingleNodeClusterView;
     use crate::test_support::{encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage};
     use bytes::{Buf, BufMut, BytesMut};
     use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
@@ -296,7 +290,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage.clone(), consumer_groups.clone(), config.clone());
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage.clone(), consumer_groups.clone(), cluster_view);
 
         let correlation_id = 7;
 
@@ -474,7 +469,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         let header = RequestHeader {
             api_key: 18,
@@ -501,7 +497,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         let header = RequestHeader {
             api_key: 18,

@@ -5,7 +5,8 @@ use crate::consumer_group::{ConsumerGroupManager, GroupCoordinatorBackend};
 use crate::error::Result;
 use crate::protocol::{compute_supported_apis, Router};
 use crate::storage::{
-    dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store, LogBackend,
+    dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store, ClusterView,
+    LogBackend, SingleNodeClusterView,
 };
 use bytes::{Buf, Bytes, BytesMut};
 use std::sync::Arc;
@@ -19,6 +20,7 @@ pub struct Server {
     config: Arc<Config>,
     storage: Arc<dyn LogBackend>,
     consumer_groups: Arc<ConsumerGroupManager>,
+    cluster_view: Arc<dyn ClusterView>,
     /// Effective ApiVersions advertised by this server, computed once at
     /// startup by intersecting static protocol support with each backend's
     /// capability descriptor.
@@ -49,6 +51,7 @@ impl Server {
             consumer_groups.offset_store().capabilities(),
             coordinator.capabilities(),
         ));
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
 
         for spec in &config.create_topics {
             match spec.split_once(':') {
@@ -72,6 +75,7 @@ impl Server {
             config,
             storage,
             consumer_groups,
+            cluster_view,
             advertised_apis,
         })
     }
@@ -120,7 +124,7 @@ impl Server {
                 let router = Router::with_advertised_apis(
                     self.storage.clone(),
                     self.consumer_groups.clone(),
-                    self.config.clone(),
+                    self.cluster_view.clone(),
                     self.advertised_apis.clone(),
                 );
 
@@ -594,7 +598,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -616,7 +621,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -642,7 +648,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -669,7 +676,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         let request = framed_request(18, 0, 1, &[]);
         let stream = ScriptedStream::new(request);
@@ -690,7 +698,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         let stream = ScriptedStream::with_read_error();
         let result = handle_connection(Box::new(stream), router).await;
@@ -703,7 +712,8 @@ mod tests {
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         let request = framed_request(18, 0, 1, &[]);
         let stream = ScriptedStream::with_write_error(request);
@@ -718,7 +728,8 @@ mod tests {
         let config = Arc::new(Config::parse_from(["heimq"]));
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         // Send a frame claiming to be larger than MAX_FRAME_BYTES
         let mut oversized = BytesMut::new();
@@ -763,7 +774,8 @@ mod tests {
         let config = Arc::new(Config::parse_from(["heimq"]));
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
-        let router = Router::new(storage, consumer_groups, config);
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
 
         // Build a request with a valid 8-byte header (so peek_correlation_id works)
         // but corrupt body after the header so the handler returns Err.

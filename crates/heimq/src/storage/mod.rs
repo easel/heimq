@@ -4,6 +4,7 @@
 //! re-exports the in-memory implementation (`MemoryLog`).
 
 mod capabilities;
+mod cluster_view;
 mod dispatch;
 mod memory;
 mod offset_store;
@@ -17,6 +18,7 @@ mod topic;
 pub use capabilities::{
     AtomicAppendScope, BackendCapabilities, CompressionCodec, Durability, RetentionMode,
 };
+pub use cluster_view::{BrokerInfo, ClusterView, ClusterViewError, SingleNodeClusterView};
 pub use dispatch::{dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store};
 pub use memory::MemoryLog;
 pub use offset_store::{CommittedOffset, OffsetStore, OffsetStoreCapabilities};

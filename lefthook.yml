@@ -5,7 +5,6 @@ pre-commit:
       run: |
         set -euo pipefail
         echo "==> .ddx/beads.jsonl changing: running workspace tests (ADR-002 Layer 1)..."
-        cd "${LEFTHOOK_ROOT}"
         if ! cargo test --workspace --all-features --no-fail-fast 2>&1; then
           echo ""
           echo "ERROR: workspace tests failed - bead state change blocked (ADR-002)"

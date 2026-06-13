@@ -13,7 +13,8 @@
 
 #![allow(dead_code)]
 
-use crate::storage::Durability;
+use crate::storage::{Durability, OffsetStore};
+use std::sync::Arc;
 
 /// Declarative description of what a group-coordinator backend can do.
 #[derive(Debug, Clone)]
@@ -139,4 +140,7 @@ pub trait GroupCoordinatorBackend: Send + Sync {
 
     /// Backend capabilities descriptor.
     fn capabilities(&self) -> &GroupCoordinatorCapabilities;
+
+    /// Offset store associated with this coordinator.
+    fn offset_store(&self) -> Arc<dyn OffsetStore>;
 }

@@ -226,6 +226,10 @@ impl GroupCoordinatorBackend for ConsumerGroupManager {
     fn capabilities(&self) -> &GroupCoordinatorCapabilities {
         &MEMORY_COORDINATOR_CAPABILITIES
     }
+
+    fn offset_store(&self) -> Arc<dyn crate::storage::OffsetStore> {
+        self.offset_store.clone()
+    }
 }
 
 #[cfg(test)]

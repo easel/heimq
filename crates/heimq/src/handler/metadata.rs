@@ -1,8 +1,7 @@
 //! Metadata request handler (API Key 3)
 
-use crate::config::Config;
 use crate::error::Result;
-use crate::storage::LogBackend;
+use crate::storage::{ClusterView, LogBackend};
 use bytes::Buf;
 use kafka_protocol::messages::metadata_response::{
     MetadataResponseBroker, MetadataResponsePartition, MetadataResponseTopic,
@@ -17,19 +16,16 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
-    config: &Arc<Config>,
+    cluster_view: &dyn ClusterView,
 ) -> Result<MetadataResponse> {
+    let self_broker = cluster_view.self_broker();
     let mut response = MetadataResponse::default();
 
     // Add broker information (single node)
     let mut broker = MetadataResponseBroker::default();
-    broker.node_id = BrokerId(config.broker_id);
-    broker.host = StrBytes::from_string(if config.host == "0.0.0.0" {
-        "127.0.0.1".to_string()  // Use IPv4 to avoid IPv6 resolution issues
-    } else {
-        config.host.clone()
-    });
-    broker.port = config.port as i32;
+    broker.node_id = BrokerId(self_broker.node_id);
+    broker.host = StrBytes::from_string(self_broker.host.clone());
+    broker.port = self_broker.port as i32;
     response.brokers.push(broker);
 
     // Parse request to get topic list
@@ -60,9 +56,9 @@ pub fn handle(
             let mut partition = MetadataResponsePartition::default();
             partition.partition_index = partition_id;
             partition.error_code = 0;
-            partition.leader_id = BrokerId(config.broker_id);
-            partition.replica_nodes = vec![BrokerId(config.broker_id)];
-            partition.isr_nodes = vec![BrokerId(config.broker_id)];
+            partition.leader_id = BrokerId(self_broker.node_id);
+            partition.replica_nodes = vec![BrokerId(self_broker.node_id)];
+            partition.isr_nodes = vec![BrokerId(self_broker.node_id)];
             topic.partitions.push(partition);
         }
 
@@ -88,9 +84,9 @@ pub fn handle(
                     let mut partition = MetadataResponsePartition::default();
                     partition.partition_index = partition_id;
                     partition.error_code = 0;
-                    partition.leader_id = BrokerId(config.broker_id);
-                    partition.replica_nodes = vec![BrokerId(config.broker_id)];
-                    partition.isr_nodes = vec![BrokerId(config.broker_id)];
+                    partition.leader_id = BrokerId(self_broker.node_id);
+                    partition.replica_nodes = vec![BrokerId(self_broker.node_id)];
+                    partition.isr_nodes = vec![BrokerId(self_broker.node_id)];
                     topic_meta.partitions.push(partition);
                 }
 
@@ -104,14 +100,11 @@ pub fn handle(
         }
     }
 
-    // Set cluster ID for newer versions
     if api_version >= 2 {
-        response.cluster_id = Some(StrBytes::from_string(config.cluster_id.clone()));
+        response.cluster_id = Some(StrBytes::from_string(cluster_view.cluster_id()));
     }
-
-    // Set controller ID for newer versions
     if api_version >= 1 {
-        response.controller_id = BrokerId(config.broker_id);
+        response.controller_id = BrokerId(self_broker.node_id);
     }
 
     Ok(response)
