@@ -148,25 +148,44 @@ impl ConsumerGroup {
         format!("{}-{}", client_id, uuid_simple())
     }
 
-    /// Add a member to the group
+    /// Add a member to the group.
+    ///
+    /// If the member_id is already known (the member is re-joining), this is a
+    /// "soft re-join": we update the member entry and preserve the existing
+    /// assignment, but do NOT bump the generation or change the group state.
+    /// This prevents the perpetual-rebalance loop that occurs when two consumers
+    /// join concurrently — without a barrier, every re-join from one consumer
+    /// invalidates the other's heartbeat, keeping gen perpetually ahead of both.
     pub fn add_member(&self, member: Member) -> i32 {
         let member_id = member.member_id.clone();
         let mut members = self.members.write();
 
-        // First member becomes the leader
+        // Soft re-join: member is already in the group; don't bump gen or state.
+        let soft_rejoin = members.contains_key(&member_id);
+
+        // First (genuinely new) member becomes the leader.
         if members.is_empty() {
             *self.leader_id.write() = Some(member_id.clone());
             *self.protocol_type.write() = Some(member.protocol_type.clone());
         }
 
-        members.insert(member_id, member);
-
-        // Trigger rebalance
-        *self.state.write() = GroupState::PreparingRebalance;
-
-        // Increment generation and return the new value
-        let new_gen = self.generation_id.fetch_add(1, Ordering::SeqCst) + 1;
-        new_gen
+        if soft_rejoin {
+            // Preserve the assignment the leader already set for this member.
+            let preserved = members
+                .get(&member_id)
+                .map(|m| m.assignment.clone())
+                .unwrap_or_default();
+            let mut updated = member;
+            updated.assignment = preserved;
+            members.insert(member_id, updated);
+            // State and generation stay unchanged.
+            self.generation_id.load(Ordering::SeqCst)
+        } else {
+            members.insert(member_id, member);
+            *self.state.write() = GroupState::PreparingRebalance;
+            let new_gen = self.generation_id.fetch_add(1, Ordering::SeqCst) + 1;
+            new_gen
+        }
     }
 
     /// Remove a member from the group

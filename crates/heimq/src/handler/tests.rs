@@ -503,7 +503,10 @@ fn sync_group_leader_applies_assignments_and_stabilizes() {
 }
 
 #[test]
-fn sync_group_non_leader_missing_assignment() {
+fn sync_group_non_leader_before_leader_syncs_returns_rebalance_in_progress() {
+    // Non-leader SyncGroup before the leader has assigned must return
+    // REBALANCE_IN_PROGRESS (22) so the follower retries rather than
+    // stabilising with an empty assignment.
     let config = test_config(true);
     let consumer_groups = test_consumer_groups(config);
     let group = consumer_groups.get_or_create_group("sync-group-2");
@@ -536,7 +539,7 @@ fn sync_group_non_leader_missing_assignment() {
     buf.put_i32(0);
 
     let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
-    assert_eq!(response.error_code, 0);
+    assert_eq!(response.error_code, 22); // REBALANCE_IN_PROGRESS — must retry
     assert!(response.assignment.is_empty());
 }
 

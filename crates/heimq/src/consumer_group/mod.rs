@@ -184,6 +184,15 @@ impl GroupCoordinatorBackend for ConsumerGroupManager {
             }
             let protocol = group.select_protocol().unwrap_or_default();
             group.complete_rebalance(protocol);
+        } else if group.state() == GroupState::PreparingRebalance {
+            // Non-leader, leader hasn't assigned yet. Return REBALANCE_IN_PROGRESS
+            // so the client re-joins. add_member treats re-joins as "soft" and
+            // does not bump the generation, so the client will converge to the
+            // same gen where the leader eventually SyncGroups.
+            return SyncResult {
+                error_code: 22,
+                assignment: Vec::new(),
+            };
         }
 
         let assignment = group.get_assignment(&req.member_id).unwrap_or_default();
