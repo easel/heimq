@@ -82,6 +82,9 @@ public class KafkaOracle {
         String lz4Topic = topic + "-lz4";
         check("produce-lz4-compressed", () -> produceCompressed(bootstrap, lz4Topic, "lz4"));
         check("consume-lz4-roundtrip", () -> consumeCompressedRoundtrip(bootstrap, lz4Topic));
+        String zstdTopic = topic + "-zstd";
+        check("produce-zstd-compressed", () -> produceCompressed(bootstrap, zstdTopic, "zstd"));
+        check("consume-zstd-roundtrip", () -> consumeCompressedRoundtrip(bootstrap, zstdTopic));
         check("offset-resume", () -> offsetResume(bootstrap, resumeTopic, resumeGroup));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
