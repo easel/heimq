@@ -35,13 +35,26 @@ pub struct Server {
 }
 
 impl Server {
+    /// Create a new server with an externally provided log backend.
+    ///
+    /// All other storage (offsets, groups) is still dispatched from config URLs.
+    /// This is primarily for tests and embeddings that inject a custom backend.
+    pub fn with_backend(config: Config, storage: Arc<dyn LogBackend>) -> Result<Self> {
+        let config = Arc::new(config);
+        Self::build(config, storage)
+    }
+
     /// Create a new server instance
     pub fn new(config: Config) -> Result<Self> {
         let config = Arc::new(config);
         let storage_cfg = config.storage();
-
         let storage: Arc<dyn LogBackend> =
             dispatch_log_backend(&storage_cfg.log, config.clone())?;
+        Self::build(config, storage)
+    }
+
+    fn build(config: Arc<Config>, storage: Arc<dyn LogBackend>) -> Result<Self> {
+        let storage_cfg = config.storage();
         let offset_store = dispatch_offset_store(&storage_cfg.offsets)?;
         let consumer_groups = Arc::new(ConsumerGroupManager::with_offset_store(
             config.clone(),
