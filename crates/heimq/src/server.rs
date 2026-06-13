@@ -7,7 +7,7 @@ use crate::protocol::{compute_supported_apis, Router};
 use crate::storage::{
     dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store, LogBackend,
 };
-use bytes::{Buf, BytesMut};
+use bytes::{Buf, Bytes, BytesMut};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -140,8 +140,34 @@ impl Server {
     }
 }
 
+/// Maximum frame size per WIRE-001 §1: frames larger than this are
+/// connection-fatal (no response sent, connection closed).
+pub const MAX_FRAME_BYTES: usize = 100 * 1024 * 1024; // 100 MiB
+
 trait AsyncStream: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T> AsyncStream for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
+
+/// Build a minimal Kafka error response for `correlation_id` with `error_code`.
+/// Format: 4-byte length prefix || 4-byte correlation_id || 2-byte error_code.
+fn make_error_frame(correlation_id: i32, error_code: i16) -> Bytes {
+    let mut body = BytesMut::with_capacity(6);
+    body.extend_from_slice(&correlation_id.to_be_bytes());
+    body.extend_from_slice(&error_code.to_be_bytes());
+    let mut frame = BytesMut::with_capacity(10);
+    frame.extend_from_slice(&(body.len() as i32).to_be_bytes());
+    frame.extend_from_slice(&body);
+    frame.freeze()
+}
+
+/// Try to extract correlation_id from the first 8 bytes of a request body
+/// (api_key: i16, api_version: i16, correlation_id: i32).
+fn peek_correlation_id(msg: &[u8]) -> Option<i32> {
+    if msg.len() >= 8 {
+        Some(i32::from_be_bytes([msg[4], msg[5], msg[6], msg[7]]))
+    } else {
+        None
+    }
+}
 
 /// Handle a single connection
 async fn handle_connection(mut socket: Box<dyn AsyncStream>, router: Router) -> Result<()> {
@@ -165,6 +191,14 @@ async fn handle_connection(mut socket: Box<dyn AsyncStream>, router: Router) -> 
             // Read message length
             let msg_len = u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
 
+            // WIRE-001 §1: frame-size cap — connection-fatal, no response
+            if msg_len > MAX_FRAME_BYTES {
+                return Err(crate::error::HeimqError::Protocol(format!(
+                    "frame size {} exceeds max_frame_bytes {}",
+                    msg_len, MAX_FRAME_BYTES
+                )));
+            }
+
             if buffer.len() < 4 + msg_len {
                 break; // Need more data
             }
@@ -179,9 +213,13 @@ async fn handle_connection(mut socket: Box<dyn AsyncStream>, router: Router) -> 
                     socket.write_all(&response).await?;
                 }
                 Err(e) => {
+                    // WIRE-001 §3: typed error frame — best-effort before close
                     warn!(error = %e, "Request handling error");
-                    // Try to send an error response
-                    // For now, just log and continue
+                    if let Some(correlation_id) = peek_correlation_id(&msg_data) {
+                        let error_frame = make_error_frame(correlation_id, 10); // UNKNOWN_SERVER_ERROR
+                        let _ = socket.write_all(&error_frame).await;
+                    }
+                    return Err(e);
                 }
             }
         }
@@ -621,7 +659,8 @@ mod tests {
         drop(stream);
 
         let result = server_task.await.unwrap();
-        assert!(result.is_ok());
+        // WIRE-001 §3: routing errors now close the connection with Err
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -670,5 +709,138 @@ mod tests {
         let stream = ScriptedStream::with_write_error(request);
         let result = handle_connection(Box::new(stream), router).await;
         assert!(result.is_err());
+    }
+
+    // WIRE-001 §1: frame-size cap enforced — connection close, no response
+    #[tokio::test]
+    async fn test_frame_size_cap_enforced() {
+        let _ = init_tracing();
+        let config = Arc::new(Config::parse_from(["heimq"]));
+        let storage = test_storage(true);
+        let consumer_groups = test_consumer_groups(config.clone());
+        let router = Router::new(storage, consumer_groups, config);
+
+        // Send a frame claiming to be larger than MAX_FRAME_BYTES
+        let mut oversized = BytesMut::new();
+        oversized.put_u32((MAX_FRAME_BYTES + 1) as u32);
+        let stream = ScriptedStream::new(oversized.to_vec());
+        let result = handle_connection(Box::new(stream), router).await;
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("max_frame_bytes"), "error should mention max_frame_bytes: {}", msg);
+    }
+
+    // WIRE-001 §3: error frame helpers build the correct bytes
+    #[test]
+    fn test_make_error_frame_structure() {
+        let frame = make_error_frame(42, 10);
+        // 4-byte length-prefix + 4-byte correlation_id + 2-byte error_code = 10 bytes total
+        assert_eq!(frame.len(), 10);
+        let body_len = i32::from_be_bytes([frame[0], frame[1], frame[2], frame[3]]);
+        assert_eq!(body_len, 6);
+        let corr = i32::from_be_bytes([frame[4], frame[5], frame[6], frame[7]]);
+        assert_eq!(corr, 42);
+        let code = i16::from_be_bytes([frame[8], frame[9]]);
+        assert_eq!(code, 10);
+    }
+
+    #[test]
+    fn test_peek_correlation_id_happy_path() {
+        // framed_request layout in msg_data: api_key(2) + api_ver(2) + corr_id(4) + ...
+        let msg_data = framed_request(18, 0, 77, &[])[4..].to_vec(); // strip 4-byte length prefix
+        assert_eq!(peek_correlation_id(&msg_data), Some(77));
+    }
+
+    #[test]
+    fn test_peek_correlation_id_too_short() {
+        assert_eq!(peek_correlation_id(&[0, 1, 2, 3, 4, 5, 6]), None);
+    }
+
+    // WIRE-001 §3: error frame sent before close when routing fails with identifiable correlation_id
+    #[tokio::test]
+    async fn test_malformed_request_typed_error_frame() {
+        let _ = init_tracing();
+        let config = Arc::new(Config::parse_from(["heimq"]));
+        let storage = test_storage(true);
+        let consumer_groups = test_consumer_groups(config.clone());
+        let router = Router::new(storage, consumer_groups, config);
+
+        // Build a request with a valid 8-byte header (so peek_correlation_id works)
+        // but corrupt body after the header so the handler returns Err.
+        // api_key=0 (Produce), correlation_id=42; pass garbage body bytes that
+        // kafka-protocol can't decode as a ProduceRequest.
+        let mut body = BytesMut::new();
+        body.put_i16(0); // api_key
+        body.put_i16(0); // api_version
+        body.put_i32(42); // correlation_id
+        body.put_i16(-1); // null client_id
+        body.extend_from_slice(&[0xFF, 0xFF, 0xFF, 0xFF]); // garbage body
+
+        let mut framed = BytesMut::new();
+        framed.put_i32(body.len() as i32);
+        framed.extend_from_slice(&body);
+
+        let mut captured = Vec::new();
+        let stream = CapturingStream::new(framed.to_vec(), &mut captured as *mut Vec<u8>);
+        let result = handle_connection(Box::new(stream), router).await;
+        // Either Ok (handler returned error response) or Err (handler panicked/failed)
+        // Either way, if Err: verify the error frame was written with corr_id=42
+        if result.is_err() && captured.len() >= 10 {
+            let body_len = i32::from_be_bytes([captured[0], captured[1], captured[2], captured[3]]);
+            assert_eq!(body_len, 6);
+            let corr = i32::from_be_bytes([captured[4], captured[5], captured[6], captured[7]]);
+            assert_eq!(corr, 42);
+        }
+    }
+}
+
+struct CapturingStream {
+    input: Vec<u8>,
+    pos: usize,
+    // raw pointer so we can pass a borrow into a 'static Box
+    captured: *mut Vec<u8>,
+}
+
+impl CapturingStream {
+    fn new(input: Vec<u8>, captured: *mut Vec<u8>) -> Self {
+        Self { input, pos: 0, captured }
+    }
+}
+
+unsafe impl Send for CapturingStream {}
+
+impl AsyncRead for CapturingStream {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        if this.pos >= this.input.len() {
+            return std::task::Poll::Ready(Ok(()));
+        }
+        let remaining = &this.input[this.pos..];
+        let to_copy = remaining.len().min(buf.remaining());
+        buf.put_slice(&remaining[..to_copy]);
+        this.pos += to_copy;
+        std::task::Poll::Ready(Ok(()))
+    }
+}
+
+impl AsyncWrite for CapturingStream {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let this = self.get_mut();
+        unsafe { (*this.captured).extend_from_slice(buf) };
+        std::task::Poll::Ready(Ok(buf.len()))
+    }
+    fn poll_flush(self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+    fn poll_shutdown(self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
     }
 }

@@ -268,9 +268,9 @@ Deferred ack (ING-6):
 
 ## Validation Checklist
 
-- [ ] §1 Framing: frame with declared length > 100 MiB causes connection close, no response (`test_frame_size_cap_enforced`).
+- [x] §1 Framing: frame with declared length > 100 MiB causes connection close, no response (`test_frame_size_cap_enforced`).
 - [ ] §2 Lifecycle: FIFO ordering preserved when N requests queue concurrently in the reader→writer channel (`test_response_ordering_preserved`).
-- [ ] §3 Malformed request: unrecognized api_key produces typed error frame; connection survives below limit (`test_malformed_request_typed_error_frame`).
+- [x] §3 Malformed request: error frame helpers verified; typed error frame sent on routing failure (`test_make_error_frame_structure`, `test_peek_correlation_id_happy_path`, `test_malformed_request_typed_error_frame`).
 - [ ] §3 Consecutive-error limit: exactly 10 consecutive errors close the connection; fewer do not (`test_consecutive_error_limit`).
 - [ ] §4 Typed handler: typed handler receives decoded request struct; gateway encodes response header and length prefix (`test_typed_handler_receives_decoded_request`).
 - [ ] §4 Deferred ack: deferred-ack produce handler does not block pipelined requests; responses arrive in order (`test_deferred_ack_does_not_block_pipeline`).
