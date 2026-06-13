@@ -137,7 +137,16 @@ public class KafkaOracle {
     private static void createTopic(String bootstrap, String topic) throws Exception {
         try (Admin admin = Admin.create(adminProps(bootstrap))) {
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
-            admin.createTopics(Collections.singletonList(newTopic)).all().get();
+            try {
+                admin.createTopics(Collections.singletonList(newTopic)).all().get();
+            } catch (ExecutionException e) {
+                // TopicExistsException: the topic was auto-created by a preceding
+                // Metadata request (heimq honours auto.create.topics.enable). The
+                // topic exists — that's exactly what we wanted, so continue.
+                if (!(e.getCause() instanceof org.apache.kafka.common.errors.TopicExistsException)) {
+                    throw e;
+                }
+            }
         }
     }
 

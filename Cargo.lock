@@ -930,6 +930,13 @@ dependencies = [
 [[package]]
 name = "heimq-wire"
 version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "hex"

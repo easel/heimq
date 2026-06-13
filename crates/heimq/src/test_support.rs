@@ -9,13 +9,10 @@ use kafka_protocol::records::{Compression, Record, RecordBatchEncoder, RecordEnc
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
-use std::sync::atomic::{AtomicU16, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::Once;
 use std::time::Duration;
-
-// Port counter for test isolation - starts high to avoid conflicts
-static PORT_COUNTER: AtomicU16 = AtomicU16::new(19092);
 
 // Topic counter for unique topic names
 static TOPIC_COUNTER: AtomicUsize = AtomicUsize::new(1);
@@ -23,9 +20,14 @@ static TOPIC_COUNTER: AtomicUsize = AtomicUsize::new(1);
 // Group counter for unique consumer group names
 static GROUP_COUNTER: AtomicUsize = AtomicUsize::new(1);
 
-/// Get the next available port for test isolation
+/// Bind to port 0 and let the OS pick an available port, then immediately
+/// release the socket so the child process can bind to the same port.
+/// This avoids TOCTOU races, but the window is small and far better than
+/// a fixed-counter scheme that re-uses ports from lingering processes.
 pub fn next_port() -> u16 {
-    PORT_COUNTER.fetch_add(1, Ordering::SeqCst)
+    use std::net::TcpListener;
+    let listener = TcpListener::bind("127.0.0.1:0").expect("failed to bind to port 0");
+    listener.local_addr().expect("no local address").port()
 }
 
 /// Generate a unique topic name with the given prefix

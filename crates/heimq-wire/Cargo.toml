@@ -9,3 +9,8 @@ repository.workspace = true
 description = "Kafka wire framing, codec, and connection loop for heimq"
 
 [dependencies]
+async-trait = "0.1"
+bytes = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["net", "io-util", "rt-multi-thread", "sync", "macros"] }
+tracing = "0.1"
