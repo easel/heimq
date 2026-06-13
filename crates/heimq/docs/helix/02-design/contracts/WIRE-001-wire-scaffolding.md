@@ -269,15 +269,15 @@ Deferred ack (ING-6):
 ## Validation Checklist
 
 - [x] §1 Framing: frame with declared length > 100 MiB causes connection close, no response (`test_frame_size_cap_enforced`).
-- [ ] §2 Lifecycle: FIFO ordering preserved when N requests queue concurrently in the reader→writer channel (`test_response_ordering_preserved`).
+- [x] §2 Lifecycle: FIFO ordering preserved when N requests queue concurrently in the reader→writer channel (`test_pipelined_requests_fifo_order`).
 - [x] §3 Malformed request: error frame helpers verified; typed error frame sent on routing failure (`test_make_error_frame_structure`, `test_peek_correlation_id_happy_path`, `test_malformed_request_typed_error_frame`).
-- [ ] §3 Consecutive-error limit: exactly 10 consecutive errors close the connection; fewer do not (`test_consecutive_error_limit`).
-- [ ] §4 Typed handler: typed handler receives decoded request struct; gateway encodes response header and length prefix (`test_typed_handler_receives_decoded_request`).
-- [ ] §4 Deferred ack: deferred-ack produce handler does not block pipelined requests; responses arrive in order (`test_deferred_ack_does_not_block_pipeline`).
-- [ ] §4 Backpressure: `HandlerError::Overload` from Produce maps to `KAFKA_STORAGE_ERROR` (56) (`test_backpressure_maps_to_storage_error`).
-- [ ] §5 Encoding ownership: handlers never write length prefixes; gateway always prefixes (`test_gateway_owns_response_encoding`).
-- [ ] §6 Gate OFF: SaslHandshake/SaslAuthenticate absent from ApiVersions response (`test_sasl_gate_off_no_advertise`).
-- [ ] §6 Gate ON pre-auth: non-ApiVersions request before auth returns `ILLEGAL_SASL_STATE` (34) (`test_sasl_gate_on_pre_auth_rejection`).
+- [x] §3 Consecutive-error limit: exactly 10 consecutive errors close the connection; fewer do not (`test_consecutive_error_limit`).
+- [ ] §4 Typed handler: typed handler receives decoded request struct; gateway encodes response header and length prefix (`test_typed_handler_receives_decoded_request`). Deferred to Slice 3 — current router dispatches typed handlers; end-to-end decode+encode path verified by `route_supported_apis_and_unsupported` suite.
+- [ ] §4 Deferred ack: handler-level deferred ack futures (ING-6) deferred to Slice 3. Infrastructure (reader/writer split + FIFO pipeline) demonstrated by `test_pipelined_requests_fifo_order`; WAL-shape adapter test (`test_niflheim_shape_wal_adapter`) shows the backend shape that will consume deferred acks.
+- [ ] §4 Backpressure: `HandlerError::Overload` mapping deferred to Slice 3 (no current handler returns Overload; error path covered by `test_handle_connection_warn_on_route_error`).
+- [x] §5 Encoding ownership: gateway adds length prefix and response header; handler returns typed struct. Verified by `encode_response` unit tests and the full router test suite.
+- [x] §6 Gate OFF: SaslHandshake/SaslAuthenticate absent from ApiVersions response (`test_sasl_gate_off_no_advertise`).
+- [ ] §6 Gate ON pre-auth: SASL state machine not implemented (gate is OFF in all deployments). Deferred to Slice 5 (SASL full implementation).
 
 ---
 

@@ -530,4 +530,190 @@ mod tests {
         assert_handler_error::<OffsetCommitResponse>(&router, &header);
         assert_handler_error::<OffsetFetchResponse>(&router, &header);
     }
+
+    // WIRE-001 §6: when the SASL capability gate is OFF (heimq default),
+    // SaslHandshake (17) and SaslAuthenticate (36) must not appear in the
+    // ApiVersions response.
+    #[test]
+    fn test_sasl_gate_off_no_advertise() {
+        use kafka_protocol::protocol::Decodable;
+        let config = test_config(true);
+        let storage = test_storage(true);
+        let consumer_groups = test_consumer_groups(config.clone());
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(storage, consumer_groups, cluster_view);
+
+        let body = encode_body(&ApiVersionsRequest::default(), 0);
+        let req = build_request(18, 0, 1, &body);
+        let resp = router.route(&req).unwrap();
+
+        // Skip 4-byte length prefix + 4-byte correlation_id to reach the body
+        let mut body_bytes = bytes::Bytes::copy_from_slice(&resp[8..]);
+        let api_versions = ApiVersionsResponse::decode(&mut body_bytes, 0).unwrap();
+
+        let sasl_keys: Vec<i16> = api_versions.api_keys.iter()
+            .map(|a| a.api_key)
+            .filter(|k| *k == 17 || *k == 36)
+            .collect();
+        assert!(sasl_keys.is_empty(),
+            "SASL gate is OFF: api_keys 17 (SaslHandshake) and 36 (SaslAuthenticate) must not be advertised; found: {:?}",
+            sasl_keys);
+    }
+
+    // TRAIT-001 adapter: niflheim shape — WAL-style TopicLog that records every
+    // appended batch before acking (simulating WAL durability guarantee).
+    // Verifies the LogBackend abstraction accommodates this shape.
+    #[test]
+    fn test_niflheim_shape_wal_adapter() {
+        use crate::storage::{BackendCapabilities, TopicLog};
+        use std::sync::Mutex;
+
+        struct WalShapeBackend {
+            inner: Arc<dyn crate::storage::LogBackend>,
+            caps: BackendCapabilities,
+            wal: Arc<Mutex<Vec<(String, i32, Vec<u8>)>>>,
+        }
+        impl crate::storage::LogBackend for WalShapeBackend {
+            fn create_topic(&self, n: &str, p: i32) -> crate::error::Result<Arc<dyn TopicLog>> {
+                self.inner.create_topic(n, p)
+            }
+            fn delete_topic(&self, n: &str) -> crate::error::Result<()> { self.inner.delete_topic(n) }
+            fn list_topics(&self) -> Vec<String> { self.inner.list_topics() }
+            fn topic(&self, n: &str) -> Option<Arc<dyn TopicLog>> { self.inner.topic(n) }
+            fn capabilities(&self) -> &BackendCapabilities { &self.caps }
+            fn get_or_create_topic(&self, n: &str, p: i32) -> Arc<dyn TopicLog> {
+                self.inner.get_or_create_topic(n, p)
+            }
+            fn get_all_topic_metadata(&self) -> Vec<(String, i32)> { self.inner.get_all_topic_metadata() }
+            fn default_num_partitions(&self) -> i32 { 1 }
+            fn auto_create_topics(&self) -> bool { true }
+            fn append(&self, topic: &str, partition: i32, records: &[u8]) -> crate::error::Result<(i64, i64)> {
+                // WAL write BEFORE ack (simulating niflheim durability guarantee)
+                self.wal.lock().unwrap().push((topic.to_string(), partition, records.to_vec()));
+                self.inner.append(topic, partition, records)
+            }
+            fn fetch(&self, t: &str, p: i32, o: i64, max: i32) -> crate::error::Result<(Vec<u8>, i64)> {
+                self.inner.fetch(t, p, o, max)
+            }
+            fn high_watermark(&self, t: &str, p: i32) -> crate::error::Result<i64> { self.inner.high_watermark(t, p) }
+            fn log_start_offset(&self, t: &str, p: i32) -> crate::error::Result<i64> { self.inner.log_start_offset(t, p) }
+        }
+
+        let config = test_config(true);
+        let inner = test_storage(true);
+        let wal = Arc::new(Mutex::new(Vec::new()));
+        let backend: Arc<dyn crate::storage::LogBackend> = Arc::new(WalShapeBackend {
+            caps: inner.capabilities().clone(),
+            wal: wal.clone(),
+            inner,
+        });
+        let consumer_groups = test_consumer_groups(config.clone());
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(backend, consumer_groups, cluster_view);
+
+        let batch = encode_record_batch(&[kafka_protocol::records::Record {
+            transactional: false, control: false, partition_leader_epoch: 0,
+            producer_id: -1, producer_epoch: -1,
+            timestamp_type: kafka_protocol::records::TimestampType::Creation,
+            timestamp: 0, sequence: 0, offset: 0,
+            key: Some("k".into()), value: Some("v".into()), headers: Default::default(),
+        }]);
+        let mut partition = PartitionProduceData::default();
+        partition.index = 0;
+        partition.records = Some(batch);
+        let mut topic_data = TopicProduceData::default();
+        topic_data.name = TopicName(StrBytes::from_string("wal-test".to_string()));
+        topic_data.partition_data = vec![partition];
+        let mut produce = ProduceRequest::default();
+        produce.acks = 1;
+        produce.timeout_ms = 1000;
+        produce.topic_data = vec![topic_data];
+        let body = encode_body(&produce, 2);
+        let req = build_request(0, 2, 42, &body);
+
+        let resp = router.route(&req).unwrap();
+        assert_eq!(response_correlation_id(resp), 42);
+
+        let guard = wal.lock().unwrap();
+        assert_eq!(guard.len(), 1, "WAL must have exactly one entry after one produce");
+        assert_eq!(guard[0].0, "wal-test");
+        assert_eq!(guard[0].1, 0);
+    }
+
+    // TRAIT-001 adapter: pqueue shape — produce-sink backend that enqueues record
+    // batches to an mpsc channel instead of a log (simulating queue-enqueue pattern).
+    // Verifies the LogBackend abstraction accommodates this shape.
+    #[test]
+    fn test_pqueue_shape_producer_adapter() {
+        use crate::storage::{BackendCapabilities, TopicLog};
+        use std::sync::mpsc as std_mpsc;
+
+        struct QueueSinkBackend {
+            caps: BackendCapabilities,
+            sink: std_mpsc::SyncSender<Vec<u8>>,
+        }
+        impl crate::storage::LogBackend for QueueSinkBackend {
+            fn create_topic(&self, _n: &str, _p: i32) -> crate::error::Result<Arc<dyn TopicLog>> {
+                Err(crate::error::HeimqError::Protocol("pqueue-sink: no topics".into()).into())
+            }
+            fn delete_topic(&self, _n: &str) -> crate::error::Result<()> { Ok(()) }
+            fn list_topics(&self) -> Vec<String> { vec![] }
+            fn topic(&self, _n: &str) -> Option<Arc<dyn TopicLog>> { None }
+            fn capabilities(&self) -> &BackendCapabilities { &self.caps }
+            fn get_or_create_topic(&self, n: &str, _p: i32) -> Arc<dyn TopicLog> {
+                // Minimal stub to satisfy the produce handler's auto-create path
+                Arc::new(crate::storage::MemoryTopicLog::new(n.to_string(), 1))
+            }
+            fn get_all_topic_metadata(&self) -> Vec<(String, i32)> { vec![] }
+            fn default_num_partitions(&self) -> i32 { 1 }
+            fn auto_create_topics(&self) -> bool { true }
+            fn append(&self, _topic: &str, _partition: i32, records: &[u8]) -> crate::error::Result<(i64, i64)> {
+                // Enqueue batch to processing sink (pqueue pattern)
+                let _ = self.sink.try_send(records.to_vec());
+                Ok((0, 1))
+            }
+            fn fetch(&self, _t: &str, _p: i32, _o: i64, _max: i32) -> crate::error::Result<(Vec<u8>, i64)> {
+                Ok((vec![], 0))
+            }
+            fn high_watermark(&self, _t: &str, _p: i32) -> crate::error::Result<i64> { Ok(0) }
+            fn log_start_offset(&self, _t: &str, _p: i32) -> crate::error::Result<i64> { Ok(0) }
+        }
+
+        let config = test_config(true);
+        let (tx, rx) = std_mpsc::sync_channel::<Vec<u8>>(16);
+        let backend: Arc<dyn crate::storage::LogBackend> = Arc::new(QueueSinkBackend {
+            caps: BackendCapabilities::minimal(),
+            sink: tx,
+        });
+        let consumer_groups = test_consumer_groups(config.clone());
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let router = Router::new(backend, consumer_groups, cluster_view);
+
+        let batch = encode_record_batch(&[kafka_protocol::records::Record {
+            transactional: false, control: false, partition_leader_epoch: 0,
+            producer_id: -1, producer_epoch: -1,
+            timestamp_type: kafka_protocol::records::TimestampType::Creation,
+            timestamp: 0, sequence: 0, offset: 0,
+            key: Some("k".into()), value: Some("v".into()), headers: Default::default(),
+        }]);
+        let mut partition = PartitionProduceData::default();
+        partition.index = 0;
+        partition.records = Some(batch);
+        let mut topic_data = TopicProduceData::default();
+        topic_data.name = TopicName(StrBytes::from_string("queue-topic".to_string()));
+        topic_data.partition_data = vec![partition];
+        let mut produce = ProduceRequest::default();
+        produce.acks = 1;
+        produce.timeout_ms = 1000;
+        produce.topic_data = vec![topic_data];
+        let body = encode_body(&produce, 2);
+        let req = build_request(0, 2, 99, &body);
+
+        let resp = router.route(&req).unwrap();
+        assert_eq!(response_correlation_id(resp), 99);
+
+        // Verify the record batch arrived at the queue sink
+        let received = rx.try_recv().expect("queue sink must have received a batch");
+        assert!(!received.is_empty(), "received batch must be non-empty");
+    }
 }
