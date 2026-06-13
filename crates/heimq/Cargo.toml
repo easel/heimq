@@ -98,6 +98,10 @@ name = "parity"
 path = "tests/parity/main.rs"
 harness = false
 
+[[test]]
+name = "compat"
+path = "tests/compat.rs"
+
 # Benchmarks - uncomment when rdkafka is available
 # [[bench]]
 # name = "throughput"
