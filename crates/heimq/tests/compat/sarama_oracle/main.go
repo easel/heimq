@@ -39,6 +39,12 @@ func run(bootstrap, topic string) error {
 
 	brokers := []string{bootstrap}
 
+	if err := check("create-topic", func() error {
+		return createTopic(brokers, topic, cfg)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("produce", func() error {
 		return produce(brokers, topic, cfg)
 	}); err != nil {
@@ -76,6 +82,43 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	if err := check("describe-configs", func() error {
+		return describeConfigs(brokers, topic, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("alter-configs", func() error {
+		return alterConfigs(brokers, topic, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("incremental-alter-configs", func() error {
+		return incrementalAlterConfigs(brokers, topic, cfg)
+	}); err != nil {
+		return err
+	}
+
+	// create-partitions must come after consume to avoid scattering messages.
+	if err := check("create-partitions", func() error {
+		return createPartitions(brokers, topic, 3, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("delete-records", func() error {
+		return deleteRecords(brokers, topic, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("describe-cluster", func() error {
+		return describeCluster(brokers, cfg)
+	}); err != nil {
+		return err
+	}
+
 	// Headers topic is separate so it doesn't mix with the base topic offsets.
 	headersTopic := topic + "-hdrs"
 	if err := check("produce-with-headers", func() error {
@@ -86,6 +129,12 @@ func run(bootstrap, topic string) error {
 
 	if err := check("consume-headers-roundtrip", func() error {
 		return consumeHeadersRoundtrip(brokers, headersTopic, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("delete-topic", func() error {
+		return deleteTopic(brokers, topic, cfg)
 	}); err != nil {
 		return err
 	}
@@ -394,4 +443,125 @@ func deleteGroups(brokers []string, group string, cfg *sarama.Config) error {
 	defer admin.Close()
 
 	return admin.DeleteConsumerGroup(group)
+}
+
+// createTopic uses sarama ClusterAdmin to exercise CreateTopics (API 19).
+func createTopic(brokers []string, topic string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	detail := &sarama.TopicDetail{
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+	}
+	return admin.CreateTopic(topic, detail, false)
+}
+
+// describeConfigs uses sarama ClusterAdmin to exercise DescribeConfigs (API 32).
+func describeConfigs(brokers []string, topic string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	resource := sarama.ConfigResource{
+		Type: sarama.TopicResource,
+		Name: topic,
+	}
+	entries, err := admin.DescribeConfig(resource)
+	if err != nil {
+		return fmt.Errorf("describe config: %w", err)
+	}
+	if len(entries) == 0 {
+		return fmt.Errorf("expected config entries, got none")
+	}
+	return nil
+}
+
+// alterConfigs uses sarama ClusterAdmin to exercise AlterConfigs (API 33).
+func alterConfigs(brokers []string, topic string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	v := "604800000"
+	entries := map[string]*string{"retention.ms": &v}
+	return admin.AlterConfig(sarama.TopicResource, topic, entries, false)
+}
+
+// incrementalAlterConfigs uses sarama ClusterAdmin to exercise IncrementalAlterConfigs (API 44).
+func incrementalAlterConfigs(brokers []string, topic string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	v := "86400000"
+	entries := map[string]sarama.IncrementalAlterConfigsEntry{
+		"retention.ms": {
+			Operation: sarama.IncrementalAlterConfigsOperationSet,
+			Value:     &v,
+		},
+	}
+	return admin.IncrementalAlterConfig(sarama.TopicResource, topic, entries, false)
+}
+
+// createPartitions uses sarama ClusterAdmin to exercise CreatePartitions (API 37).
+func createPartitions(brokers []string, topic string, count int32, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	return admin.CreatePartitions(topic, count, nil, false)
+}
+
+// deleteRecords uses sarama ClusterAdmin to exercise DeleteRecords (API 21).
+func deleteRecords(brokers []string, topic string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	// Delete records up to offset 2 on partition 0.
+	offsets := map[int32]int64{0: 2}
+	return admin.DeleteRecords(topic, offsets)
+}
+
+// describeCluster uses sarama ClusterAdmin to exercise DescribeCluster (API 60).
+func describeCluster(brokers []string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	bs, _, err := admin.DescribeCluster()
+	if err != nil {
+		return fmt.Errorf("describe cluster: %w", err)
+	}
+	if len(bs) == 0 {
+		return fmt.Errorf("expected at least 1 broker, got 0")
+	}
+	return nil
+}
+
+// deleteTopic uses sarama ClusterAdmin to exercise DeleteTopics (API 20).
+func deleteTopic(brokers []string, topic string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	return admin.DeleteTopic(topic)
 }
