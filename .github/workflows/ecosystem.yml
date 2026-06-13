@@ -1,0 +1,103 @@
+name: ecosystem
+
+# FEAT-005 integration matrix: verifies that major Kafka ecosystem tools
+# work correctly with heimq. Tests start real Docker containers (Connect,
+# ksqlDB, Flink, Debezium, Schema Registry) and librdkafka clients (Go,
+# Python, Node). Not a required gate; must be green before FEAT-005 close.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # librdkafka language clients (lighter, run first)
+  librdkafka-clients:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build heimq
+        run: cargo build -p heimq --bin heimq
+
+      - name: Start heimq
+        run: |
+          ADVERTISED_HOST=$(hostname -I | awk '{print $1}')
+          ./target/debug/heimq --host 0.0.0.0 --port 9094 --memory-only --advertised-host "$ADVERTISED_HOST" &
+          echo "HEIMQ_PID=$!" >> $GITHUB_ENV
+          timeout 15 bash -c 'until nc -z localhost 9094; do sleep 0.2; done'
+
+      - name: Test Python confluent-kafka
+        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/01-librdkafka-python.sh
+
+      - name: Test Go confluent-kafka-go
+        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/02-librdkafka-go.sh
+
+      - name: Test Node node-rdkafka
+        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/03-librdkafka-node.sh
+
+      - name: Stop heimq
+        if: always()
+        run: kill $HEIMQ_PID 2>/dev/null || true
+
+  # Confluent platform services (heavier Docker images)
+  confluent-platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build heimq
+        run: cargo build -p heimq --bin heimq
+
+      - name: Start heimq
+        run: |
+          ADVERTISED_HOST=$(hostname -I | awk '{print $1}')
+          ./target/debug/heimq --host 0.0.0.0 --port 9094 --memory-only --advertised-host "$ADVERTISED_HOST" &
+          echo "HEIMQ_PID=$!" >> $GITHUB_ENV
+          timeout 15 bash -c 'until nc -z localhost 9094; do sleep 0.2; done'
+
+      - name: Test Schema Registry
+        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/04-schema-registry.sh
+
+      - name: Test Kafka Connect (source + sink)
+        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/05-kafka-connect.sh
+
+      - name: Test ksqlDB
+        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/06-ksqldb.sh
+
+      - name: Stop heimq
+        if: always()
+        run: kill $HEIMQ_PID 2>/dev/null || true
+
+  # CDC and stream processing (require additional services)
+  cdc-streaming:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build heimq
+        run: cargo build -p heimq --bin heimq
+
+      - name: Start heimq
+        run: |
+          ADVERTISED_HOST=$(hostname -I | awk '{print $1}')
+          ./target/debug/heimq --host 0.0.0.0 --port 9094 --memory-only --advertised-host "$ADVERTISED_HOST" &
+          echo "HEIMQ_PID=$!" >> $GITHUB_ENV
+          timeout 15 bash -c 'until nc -z localhost 9094; do sleep 0.2; done'
+
+      - name: Test Debezium PostgreSQL CDC
+        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/07-debezium.sh
+
+      - name: Test Apache Flink (Kafka source + sink, EOS)
+        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/08-flink.sh
+
+      - name: Stop heimq
+        if: always()
+        run: kill $HEIMQ_PID 2>/dev/null || true
