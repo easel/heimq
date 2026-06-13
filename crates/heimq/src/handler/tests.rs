@@ -1887,3 +1887,157 @@ fn end_txn_unknown_txn_returns_invalid_epoch() {
     let response = end_txn::handle(0, &body, &storage, &offset_store, &txn_mgr).unwrap();
     assert_ne!(response.error_code, 0, "unknown transaction must return non-zero error_code");
 }
+
+#[test]
+fn add_partitions_to_txn_unknown_returns_error() {
+    use kafka_protocol::messages::add_partitions_to_txn_request::{AddPartitionsToTxnRequest, AddPartitionsToTxnTopic};
+    use kafka_protocol::messages::{ProducerId, TransactionalId};
+    let txn_mgr = TransactionManager::new();
+    let mut req = AddPartitionsToTxnRequest::default();
+    req.v3_and_below_transactional_id = TransactionalId(StrBytes::from_static_str("no-such-txn"));
+    req.v3_and_below_producer_id = ProducerId(1);
+    req.v3_and_below_producer_epoch = 0;
+    let mut topic = AddPartitionsToTxnTopic::default();
+    topic.name = TopicName(StrBytes::from_static_str("test-topic"));
+    topic.partitions = vec![0];
+    req.v3_and_below_topics = vec![topic];
+    let body = encode_body(&req, 0);
+    let response = add_partitions_to_txn::handle(0, &body, &txn_mgr).unwrap();
+    assert_eq!(response.results_by_topic_v3_and_below.len(), 1);
+    let err = response.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code;
+    assert_ne!(err, 0, "unknown txn must return non-zero error on partition");
+}
+
+#[test]
+fn add_partitions_to_txn_valid_txn_succeeds() {
+    use kafka_protocol::messages::add_partitions_to_txn_request::{AddPartitionsToTxnRequest, AddPartitionsToTxnTopic};
+    use kafka_protocol::messages::{ProducerId, TransactionalId};
+    let txn_mgr = TransactionManager::new();
+    // Initialise a real transaction first.
+    let (pid, epoch) = txn_mgr.init_transactional_producer("txn-apts");
+    let mut req = AddPartitionsToTxnRequest::default();
+    req.v3_and_below_transactional_id = TransactionalId(StrBytes::from_static_str("txn-apts"));
+    req.v3_and_below_producer_id = ProducerId(pid);
+    req.v3_and_below_producer_epoch = epoch;
+    let mut topic = AddPartitionsToTxnTopic::default();
+    topic.name = TopicName(StrBytes::from_static_str("test-topic"));
+    topic.partitions = vec![0];
+    req.v3_and_below_topics = vec![topic];
+    let body = encode_body(&req, 0);
+    let response = add_partitions_to_txn::handle(0, &body, &txn_mgr).unwrap();
+    assert_eq!(response.results_by_topic_v3_and_below.len(), 1);
+    let err = response.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code;
+    assert_eq!(err, 0, "valid txn must return 0 error on partition");
+}
+
+#[test]
+fn add_offsets_to_txn_unknown_returns_error() {
+    use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+    use kafka_protocol::messages::{GroupId, ProducerId, TransactionalId};
+    let txn_mgr = TransactionManager::new();
+    let mut req = AddOffsetsToTxnRequest::default();
+    req.transactional_id = TransactionalId(StrBytes::from_static_str("no-such-txn"));
+    req.producer_id = ProducerId(1);
+    req.producer_epoch = 0;
+    req.group_id = GroupId(StrBytes::from_static_str("my-group"));
+    let body = encode_body(&req, 0);
+    let response = add_offsets_to_txn::handle(0, &body, &txn_mgr).unwrap();
+    assert_ne!(response.error_code, 0, "unknown txn must return non-zero error");
+}
+
+#[test]
+fn add_offsets_to_txn_valid_txn_succeeds() {
+    use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+    use kafka_protocol::messages::{GroupId, ProducerId, TransactionalId};
+    let txn_mgr = TransactionManager::new();
+    let (pid, epoch) = txn_mgr.init_transactional_producer("txn-aotxn");
+    let mut req = AddOffsetsToTxnRequest::default();
+    req.transactional_id = TransactionalId(StrBytes::from_static_str("txn-aotxn"));
+    req.producer_id = ProducerId(pid);
+    req.producer_epoch = epoch;
+    req.group_id = GroupId(StrBytes::from_static_str("my-group"));
+    let body = encode_body(&req, 0);
+    let response = add_offsets_to_txn::handle(0, &body, &txn_mgr).unwrap();
+    assert_eq!(response.error_code, 0, "valid txn must return 0 error");
+}
+
+#[test]
+fn txn_offset_commit_unknown_txn_returns_error() {
+    use kafka_protocol::messages::txn_offset_commit_request::{TxnOffsetCommitRequest, TxnOffsetCommitRequestPartition, TxnOffsetCommitRequestTopic};
+    use kafka_protocol::messages::{GroupId, ProducerId, TransactionalId};
+    let txn_mgr = TransactionManager::new();
+    let mut req = TxnOffsetCommitRequest::default();
+    req.transactional_id = TransactionalId(StrBytes::from_static_str("no-such-txn"));
+    req.group_id = GroupId(StrBytes::from_static_str("my-group"));
+    req.producer_id = ProducerId(1);
+    req.producer_epoch = 0;
+    let mut topic = TxnOffsetCommitRequestTopic::default();
+    topic.name = TopicName(StrBytes::from_static_str("test-topic"));
+    let mut part = TxnOffsetCommitRequestPartition::default();
+    part.partition_index = 0;
+    part.committed_offset = 5;
+    topic.partitions = vec![part];
+    req.topics = vec![topic];
+    let body = encode_body(&req, 0);
+    let response = txn_offset_commit::handle(0, &body, &txn_mgr).unwrap();
+    assert_eq!(response.topics.len(), 1);
+    let err = response.topics[0].partitions[0].error_code;
+    assert_ne!(err, 0, "unknown txn offset commit must return non-zero error");
+}
+
+#[test]
+fn write_txn_markers_appends_control_record() {
+    use kafka_protocol::messages::write_txn_markers_request::{WriteTxnMarkersRequest, WritableTxnMarker, WritableTxnMarkerTopic};
+    use kafka_protocol::messages::ProducerId;
+    let storage = test_storage(false);
+    storage.create_topic("markers-test", 1).unwrap();
+    let txn_mgr = TransactionManager::new();
+    let mut marker = WritableTxnMarker::default();
+    marker.producer_id = ProducerId(42);
+    marker.producer_epoch = 0;
+    marker.transaction_result = true;
+    let mut topic = WritableTxnMarkerTopic::default();
+    topic.name = TopicName(StrBytes::from_static_str("markers-test"));
+    topic.partition_indexes = vec![0];
+    marker.topics = vec![topic];
+    let mut req = WriteTxnMarkersRequest::default();
+    req.markers = vec![marker];
+    let body = encode_body(&req, 0);
+    let response = write_txn_markers::handle(0, &body, &storage, &txn_mgr).unwrap();
+    assert_eq!(response.markers.len(), 1);
+    let err = response.markers[0].topics[0].partitions[0].error_code;
+    assert_eq!(err, 0, "write_txn_markers on existing topic must succeed");
+}
+
+#[test]
+fn offset_delete_removes_group_offsets() {
+    use kafka_protocol::messages::offset_delete_request::{OffsetDeleteRequest, OffsetDeleteRequestTopic, OffsetDeleteRequestPartition};
+    let offset_store: Arc<dyn crate::storage::OffsetStore> = Arc::new(MemoryOffsetStore::new());
+    let mut req = OffsetDeleteRequest::default();
+    req.group_id = GroupId(StrBytes::from_static_str("del-off-grp"));
+    let mut topic = OffsetDeleteRequestTopic::default();
+    topic.name = TopicName(StrBytes::from_static_str("del-off-test"));
+    let mut part = OffsetDeleteRequestPartition::default();
+    part.partition_index = 0;
+    topic.partitions = vec![part];
+    req.topics = vec![topic];
+    let body = encode_body(&req, 0);
+    let response = offset_delete::handle(0, &body, &offset_store).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert_eq!(response.topics.len(), 1);
+    assert_eq!(response.topics[0].partitions[0].error_code, 0);
+}
+
+#[test]
+fn delete_groups_removes_empty_group() {
+    use kafka_protocol::messages::delete_groups_request::DeleteGroupsRequest;
+    let config = test_config(false);
+    let coordinator = test_consumer_groups(config);
+    let mut req = DeleteGroupsRequest::default();
+    req.groups_names = vec![GroupId(StrBytes::from_static_str("nonexistent-group"))];
+    let body = encode_body(&req, 0);
+    let response = delete_groups::handle(0, &body, coordinator.as_ref()).unwrap();
+    assert_eq!(response.results.len(), 1);
+    // Deleting a non-existent group returns 0 (already gone).
+    assert_eq!(response.results[0].error_code, 0);
+}

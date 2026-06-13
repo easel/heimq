@@ -171,6 +171,14 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	resumeTopic := topic + "-resume"
+	resumeGroup := fmt.Sprintf("sarama-resume-%d", time.Now().UnixNano())
+	if err := check("offset-resume", func() error {
+		return offsetResume(brokers, resumeTopic, resumeGroup, cfg)
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -711,6 +719,144 @@ func consumeCompressedRoundtrip(brokers []string, topic string, cfg *sarama.Conf
 	for i := 0; i < want; i++ {
 		key := fmt.Sprintf("ckey-%d", i)
 		wantVal := fmt.Sprintf("cval-%d", i)
+		v, ok := got[key]
+		if !ok {
+			return fmt.Errorf("missing key %s", key)
+		}
+		if v != wantVal {
+			return fmt.Errorf("key %s: got %q want %q", key, v, wantVal)
+		}
+	}
+	return nil
+}
+
+// offsetResume verifies that a consumer group resumes from a previously
+// committed offset rather than replaying from the beginning.
+//
+//  1. Create topic, produce 8 records (rkey-0..rkey-7).
+//  2. Use OffsetManager to commit offset=4 on partition 0 without consuming.
+//  3. Start a partition consumer at OffsetNewest (fallback if no commit).
+//     Since a commit exists, sarama's consumer group will honour it.
+//  4. Actually, use a partition consumer starting at the committed offset directly
+//     (sarama admin approach: fetch committed offset then seek).
+func offsetResume(brokers []string, topic, group string, baseCfg *sarama.Config) error {
+	// Step 1: create topic and produce 8 records.
+	admin, err := sarama.NewClusterAdmin(brokers, baseCfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	if err := admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, false); err != nil {
+		admin.Close()
+		return fmt.Errorf("create topic: %w", err)
+	}
+	admin.Close()
+
+	producer, err := sarama.NewSyncProducer(brokers, baseCfg)
+	if err != nil {
+		return fmt.Errorf("new producer: %w", err)
+	}
+	for i := 0; i < 8; i++ {
+		_, _, err := producer.SendMessage(&sarama.ProducerMessage{
+			Topic: topic,
+			Key:   sarama.StringEncoder(fmt.Sprintf("rkey-%d", i)),
+			Value: sarama.StringEncoder(fmt.Sprintf("rval-%d", i)),
+		})
+		if err != nil {
+			producer.Close()
+			return fmt.Errorf("produce record %d: %w", i, err)
+		}
+	}
+	producer.Close()
+
+	// Step 2: commit offset=4 for the group using OffsetManager.
+	omCfg := sarama.NewConfig()
+	omCfg.Version = sarama.V2_6_0_0
+	omCfg.Consumer.Offsets.Initial = sarama.OffsetOldest
+	client, err := sarama.NewClient(brokers, omCfg)
+	if err != nil {
+		return fmt.Errorf("new client for offset manager: %w", err)
+	}
+	defer client.Close()
+
+	om, err := sarama.NewOffsetManagerFromClient(group, client)
+	if err != nil {
+		return fmt.Errorf("new offset manager: %w", err)
+	}
+	pom, err := om.ManagePartition(topic, 0)
+	if err != nil {
+		om.Close()
+		return fmt.Errorf("manage partition: %w", err)
+	}
+	// MarkOffset commits offset+1 (next to consume), so mark 4 to resume from record 4.
+	pom.MarkOffset(4, "resume-test")
+	if err := pom.Close(); err != nil {
+		om.Close()
+		return fmt.Errorf("close pom: %w", err)
+	}
+	if err := om.Close(); err != nil {
+		return fmt.Errorf("close om: %w", err)
+	}
+
+	// Step 3: fetch the committed offset and verify it is 4.
+	fetchCfg := sarama.NewConfig()
+	fetchCfg.Version = sarama.V2_6_0_0
+	fetchCfg.Consumer.Offsets.Initial = sarama.OffsetOldest
+	fetchClient, err := sarama.NewClient(brokers, fetchCfg)
+	if err != nil {
+		return fmt.Errorf("new fetch client: %w", err)
+	}
+	defer fetchClient.Close()
+
+	om2, err := sarama.NewOffsetManagerFromClient(group, fetchClient)
+	if err != nil {
+		return fmt.Errorf("new offset manager 2: %w", err)
+	}
+	pom2, err := om2.ManagePartition(topic, 0)
+	if err != nil {
+		om2.Close()
+		return fmt.Errorf("manage partition 2: %w", err)
+	}
+	nextOffset, _ := pom2.NextOffset()
+	pom2.Close()
+	om2.Close()
+
+	if nextOffset != 4 {
+		return fmt.Errorf("expected committed offset=4, got %d", nextOffset)
+	}
+
+	// Step 4: consume records starting at offset 4 and verify rkey-4..rkey-7.
+	consCfg := sarama.NewConfig()
+	consCfg.Version = sarama.V2_6_0_0
+	consCfg.Consumer.Offsets.Initial = sarama.OffsetOldest
+	consumer, err := sarama.NewConsumer(brokers, consCfg)
+	if err != nil {
+		return fmt.Errorf("new consumer: %w", err)
+	}
+	defer consumer.Close()
+
+	pc, err := consumer.ConsumePartition(topic, 0, nextOffset)
+	if err != nil {
+		return fmt.Errorf("consume partition at %d: %w", nextOffset, err)
+	}
+	defer pc.Close()
+
+	got := make(map[string]string)
+	want := 4
+	timeout := time.After(20 * time.Second)
+	for len(got) < want {
+		select {
+		case msg := <-pc.Messages():
+			got[string(msg.Key)] = string(msg.Value)
+		case err := <-pc.Errors():
+			return fmt.Errorf("partition error: %w", err.Err)
+		case <-timeout:
+			return fmt.Errorf("timeout: consumed %d/%d resumed records", len(got), want)
+		}
+	}
+
+	for i := 4; i < 8; i++ {
+		key := fmt.Sprintf("rkey-%d", i)
+		wantVal := fmt.Sprintf("rval-%d", i)
 		v, ok := got[key]
 		if !ok {
 			return fmt.Errorf("missing key %s", key)

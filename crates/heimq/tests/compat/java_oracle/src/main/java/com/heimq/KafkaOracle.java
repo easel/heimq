@@ -53,16 +53,23 @@ public class KafkaOracle {
     private static void run(String bootstrap, String topic) throws Exception {
         String resumeTopic = topic + "-resume";
         String resumeGroup = "java-resume-" + System.nanoTime();
+        String oracleGroup = "java-oracle-group-" + System.nanoTime();
 
         check("create-topic", () -> createTopic(bootstrap, topic));
         check("produce", () -> produce(bootstrap, topic));
         check("consume-via-group", () -> consumeViaGroup(bootstrap, topic));
         check("describe-configs", () -> describeConfigs(bootstrap, topic));
         check("alter-configs", () -> alterConfigs(bootstrap, topic));
+        check("incremental-alter-configs", () -> incrementalAlterConfigs(bootstrap, topic));
         check("list-offsets", () -> listOffsets(bootstrap, topic));
         check("describe-cluster", () -> describeCluster(bootstrap));
         check("describe-log-dirs", () -> describeLogDirs(bootstrap));
         check("create-partitions", () -> createPartitions(bootstrap, topic));
+        check("delete-records", () -> deleteRecords(bootstrap, topic));
+        check("list-groups", () -> listGroups(bootstrap));
+        check("describe-groups", () -> describeGroups(bootstrap, oracleGroup));
+        check("offset-delete", () -> offsetDelete(bootstrap, topic, oracleGroup));
+        check("delete-groups", () -> deleteGroups(bootstrap, oracleGroup));
         check("offset-resume", () -> offsetResume(bootstrap, resumeTopic, resumeGroup));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
@@ -246,6 +253,31 @@ public class KafkaOracle {
         }
     }
 
+    private static void listGroups(String bootstrap) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            ListConsumerGroupsResult result = admin.listConsumerGroups();
+            // Just verify it returns without error; the list may be empty or non-empty.
+            Collection<ConsumerGroupListing> groups = result.all().get();
+            if (groups == null) {
+                throw new RuntimeException("listConsumerGroups returned null");
+            }
+        }
+    }
+
+    private static void describeGroups(String bootstrap, String group) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            // Describing a non-existent group: the request succeeds, the group entry
+            // will have a non-STABLE state. We only verify no exception is thrown.
+            DescribeConsumerGroupsResult result = admin.describeConsumerGroups(
+                    Collections.singletonList(group));
+            try {
+                result.all().get();
+            } catch (ExecutionException e) {
+                // GROUP_ID_NOT_FOUND or similar is acceptable — request completed.
+            }
+        }
+    }
+
     /**
      * Verifies that committed consumer group offsets persist across consumer sessions.
      *
@@ -356,6 +388,58 @@ public class KafkaOracle {
             if (!r.val().equals("hval-" + i)) throw new RuntimeException(key + ": val mismatch: " + r.val());
             if (!r.trace().equals("trace-" + i)) throw new RuntimeException(key + ": x-trace mismatch: " + r.trace());
             if (!r.seq().equals(String.valueOf(i))) throw new RuntimeException(key + ": x-seq mismatch: " + r.seq());
+        }
+    }
+
+    private static void incrementalAlterConfigs(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            Map<ConfigResource, Collection<AlterConfigOp>> ops = new HashMap<>();
+            ops.put(resource, Collections.singletonList(
+                    new AlterConfigOp(new ConfigEntry("retention.ms", "172800000"), AlterConfigOp.OpType.SET)));
+            admin.incrementalAlterConfigs(ops).all().get();
+        }
+    }
+
+    private static void deleteRecords(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            TopicPartition tp = new TopicPartition(topic, 0);
+            // Delete records before offset 1 (low watermark advance).
+            Map<TopicPartition, RecordsToDelete> toDelete =
+                    Collections.singletonMap(tp, RecordsToDelete.beforeOffset(1L));
+            DeleteRecordsResult result = admin.deleteRecords(toDelete);
+            DeletedRecords deleted = result.lowWatermarks().get(tp).get();
+            if (deleted.lowWatermark() < 1) {
+                throw new RuntimeException("expected low watermark >= 1, got " + deleted.lowWatermark());
+            }
+        }
+    }
+
+    private static void offsetDelete(String bootstrap, String topic, String group) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            TopicPartition tp = new TopicPartition(topic, 0);
+            Map<String, Collection<TopicPartition>> groupOffsets = new HashMap<>();
+            groupOffsets.put(group, Collections.singletonList(tp));
+            // deleteConsumerGroupOffsets only succeeds when the group is in EMPTY state;
+            // the group was never actually joined here, so it may not have offsets to delete —
+            // we accept either success or GROUP_ID_NOT_FOUND (error_code != 0 on the entry).
+            try {
+                admin.deleteConsumerGroupOffsets(group, new HashSet<>(Collections.singletonList(tp))).all().get();
+            } catch (ExecutionException e) {
+                // GROUP_ID_NOT_FOUND or GROUP_SUBSCRIBED_TO_TOPIC is acceptable.
+            }
+        }
+    }
+
+    private static void deleteGroups(String bootstrap, String group) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            DeleteConsumerGroupsResult result = admin.deleteConsumerGroups(
+                    Collections.singletonList(group));
+            try {
+                result.all().get();
+            } catch (ExecutionException e) {
+                // GROUP_ID_NOT_FOUND is acceptable — group was never joined.
+            }
         }
     }
 }
