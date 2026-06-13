@@ -1,5 +1,5 @@
 use super::*;
-use crate::consumer_group::{GroupState, Member};
+use crate::consumer_group::{GroupState, Member, MemoryOffsetStore};
 use crate::producer_state::ProducerStateManager;
 use crate::storage::SingleNodeClusterView;
 use crate::test_support::{encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage};
@@ -1694,4 +1694,196 @@ fn describe_topic_partitions_unknown_topic() {
     let response = describe_topic_partitions::handle(0, &body, &storage, &cluster_view).unwrap();
     assert_eq!(response.topics.len(), 1);
     assert_eq!(response.topics[0].error_code, 3);
+}
+
+#[test]
+fn init_producer_id_assigns_id() {
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    let txn_mgr = TransactionManager::new();
+    let req = InitProducerIdRequest::default();
+    let body = encode_body(&req, 0);
+    let response = init_producer_id::handle(0, &body, &txn_mgr).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.producer_id.0 >= 0, "producer_id must be non-negative");
+}
+
+#[test]
+fn init_producer_id_transactional_assigns_id() {
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::TransactionalId;
+    let txn_mgr = TransactionManager::new();
+    let mut req = InitProducerIdRequest::default();
+    req.transactional_id = Some(TransactionalId(StrBytes::from_static_str("my-txn")));
+    req.transaction_timeout_ms = 60000;
+    let body = encode_body(&req, 0);
+    let response = init_producer_id::handle(0, &body, &txn_mgr).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.producer_id.0 >= 0, "transactional producer_id must be non-negative");
+}
+
+#[test]
+fn describe_cluster_returns_broker_list() {
+    use kafka_protocol::messages::describe_cluster_request::DescribeClusterRequest;
+    let config = test_config(false);
+    let cluster_view = SingleNodeClusterView::new(&config);
+    let req = DescribeClusterRequest::default();
+    let body = encode_body(&req, 0);
+    let response = describe_cluster::handle(0, &body, &cluster_view).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(!response.brokers.is_empty(), "must return at least one broker");
+    assert!(!response.cluster_id.is_empty(), "cluster_id must be non-empty");
+}
+
+#[test]
+fn describe_configs_returns_entries() {
+    use kafka_protocol::messages::describe_configs_request::{DescribeConfigsRequest, DescribeConfigsResource};
+    let mut req = DescribeConfigsRequest::default();
+    let mut resource = DescribeConfigsResource::default();
+    resource.resource_type = 2; // TOPIC
+    resource.resource_name = StrBytes::from_static_str("my-topic");
+    req.resources = vec![resource];
+    let body = encode_body(&req, 1);
+    let response = describe_configs::handle(1, &body).unwrap();
+    assert_eq!(response.results.len(), 1);
+    let result = &response.results[0];
+    assert_eq!(result.error_code, 0);
+    assert!(!result.configs.is_empty(), "must return at least one config entry");
+}
+
+#[test]
+fn alter_configs_returns_success() {
+    use kafka_protocol::messages::alter_configs_request::{AlterConfigsRequest, AlterConfigsResource, AlterableConfig};
+    let mut req = AlterConfigsRequest::default();
+    let mut resource = AlterConfigsResource::default();
+    resource.resource_type = 2; // TOPIC
+    resource.resource_name = StrBytes::from_static_str("my-topic");
+    let mut entry = AlterableConfig::default();
+    entry.name = StrBytes::from_static_str("retention.ms");
+    entry.value = Some(StrBytes::from_static_str("86400000"));
+    resource.configs = vec![entry];
+    req.resources = vec![resource];
+    let body = encode_body(&req, 0);
+    let response = alter_configs::handle(0, &body).unwrap();
+    assert_eq!(response.responses.len(), 1);
+    assert_eq!(response.responses[0].error_code, 0);
+}
+
+#[test]
+fn incremental_alter_configs_returns_success() {
+    use kafka_protocol::messages::incremental_alter_configs_request::{
+        IncrementalAlterConfigsRequest, AlterConfigsResource, AlterableConfig,
+    };
+    let mut req = IncrementalAlterConfigsRequest::default();
+    let mut resource = AlterConfigsResource::default();
+    resource.resource_type = 2; // TOPIC
+    resource.resource_name = StrBytes::from_static_str("my-topic");
+    let mut entry = AlterableConfig::default();
+    entry.name = StrBytes::from_static_str("retention.ms");
+    entry.value = Some(StrBytes::from_static_str("86400000"));
+    entry.config_operation = 0; // SET
+    resource.configs = vec![entry];
+    req.resources = vec![resource];
+    let body = encode_body(&req, 0);
+    let response = incremental_alter_configs::handle(0, &body).unwrap();
+    assert_eq!(response.responses.len(), 1);
+    assert_eq!(response.responses[0].error_code, 0);
+}
+
+#[test]
+fn list_groups_empty() {
+    let config = test_config(false);
+    let coordinator = test_consumer_groups(config);
+    use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
+    let req = ListGroupsRequest::default();
+    let body = encode_body(&req, 0);
+    let response = list_groups::handle(0, &body, coordinator.as_ref()).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.groups.is_empty(), "fresh coordinator must have no groups");
+}
+
+#[test]
+fn describe_groups_unknown_returns_error() {
+    let config = test_config(false);
+    let coordinator = test_consumer_groups(config);
+    use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
+    use kafka_protocol::messages::GroupId;
+    let mut req = DescribeGroupsRequest::default();
+    req.groups = vec![GroupId(StrBytes::from_static_str("no-such-group"))];
+    let body = encode_body(&req, 0);
+    let response = describe_groups::handle(0, &body, coordinator.as_ref()).unwrap();
+    assert_eq!(response.groups.len(), 1);
+    assert_ne!(response.groups[0].error_code, 0, "unknown group must return non-zero error_code");
+}
+
+#[test]
+fn describe_log_dirs_known_topic() {
+    use kafka_protocol::messages::describe_log_dirs_request::DescribeLogDirsRequest;
+    let storage = test_storage(false);
+    storage.create_topic("logdirs-test", 1).unwrap();
+    // topics = None means "all topics"; the default gives Some([]) so set it explicitly.
+    let mut req = DescribeLogDirsRequest::default();
+    req.topics = None;
+    let body = encode_body(&req, 0);
+    let response = describe_log_dirs::handle(0, &body, &storage).unwrap();
+    assert_eq!(response.results.len(), 1);
+    assert_eq!(response.results[0].error_code, 0);
+    assert!(!response.results[0].topics.is_empty(), "must return at least one topic entry");
+}
+
+#[test]
+fn create_partitions_expands_topic() {
+    use kafka_protocol::messages::create_partitions_request::{CreatePartitionsRequest, CreatePartitionsTopic};
+    let storage = test_storage(false);
+    storage.create_topic("expand-me", 1).unwrap();
+    let mut req = CreatePartitionsRequest::default();
+    let mut topic = CreatePartitionsTopic::default();
+    topic.name = TopicName(StrBytes::from_static_str("expand-me"));
+    topic.count = 3;
+    req.topics = vec![topic];
+    let body = encode_body(&req, 0);
+    let response = create_partitions::handle(0, &body, &storage).unwrap();
+    assert_eq!(response.results.len(), 1);
+    assert_eq!(response.results[0].error_code, 0, "expand from 1→3 must succeed");
+    assert_eq!(storage.topic("expand-me").unwrap().num_partitions(), 3);
+}
+
+#[test]
+fn delete_records_updates_low_watermark() {
+    use kafka_protocol::messages::delete_records_request::{DeleteRecordsRequest, DeleteRecordsTopic, DeleteRecordsPartition};
+    let storage = test_storage(false);
+    storage.create_topic("del-rec-test", 1).unwrap();
+    let batch = encode_record_batch(&[new_record(0), new_record(1), new_record(2), new_record(3)]);
+    storage.append("del-rec-test", 0, &batch).unwrap();
+
+    let mut req = DeleteRecordsRequest::default();
+    let mut topic = DeleteRecordsTopic::default();
+    topic.name = TopicName(StrBytes::from_static_str("del-rec-test"));
+    let mut part = DeleteRecordsPartition::default();
+    part.partition_index = 0;
+    part.offset = 2;
+    topic.partitions = vec![part];
+    req.topics = vec![topic];
+    let body = encode_body(&req, 0);
+    let response = delete_records::handle(0, &body, &storage).unwrap();
+    assert_eq!(response.topics.len(), 1);
+    let pr = &response.topics[0].partitions[0];
+    assert_eq!(pr.error_code, 0);
+    assert_eq!(pr.low_watermark, 2, "low watermark must advance to the requested offset");
+}
+
+#[test]
+fn end_txn_unknown_txn_returns_invalid_epoch() {
+    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
+    use kafka_protocol::messages::{ProducerId, TransactionalId};
+    let storage = test_storage(false);
+    let offset_store: Arc<dyn crate::storage::OffsetStore> = Arc::new(MemoryOffsetStore::new());
+    let txn_mgr = TransactionManager::new();
+    let mut req = EndTxnRequest::default();
+    req.transactional_id = TransactionalId(StrBytes::from_static_str("nonexistent-txn"));
+    req.producer_id = ProducerId(42);
+    req.producer_epoch = 0;
+    req.committed = true;
+    let body = encode_body(&req, 0);
+    let response = end_txn::handle(0, &body, &storage, &offset_store, &txn_mgr).unwrap();
+    assert_ne!(response.error_code, 0, "unknown transaction must return non-zero error_code");
 }

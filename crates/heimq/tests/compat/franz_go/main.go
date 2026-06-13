@@ -40,6 +40,8 @@ func run(bootstrap string) error {
 	group := fmt.Sprintf("franz-group-%d", ts)
 	hdrTopic := fmt.Sprintf("franz-hdrs-%d", ts)
 	hdrGroup := fmt.Sprintf("franz-hdrs-group-%d", ts)
+	compTopic := fmt.Sprintf("franz-comp-%d", ts)
+	compGroup := fmt.Sprintf("franz-comp-group-%d", ts)
 
 	if err := check("create-topic", func() error {
 		return createTopic(ctx, bootstrap, topic)
@@ -169,6 +171,18 @@ func run(bootstrap string) error {
 
 	if err := check("consume-headers-roundtrip", func() error {
 		return consumeHeadersRoundtrip(ctx, bootstrap, hdrTopic, hdrGroup)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("produce-compressed", func() error {
+		return produceCompressed(ctx, bootstrap, compTopic)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("consume-compressed-roundtrip", func() error {
+		return consumeCompressedRoundtrip(ctx, bootstrap, compTopic, compGroup)
 	}); err != nil {
 		return err
 	}
@@ -806,6 +820,95 @@ func incrementalAlterConfigs(ctx context.Context, bootstrap, topic string) error
 	}
 	if _, err := resp.On(topic, func(r *kadm.AlterConfigsResponse) error { return r.Err }); err != nil {
 		return fmt.Errorf("incremental alter configs response for %q: %w", topic, err)
+	}
+	return nil
+}
+
+// produceCompressed creates compTopic and produces 4 records using gzip compression.
+// The topic is created inline so no separate create-topic check is needed.
+func produceCompressed(ctx context.Context, bootstrap, topic string) error {
+	// First create the topic.
+	{
+		cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+		if err != nil {
+			return fmt.Errorf("new client: %w", err)
+		}
+		adm := kadm.NewClient(cl)
+		resp, err := adm.CreateTopics(ctx, 1, 1, nil, topic)
+		cl.Close()
+		if err != nil {
+			return fmt.Errorf("create topic: %w", err)
+		}
+		if r, ok := resp[topic]; ok && r.Err != nil {
+			return fmt.Errorf("create topic %q: %w", topic, r.Err)
+		}
+	}
+
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.DefaultProduceTopic(topic),
+		kgo.ProducerBatchCompression(kgo.GzipCompression()),
+	)
+	if err != nil {
+		return fmt.Errorf("new producer: %w", err)
+	}
+	defer cl.Close()
+
+	for i := 0; i < 4; i++ {
+		res := cl.ProduceSync(ctx, &kgo.Record{
+			Key:   []byte(fmt.Sprintf("comp-key-%d", i)),
+			Value: []byte(fmt.Sprintf("comp-val-%d", i)),
+		})
+		if err := res.FirstErr(); err != nil {
+			return fmt.Errorf("record %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// consumeCompressedRoundtrip consumes the 4 gzip-compressed records and verifies
+// that the server correctly decompresses them during fetch.
+func consumeCompressedRoundtrip(ctx context.Context, bootstrap, topic, group string) error {
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.ConsumeTopics(topic),
+		kgo.ConsumerGroup(group),
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+	)
+	if err != nil {
+		return fmt.Errorf("new consumer: %w", err)
+	}
+	defer cl.Close()
+
+	got := make(map[string]string)
+	want := 4
+	for len(got) < want {
+		if ctx.Err() != nil {
+			return fmt.Errorf("timeout: consumed %d/%d compressed records", len(got), want)
+		}
+		fetches := cl.PollFetches(ctx)
+		if errs := fetches.Errors(); len(errs) > 0 {
+			return fmt.Errorf("fetch: %v", errs[0].Err)
+		}
+		fetches.EachRecord(func(r *kgo.Record) {
+			got[string(r.Key)] = string(r.Value)
+		})
+	}
+
+	for i := 0; i < want; i++ {
+		key := fmt.Sprintf("comp-key-%d", i)
+		wantVal := fmt.Sprintf("comp-val-%d", i)
+		v, ok := got[key]
+		if !ok {
+			return fmt.Errorf("missing key %s", key)
+		}
+		if v != wantVal {
+			return fmt.Errorf("key %s: got %q want %q", key, v, wantVal)
+		}
+	}
+
+	if err := cl.CommitUncommittedOffsets(ctx); err != nil {
+		return fmt.Errorf("commit offsets: %w", err)
 	}
 	return nil
 }
