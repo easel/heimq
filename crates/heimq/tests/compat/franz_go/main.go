@@ -48,6 +48,8 @@ func run(bootstrap string) error {
 	zstdGroup := fmt.Sprintf("franz-zstd-group-%d", ts)
 	resumeTopic := fmt.Sprintf("franz-resume-%d", ts)
 	resumeGroup := fmt.Sprintf("franz-resume-group-%d", ts)
+	txnTopic := fmt.Sprintf("franz-txn-%d", ts)
+	txnGroup := fmt.Sprintf("franz-txn-group-%d", ts)
 
 	if err := check("create-topic", func() error {
 		return createTopic(ctx, bootstrap, topic)
@@ -219,6 +221,18 @@ func run(bootstrap string) error {
 
 	if err := check("offset-resume", func() error {
 		return offsetResume(ctx, bootstrap, resumeTopic, resumeGroup)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("transactional-produce", func() error {
+		return transactionalProduce(ctx, bootstrap, txnTopic)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("transactional-consume-committed", func() error {
+		return transactionalConsumeCommitted(ctx, bootstrap, txnTopic, txnGroup)
 	}); err != nil {
 		return err
 	}
@@ -1103,5 +1117,110 @@ func offsetResume(ctx context.Context, bootstrap, topic, group string) error {
 		}
 	}
 
+	return nil
+}
+
+// transactionalProduce creates txnTopic, commits 3 records in a transaction,
+// then aborts a second transaction containing 2 records.
+func transactionalProduce(ctx context.Context, bootstrap, topic string) error {
+	if err := createTopic(ctx, bootstrap, topic); err != nil {
+		return fmt.Errorf("create topic: %w", err)
+	}
+
+	txnID := fmt.Sprintf("franz-txn-%d", time.Now().UnixNano())
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.TransactionalID(txnID),
+		kgo.DefaultProduceTopic(topic),
+	)
+	if err != nil {
+		return fmt.Errorf("new txn client: %w", err)
+	}
+	defer cl.Close()
+
+	// Committed transaction.
+	if err := cl.BeginTransaction(); err != nil {
+		return fmt.Errorf("begin txn: %w", err)
+	}
+	for i := 0; i < 3; i++ {
+		r := &kgo.Record{Key: []byte(fmt.Sprintf("tkey-%d", i)), Value: []byte(fmt.Sprintf("tval-%d", i))}
+		if err := cl.ProduceSync(ctx, r).FirstErr(); err != nil {
+			return fmt.Errorf("txn produce record %d: %w", i, err)
+		}
+	}
+	if err := cl.EndTransaction(ctx, kgo.TryCommit); err != nil {
+		return fmt.Errorf("commit txn: %w", err)
+	}
+
+	// Aborted transaction — these records must not be visible to read_committed.
+	if err := cl.BeginTransaction(); err != nil {
+		return fmt.Errorf("begin abort txn: %w", err)
+	}
+	for i := 0; i < 2; i++ {
+		r := &kgo.Record{Key: []byte(fmt.Sprintf("akey-%d", i)), Value: []byte(fmt.Sprintf("aval-%d", i))}
+		if err := cl.ProduceSync(ctx, r).FirstErr(); err != nil {
+			return fmt.Errorf("abort txn produce record %d: %w", i, err)
+		}
+	}
+	if err := cl.EndTransaction(ctx, kgo.TryAbort); err != nil {
+		return fmt.Errorf("abort txn: %w", err)
+	}
+
+	return nil
+}
+
+// transactionalConsumeCommitted reads from txnTopic using read_committed isolation
+// and verifies that only the 3 committed records (tkey-0..tkey-2) arrive, not
+// the 2 aborted records (akey-0, akey-1).
+func transactionalConsumeCommitted(ctx context.Context, bootstrap, topic, group string) error {
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.ConsumerGroup(group),
+		kgo.ConsumeTopics(topic),
+		kgo.FetchIsolationLevel(kgo.ReadCommitted()),
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+	)
+	if err != nil {
+		return fmt.Errorf("new consumer client: %w", err)
+	}
+	defer cl.Close()
+
+	got := make(map[string]string)
+	deadline := time.Now().Add(30 * time.Second)
+	for len(got) < 3 && time.Now().Before(deadline) {
+		fetches := cl.PollFetches(ctx)
+		if errs := fetches.Errors(); len(errs) > 0 {
+			return fmt.Errorf("txn fetch error: %v", errs[0].Err)
+		}
+		fetches.EachRecord(func(r *kgo.Record) {
+			got[string(r.Key)] = string(r.Value)
+		})
+	}
+
+	if len(got) < 3 {
+		return fmt.Errorf("timeout: consumed %d/3 committed records; got keys: %v", len(got), got)
+	}
+
+	for i := 0; i < 3; i++ {
+		key := fmt.Sprintf("tkey-%d", i)
+		wantVal := fmt.Sprintf("tval-%d", i)
+		v, ok := got[key]
+		if !ok {
+			return fmt.Errorf("missing committed record %s", key)
+		}
+		if v != wantVal {
+			return fmt.Errorf("key %s: got %q want %q", key, v, wantVal)
+		}
+	}
+	// Aborted records must not appear.
+	for i := 0; i < 2; i++ {
+		if _, ok := got[fmt.Sprintf("akey-%d", i)]; ok {
+			return fmt.Errorf("aborted record akey-%d leaked into read_committed consumer", i)
+		}
+	}
+
+	if err := cl.CommitUncommittedOffsets(ctx); err != nil {
+		return fmt.Errorf("commit offsets: %w", err)
+	}
 	return nil
 }
