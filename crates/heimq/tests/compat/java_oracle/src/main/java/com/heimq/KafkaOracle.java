@@ -18,6 +18,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.Future;
+import java.util.concurrent.ExecutionException;
 
 /**
  * Java kafka-clients oracle for heimq.
@@ -56,6 +57,9 @@ public class KafkaOracle {
         check("describe-configs", () -> describeConfigs(bootstrap, topic));
         check("alter-configs", () -> alterConfigs(bootstrap, topic));
         check("list-offsets", () -> listOffsets(bootstrap, topic));
+        check("describe-cluster", () -> describeCluster(bootstrap));
+        check("describe-log-dirs", () -> describeLogDirs(bootstrap));
+        check("create-partitions", () -> createPartitions(bootstrap, topic));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
         check("delete-topic", () -> deleteTopic(bootstrap, topic));
@@ -205,6 +209,36 @@ public class KafkaOracle {
                         .add("x-seq", String.valueOf(i).getBytes());
                 producer.send(record).get();
             }
+        }
+    }
+
+    private static void describeCluster(String bootstrap) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            DescribeClusterResult result = admin.describeCluster();
+            Collection<org.apache.kafka.common.Node> nodes = result.nodes().get();
+            if (nodes.isEmpty()) {
+                throw new RuntimeException("expected at least 1 broker node, got none");
+            }
+        }
+    }
+
+    private static void describeLogDirs(String bootstrap) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            // Describe log dirs for all brokers (we only have one: node 0).
+            DescribeLogDirsResult result = admin.describeLogDirs(Collections.singletonList(0));
+            Map<Integer, Map<String, org.apache.kafka.clients.admin.LogDirDescription>> dirs =
+                    result.allDescriptions().get();
+            if (dirs.isEmpty()) {
+                throw new RuntimeException("expected log dirs response, got empty map");
+            }
+        }
+    }
+
+    private static void createPartitions(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            Map<String, NewPartitions> newPartitions = Collections.singletonMap(
+                    topic, NewPartitions.increaseTo(3));
+            admin.createPartitions(newPartitions).all().get();
         }
     }
 

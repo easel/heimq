@@ -7,6 +7,10 @@ use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
 use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
 use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
+use kafka_protocol::messages::describe_topic_partitions_request::{DescribeTopicPartitionsRequest, TopicRequest as DtpTopicRequest};
+use kafka_protocol::messages::elect_leaders_request::{ElectLeadersRequest, TopicPartitions as ElectLeadersTopicPartitions};
+use kafka_protocol::messages::list_transactions_request::ListTransactionsRequest;
+use kafka_protocol::messages::offset_for_leader_epoch_request::{OffsetForLeaderEpochRequest, OffsetForLeaderTopic, OffsetForLeaderPartition};
 use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
 use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
 use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
@@ -1574,4 +1578,120 @@ fn sync_group_read_string_edges() {
     buf.extend_from_slice(b"a");
     let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
     assert_eq!(response.error_code, 35);
+}
+
+#[test]
+fn list_transactions_returns_empty() {
+    let req = ListTransactionsRequest::default();
+    let body = encode_body(&req, 0);
+    let response = list_transactions::handle(0, &body).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.transaction_states.is_empty());
+}
+
+#[test]
+fn elect_leaders_always_succeeds() {
+    let mut req = ElectLeadersRequest::default();
+    let mut tp = ElectLeadersTopicPartitions::default();
+    tp.topic = TopicName(StrBytes::from_static_str("my-topic"));
+    tp.partitions = vec![0, 1, 2];
+    req.topic_partitions = Some(vec![tp]);
+    let body = encode_body(&req, 0);
+    let response = elect_leaders::handle(0, &body).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert_eq!(response.replica_election_results.len(), 1);
+    let result = &response.replica_election_results[0];
+    for p in &result.partition_result {
+        assert_eq!(p.error_code, 0, "partition {} should succeed", p.partition_id);
+    }
+}
+
+#[test]
+fn elect_leaders_no_topics_returns_empty() {
+    let mut req = ElectLeadersRequest::default();
+    req.topic_partitions = None;
+    let body = encode_body(&req, 0);
+    let response = elect_leaders::handle(0, &body).unwrap();
+    assert_eq!(response.error_code, 0);
+    assert!(response.replica_election_results.is_empty());
+}
+
+#[test]
+fn offset_for_leader_epoch_returns_hwm() {
+    let storage = test_storage(false);
+    storage.create_topic("ep-test", 1).unwrap();
+
+    let mut req = OffsetForLeaderEpochRequest::default();
+    let mut topic = OffsetForLeaderTopic::default();
+    topic.topic = TopicName(StrBytes::from_static_str("ep-test"));
+    let mut part = OffsetForLeaderPartition::default();
+    part.partition = 0;
+    part.leader_epoch = 0;
+    part.current_leader_epoch = -1;
+    topic.partitions = vec![part];
+    req.topics = vec![topic];
+    let body = encode_body(&req, 0);
+    let response = offset_for_leader_epoch::handle(0, &body, &storage).unwrap();
+    assert_eq!(response.topics.len(), 1);
+    let tp = &response.topics[0].partitions[0];
+    assert_eq!(tp.error_code, 0);
+    assert!(tp.end_offset >= 0);
+}
+
+#[test]
+fn offset_for_leader_epoch_unknown_topic_returns_error3() {
+    let storage = test_storage(false);
+
+    let mut req = OffsetForLeaderEpochRequest::default();
+    let mut topic = OffsetForLeaderTopic::default();
+    topic.topic = TopicName(StrBytes::from_static_str("nonexistent"));
+    let mut part = OffsetForLeaderPartition::default();
+    part.partition = 0;
+    part.leader_epoch = 0;
+    part.current_leader_epoch = -1;
+    topic.partitions = vec![part];
+    req.topics = vec![topic];
+    let body = encode_body(&req, 0);
+    let response = offset_for_leader_epoch::handle(0, &body, &storage).unwrap();
+    let tp = &response.topics[0].partitions[0];
+    assert_eq!(tp.error_code, 3);
+}
+
+#[test]
+fn describe_topic_partitions_known_topic() {
+    let config = test_config(false);
+    let storage = test_storage(false);
+    let cluster_view = SingleNodeClusterView::new(&config);
+    storage.create_topic("dtp-test", 2).unwrap();
+
+    let mut req = DescribeTopicPartitionsRequest::default();
+    let mut topic_req = DtpTopicRequest::default();
+    topic_req.name = TopicName(StrBytes::from_static_str("dtp-test"));
+    req.topics = vec![topic_req];
+    let body = encode_body(&req, 0);
+    let response = describe_topic_partitions::handle(0, &body, &storage, &cluster_view).unwrap();
+    assert_eq!(response.topics.len(), 1);
+    let t = &response.topics[0];
+    assert_eq!(t.error_code, 0);
+    assert_eq!(t.partitions.len(), 2);
+    for p in &t.partitions {
+        assert_eq!(p.error_code, 0);
+        assert!(p.leader_id.0 >= 0);
+    }
+}
+
+#[test]
+fn describe_topic_partitions_unknown_topic() {
+    let config = test_config(false);
+    let storage = test_storage(false);
+    let cluster_view = SingleNodeClusterView::new(&config);
+
+    let mut req = DescribeTopicPartitionsRequest::default();
+    let mut topic_req = DtpTopicRequest::default();
+    topic_req.name = TopicName(StrBytes::from_static_str("no-such-topic"));
+    req.topics = vec![topic_req];
+    let body = encode_body(&req, 0);
+    let response = describe_topic_partitions::handle(0, &body, &storage, &cluster_view).unwrap();
+    assert_eq!(response.topics.len(), 1);
+    assert_eq!(response.topics[0].error_code, 3);
 }

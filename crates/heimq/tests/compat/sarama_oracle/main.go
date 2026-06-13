@@ -107,6 +107,18 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	if err := check("list-offsets", func() error {
+		return listOffsets(brokers, topic, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("describe-log-dirs", func() error {
+		return describeLogDirs(brokers, cfg)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("delete-records", func() error {
 		return deleteRecords(brokers, topic, cfg)
 	}); err != nil {
@@ -535,6 +547,54 @@ func deleteRecords(brokers []string, topic string, cfg *sarama.Config) error {
 	// Delete records up to offset 2 on partition 0.
 	offsets := map[int32]int64{0: 2}
 	return admin.DeleteRecords(topic, offsets)
+}
+
+// listOffsets uses sarama Client.GetOffset to exercise ListOffsets (API 2).
+func listOffsets(brokers []string, topic string, cfg *sarama.Config) error {
+	client, err := sarama.NewClient(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer client.Close()
+
+	// Get the latest offset (high watermark) for partition 0.
+	offset, err := client.GetOffset(topic, 0, sarama.OffsetNewest)
+	if err != nil {
+		return fmt.Errorf("get offset (newest): %w", err)
+	}
+	// We produced 5 messages, so latest offset should be >= 5.
+	if offset < 5 {
+		return fmt.Errorf("expected offset >= 5 for newest, got %d", offset)
+	}
+
+	// Get the earliest offset for partition 0.
+	earliest, err := client.GetOffset(topic, 0, sarama.OffsetOldest)
+	if err != nil {
+		return fmt.Errorf("get offset (oldest): %w", err)
+	}
+	if earliest < 0 {
+		return fmt.Errorf("expected non-negative oldest offset, got %d", earliest)
+	}
+	return nil
+}
+
+// describeLogDirs uses sarama ClusterAdmin to exercise DescribeLogDirs (API 35).
+func describeLogDirs(brokers []string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	// Query log dirs for broker 0 (our single-node cluster).
+	logDirs, err := admin.DescribeLogDirs([]int32{0})
+	if err != nil {
+		return fmt.Errorf("describe log dirs: %w", err)
+	}
+	if len(logDirs) == 0 {
+		return fmt.Errorf("expected log dirs response, got empty map")
+	}
+	return nil
 }
 
 // describeCluster uses sarama ClusterAdmin to exercise DescribeCluster (API 60).

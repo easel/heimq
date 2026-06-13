@@ -97,6 +97,7 @@ impl Router {
             44 => self.handle_incremental_alter_configs(&header, &body),
             60 => self.handle_describe_cluster(&header, &body),
             66 => self.handle_list_transactions(&header, &body),
+            75 => self.handle_describe_topic_partitions(&header, &body),
             47 => self.handle_offset_delete(&header, &body),
             19 => self.handle_create_topics(&header, &body),
             35 => self.handle_describe_log_dirs(&header, &body),
@@ -334,6 +335,20 @@ impl Router {
         self.handle_and_encode(
             header,
             Box::new(|| list_transactions::handle(header.api_version, body)),
+        )
+    }
+
+    fn handle_describe_topic_partitions(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| {
+                describe_topic_partitions::handle(
+                    header.api_version,
+                    body,
+                    &self.storage,
+                    self.cluster_view.as_ref(),
+                )
+            }),
         )
     }
 

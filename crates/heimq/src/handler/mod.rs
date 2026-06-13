@@ -13,6 +13,7 @@ pub mod elect_leaders;
 pub mod describe_cluster;
 pub mod describe_configs;
 pub mod describe_groups;
+pub mod describe_topic_partitions;
 pub mod describe_log_dirs;
 pub mod end_txn;
 pub mod fetch;

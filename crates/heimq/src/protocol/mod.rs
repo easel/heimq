@@ -46,6 +46,7 @@ pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     (44, 0, 1),  // IncrementalAlterConfigs
     (60, 0, 1),  // DescribeCluster
     (66, 0, 1),  // ListTransactions
+    (75, 0, 0),  // DescribeTopicPartitions
     (47, 0, 0),  // OffsetDelete
     (19, 0, 7),  // CreateTopics
     (37, 0, 3),  // CreatePartitions
@@ -97,7 +98,7 @@ enum CapabilityGate {
 fn capability_gate(api_key: i16) -> CapabilityGate {
     match api_key {
         // Log-backend APIs.
-        0 | 1 | 2 | 3 | 19 | 20 | 21 | 23 | 35 | 37 => CapabilityGate::Log,
+        0 | 1 | 2 | 3 | 19 | 20 | 21 | 23 | 35 | 37 | 75 => CapabilityGate::Log,
         // Offset-store APIs.
         8 | 9 | 47 => CapabilityGate::OffsetStore,
         // Group-coordinator APIs.

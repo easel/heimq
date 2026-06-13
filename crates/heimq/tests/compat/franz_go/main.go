@@ -149,6 +149,12 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("describe-topic-partitions", func() error {
+		return describeTopicPartitions(ctx, bootstrap, topic)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("delete-topic", func() error {
 		return deleteTopic(ctx, bootstrap, topic)
 	}); err != nil {
@@ -737,6 +743,48 @@ func offsetForLeaderEpoch(ctx context.Context, bootstrap, topic string) error {
 			if p.EndOffset < 0 {
 				return fmt.Errorf("partition %d: negative end offset %d", p.Partition, p.EndOffset)
 			}
+		}
+	}
+	return nil
+}
+
+// describeTopicPartitions exercises DescribeTopicPartitions (API 75, KIP-848).
+func describeTopicPartitions(ctx context.Context, bootstrap, topic string) error {
+	// kgo defaults to kversion.Stable() which does not yet include API 75.
+	// Pass MaxVersions(nil) to skip the client-side version cap and let the
+	// server's own ApiVersions response govern negotiation.
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap), kgo.MaxVersions(nil))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	req := &kmsg.DescribeTopicPartitionsRequest{
+		Topics: []kmsg.DescribeTopicPartitionsRequestTopic{
+			{Topic: topic},
+		},
+		ResponsePartitionLimit: 200,
+	}
+	resp, err := req.RequestWith(ctx, cl)
+	if err != nil {
+		return fmt.Errorf("rpc: %w", err)
+	}
+	if len(resp.Topics) == 0 {
+		return fmt.Errorf("expected at least one topic in response, got none")
+	}
+	t := resp.Topics[0]
+	if t.ErrorCode != 0 {
+		return fmt.Errorf("topic %q error_code=%d", topic, t.ErrorCode)
+	}
+	if len(t.Partitions) == 0 {
+		return fmt.Errorf("topic %q: expected partitions, got none", topic)
+	}
+	for _, p := range t.Partitions {
+		if p.ErrorCode != 0 {
+			return fmt.Errorf("topic %q partition %d error_code=%d", topic, p.Partition, p.ErrorCode)
+		}
+		if p.LeaderID < 0 {
+			return fmt.Errorf("topic %q partition %d: invalid leader_id=%d", topic, p.Partition, p.LeaderID)
 		}
 	}
 	return nil
