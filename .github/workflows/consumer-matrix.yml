@@ -1,0 +1,33 @@
+name: consumer-matrix
+# Verifies that heimq-broker changes don't break consumer repos.
+# Currently gates on fjord; pqueue and niflheim added at their adoption slices.
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  fjord:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout heimq
+        uses: actions/checkout@v4
+        with:
+          path: heimq
+
+      - name: Checkout fjord
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/fjord
+          path: fjord
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            heimq
+            fjord
+
+      - name: Build heimq-broker (consumer dependency)
+        run: cargo build -p heimq-broker
+        working-directory: heimq
+
+      - name: Test fjord-broker conformance
+        run: cargo test -p fjord-broker
+        working-directory: fjord
