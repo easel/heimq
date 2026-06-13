@@ -1,0 +1,1 @@
+{"status":"block","summary":"workspace tests failed","failing_tests":"test __gate_verification::intentionally_failing_gate_test ... FAILED|test result: FAILED. 161 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s"}
