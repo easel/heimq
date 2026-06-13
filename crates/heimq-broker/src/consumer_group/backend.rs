@@ -168,6 +168,9 @@ pub trait GroupCoordinatorBackend: Send + Sync {
     /// Describe a single group. Returns `None` if the group does not exist.
     fn describe_group(&self, group_id: &str) -> Option<GroupDescription>;
 
+    /// Delete a group. Returns true if the group existed and was removed.
+    fn delete_group(&self, group_id: &str) -> bool;
+
     /// Backend capabilities descriptor.
     fn capabilities(&self) -> &GroupCoordinatorCapabilities;
 

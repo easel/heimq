@@ -236,6 +236,10 @@ impl GroupCoordinatorBackend for ConsumerGroupManager {
         self.groups.iter().map(|e| e.key().clone()).collect()
     }
 
+    fn delete_group(&self, group_id: &str) -> bool {
+        self.groups.remove(group_id).is_some()
+    }
+
     fn describe_group(&self, group_id: &str) -> Option<GroupDescription> {
         let group = self.get_group(group_id)?;
         let group_state = match group.state() {

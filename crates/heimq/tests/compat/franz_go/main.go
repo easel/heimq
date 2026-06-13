@@ -70,6 +70,12 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("delete-groups", func() error {
+		return deleteGroups(ctx, bootstrap, group)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("list-offsets", func() error {
 		return listOffsets(ctx, bootstrap, topic, 5)
 	}); err != nil {
@@ -410,6 +416,25 @@ func describeGroups(ctx context.Context, bootstrap, wantGroup string) error {
 	}
 	if dg.Err != nil {
 		return fmt.Errorf("group %q describe error: %w", wantGroup, dg.Err)
+	}
+	return nil
+}
+
+// deleteGroups verifies that DeleteGroups (API 42) succeeds for a known group.
+func deleteGroups(ctx context.Context, bootstrap, group string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	resp, err := adm.DeleteGroups(ctx, group)
+	if err != nil {
+		return fmt.Errorf("delete groups rpc: %w", err)
+	}
+	if r, ok := resp[group]; ok && r.Err != nil {
+		return fmt.Errorf("delete group %q: %w", group, r.Err)
 	}
 	return nil
 }

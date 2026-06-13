@@ -45,8 +45,27 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	group := fmt.Sprintf("sarama-oracle-group-%d", time.Now().UnixNano())
 	if err := check("consume-via-group", func() error {
-		return consumeViaGroup(brokers, topic, cfg)
+		return consumeViaGroup(brokers, topic, group, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("list-groups", func() error {
+		return listGroups(brokers, group, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("describe-groups", func() error {
+		return describeGroups(brokers, group, cfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("delete-groups", func() error {
+		return deleteGroups(brokers, group, cfg)
 	}); err != nil {
 		return err
 	}
@@ -250,8 +269,7 @@ func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession,
 	return nil
 }
 
-func consumeViaGroup(brokers []string, topic string, cfg *sarama.Config) error {
-	group := fmt.Sprintf("sarama-oracle-group-%d", time.Now().UnixNano())
+func consumeViaGroup(brokers []string, topic, group string, cfg *sarama.Config) error {
 	cg, err := sarama.NewConsumerGroup(brokers, group, cfg)
 	if err != nil {
 		return fmt.Errorf("new consumer group: %w", err)
@@ -307,4 +325,56 @@ func consumeViaGroup(brokers []string, topic string, cfg *sarama.Config) error {
 
 	cancel()
 	return nil
+}
+
+// listGroups uses sarama ClusterAdmin to exercise ListGroups (API 16).
+func listGroups(brokers []string, wantGroup string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	groups, err := admin.ListConsumerGroups()
+	if err != nil {
+		return fmt.Errorf("list consumer groups: %w", err)
+	}
+	if _, ok := groups[wantGroup]; !ok {
+		return fmt.Errorf("group %q not found in list; got %d groups", wantGroup, len(groups))
+	}
+	return nil
+}
+
+// describeGroups uses sarama ClusterAdmin to exercise DescribeGroups (API 15).
+func describeGroups(brokers []string, wantGroup string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	descriptions, err := admin.DescribeConsumerGroups([]string{wantGroup})
+	if err != nil {
+		return fmt.Errorf("describe consumer groups: %w", err)
+	}
+	for _, d := range descriptions {
+		if d.GroupId == wantGroup {
+			if d.Err != sarama.ErrNoError {
+				return fmt.Errorf("group %q describe error: %v", wantGroup, d.Err)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("group %q missing from describe response", wantGroup)
+}
+
+// deleteGroups uses sarama ClusterAdmin to exercise DeleteGroups (API 42).
+func deleteGroups(brokers []string, group string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	return admin.DeleteConsumerGroup(group)
 }
