@@ -21,6 +21,7 @@ use std::time::Duration;
 const TOPIC: &str = "parity-produce-fetch";
 const N: usize = 10;
 
+// @covers US-001-AC4 US-005-AC4 US-005-AC5
 pub struct ProduceFetchRoundtrip;
 
 #[async_trait]

@@ -150,6 +150,7 @@ fn test_legacy_multiple_topics() {
 // Modern Protocol Tests (rdkafka - full produce/consume with modern protocol)
 // ============================================================================
 
+// @covers US-001-AC1 US-001-AC3 US-013-AC1
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_simple_produce() {
@@ -250,6 +251,7 @@ async fn test_rdkafka_rapid_produce() {
     }
 }
 
+// @covers US-001-AC1 US-001-AC2 US-001-AC3
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_produce_consume_roundtrip() {
@@ -405,6 +407,7 @@ fn create_group_consumer(server: &TestServer, group_id: &str, session_timeout_ms
         .expect("Failed to create consumer")
 }
 
+// @covers US-002-AC1 US-002-AC3
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_consumer_group_join() {
@@ -446,6 +449,7 @@ async fn test_rdkafka_consumer_group_join() {
     assert_eq!(received, 5, "Consumer should have joined group and received all messages");
 }
 
+// @covers US-002-AC4
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_consumer_group_offset_commit() {
@@ -526,6 +530,7 @@ async fn test_rdkafka_consumer_group_offset_commit() {
     }
 }
 
+// @covers US-002-AC4
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_consumer_group_manual_offset_fetch() {
@@ -649,6 +654,7 @@ async fn test_rdkafka_multiple_consumers_same_group() {
     println!("Consumer 1 received: {}, Consumer 2 received: {}", c1_received, c2_received);
 }
 
+// @covers US-002-AC1
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_consumer_group_lifecycle() {
@@ -743,6 +749,7 @@ async fn test_rdkafka_consumer_group_lifecycle() {
     }
 }
 
+// @covers US-002-AC3
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_consumer_rebalance_on_new_member() {
@@ -1209,6 +1216,7 @@ async fn test_rdkafka_group_multi_partition_delivery() {
     );
 }
 
+// @covers US-002-AC2
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_group_rebalance_on_graceful_leave() {
@@ -1756,6 +1764,7 @@ fn test_legacy_keyed_messages_produce() {
     assert!(topics.names().any(|n| n == topic), "Topic should exist");
 }
 
+// @covers US-002-AC4
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh"]
 async fn test_rdkafka_group_resume_from_committed() {
@@ -3494,6 +3503,7 @@ async fn test_rdkafka_concurrent_producers() {
     }
 }
 
+// @covers US-006-AC1 US-006-AC2
 #[tokio::test]
 #[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
 async fn test_rdkafka_produce_consume_soak() {

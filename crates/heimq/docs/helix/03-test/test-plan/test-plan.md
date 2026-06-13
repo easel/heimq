@@ -387,4 +387,75 @@ test:
 - All P0 idempotent-producer and transaction acceptance scenarios pass against heimq and against Redpanda (FEAT-002).
 - Standard Kafka benchmarks (`kafka-producer-perf-test`, `kafka-consumer-perf-test`, OpenMessaging Benchmark) complete without protocol/client errors (FEAT-004).
 - Each ecosystem integration target has at least one passing test in CI (FEAT-005).
+
+## Acceptance Criteria Layer Allocation
+
+Machine-checkable via `grep -r '@covers' crates/heimq/tests/`. Legend: **C** = contract, **I** = integration, **P** = parity, **E** = ecosystem/manual, **NYI** = not-yet-implemented (capability-gated or future story).
+
+| AC ID | Layer | Exercising Test(s) | Status |
+|---|---|---|---|
+| US-001-AC1 | C, I | `contract_api_versions_matches_supported_range`, `contract_produce_fetch_roundtrip`, `test_rdkafka_simple_produce`, `test_rdkafka_produce_consume_roundtrip` | Automated |
+| US-001-AC2 | C, I | `contract_produce_fetch_roundtrip`, `test_rdkafka_produce_consume_roundtrip` | Automated |
+| US-001-AC3 | I | `test_rdkafka_simple_produce`, `test_rdkafka_produce_consume_roundtrip` | Automated |
+| US-001-AC4 | P | `parity::workloads::produce_fetch::ProduceFetchRoundtrip` | Automated |
+| US-002-AC1 | C, I | `contract_find_coordinator_returns_self`, `contract_join_group_new_member`, `contract_sync_group_leader`, `contract_heartbeat_active_member`, `contract_consumer_group_lifecycle`, `test_rdkafka_consumer_group_join`, `test_rdkafka_consumer_group_lifecycle` | Automated |
+| US-002-AC2 | C, I | `contract_leave_group_success`, `contract_consumer_group_lifecycle`, `test_rdkafka_group_rebalance_on_graceful_leave` | Automated |
+| US-002-AC3 | C, I | `contract_join_group_new_member`, `test_rdkafka_consumer_group_join`, `test_rdkafka_consumer_rebalance_on_new_member` | Automated |
+| US-002-AC4 | C, I | `contract_offset_commit_and_fetch`, `test_rdkafka_consumer_group_offset_commit`, `test_rdkafka_consumer_group_manual_offset_fetch`, `test_rdkafka_group_resume_from_committed` | Automated |
+| US-002-AC5 | P | `parity::workloads::consumer_group::ConsumerGroupLifecycle` | Automated |
+| US-003-AC1 | — | — | NYI: capability-gated off (FEAT-002) |
+| US-003-AC2 | — | — | NYI: capability-gated off |
+| US-003-AC3 | — | — | NYI: capability-gated off |
+| US-003-AC4 | — | — | NYI: capability-gated off |
+| US-003-AC5 | — | — | NYI: capability-gated off |
+| US-004-AC1 | — | — | NYI: capability-gated off (FEAT-002) |
+| US-004-AC2 | — | — | NYI: capability-gated off |
+| US-004-AC3 | — | — | NYI: capability-gated off |
+| US-004-AC4 | — | — | NYI: capability-gated off |
+| US-004-AC5 | — | — | NYI: capability-gated off |
+| US-004-AC6 | — | — | NYI: capability-gated off |
+| US-004-AC7 | — | — | NYI: capability-gated off |
+| US-004-AC8 | — | — | NYI: capability-gated off |
+| US-004-AC9 | — | — | NYI: capability-gated off |
+| US-004-AC10 | — | — | NYI: capability-gated off |
+| US-004-AC11 | — | — | NYI: capability-gated off |
+| US-005-AC1 | P | `tests/parity/main.rs` (harness entry point) | Automated |
+| US-005-AC2 | P | `tests/parity/diff.rs` | Automated |
+| US-005-AC3 | P | `tests/parity/normalize.rs` | Automated |
+| US-005-AC4 | P | `parity::workloads::produce_fetch`, `parity::workloads::consumer_group` | Automated |
+| US-005-AC5 | P | `parity::workloads::produce_fetch`, `parity::workloads::consumer_group` | Automated |
+| US-005-AC6 | P | `tests/parity/exemptions.rs` | Automated |
+| US-005-AC7 | — | — | NYI: txn workloads gated off (FEAT-002) |
+| US-006-AC1 | E | `scripts/bench/run-smoke.sh` + CI (`bench-smoke.yml`) | Automated (CI) |
+| US-006-AC2 | E | `scripts/bench/run-smoke.sh` + CI (`bench-smoke.yml`) | Automated (CI) |
+| US-006-AC3 | — | — | NYI: idempotent/transactional bench profiles pending FEAT-002 |
+| US-006-AC4 | E | `scripts/bench/profiles/producer-smoke.properties`, `scripts/bench/profiles/consumer-smoke.properties` | Manual (files checked in) |
+| US-007-AC1 | — | — | NYI: OMB integration not yet implemented |
+| US-007-AC2 | — | — | NYI: OMB YAML config not yet created |
+| US-007-AC3 | — | — | NYI: OMB CI job not yet added |
+| US-008-AC1 | — | — | NYI: Kafka Connect ecosystem test |
+| US-008-AC2 | — | — | NYI: Kafka Connect ecosystem test |
+| US-008-AC3 | — | — | NYI: Kafka Connect ecosystem test |
+| US-008-AC4 | — | — | NYI: Kafka Connect ecosystem test |
+| US-009-AC1 | — | — | NYI: Flink ecosystem test |
+| US-009-AC2 | — | — | NYI: Flink ecosystem test |
+| US-009-AC3 | — | — | NYI: Flink ecosystem test |
+| US-010-AC1 | — | — | NYI: Debezium CDC ecosystem test |
+| US-010-AC2 | — | — | NYI: Debezium CDC ecosystem test |
+| US-010-AC3 | — | — | NYI: Debezium CDC ecosystem test |
+| US-011-AC1 | — | — | NYI: Schema Registry ecosystem test |
+| US-011-AC2 | — | — | NYI: Schema Registry ecosystem test |
+| US-011-AC3 | — | — | NYI: Schema Registry ecosystem test |
+| US-011-AC4 | — | — | NYI: Schema Registry ecosystem test |
+| US-012-AC1 | — | — | NYI: multi-language Go client test |
+| US-012-AC2 | — | — | NYI: multi-language Python client test |
+| US-012-AC3 | — | — | NYI: multi-language Node.js client test |
+| US-012-AC4 | — | — | NYI: multi-language per-language scripts |
+| US-013-AC1 | I | `test_rdkafka_simple_produce` (default-config rdkafka) | Automated |
+| US-013-AC2 | C | `contract_api_versions_matches_supported_range` | Automated |
+| US-013-AC3 | C | `contract_produce_fetch_roundtrip`, `contract_fetch_respects_max_bytes` | Automated |
+| US-013-AC4 | P | `parity::workloads::produce_fetch` (rdkafka uses flexible versions) | Automated |
+| US-014-AC1 | — | — | NYI: ksqlDB ecosystem test |
+| US-014-AC2 | — | — | NYI: ksqlDB ecosystem test |
+| US-014-AC3 | — | — | NYI: ksqlDB ecosystem test |
 - Flexible-version codec implemented for in-scope APIs; `SUPPORTED_APIS` advertises target maxima; differential parity harness reports zero diffs at flexible versions for in-scope APIs (FEAT-006).

@@ -173,6 +173,7 @@ fn produce_batch(server: &TestServer, topic: &str, batch: bytes::Bytes) -> Produ
     send_request(server, 0, 2, &produce_request)
 }
 
+// @covers US-001-AC1 US-013-AC2
 #[test]
 fn contract_api_versions_matches_supported_range() {
     let server = TestServer::start();
@@ -197,6 +198,7 @@ fn contract_api_versions_matches_supported_range() {
     assert_eq!(advertised, expected);
 }
 
+// @covers US-001-AC1
 #[test]
 fn contract_metadata_auto_creates_topic() {
     let server = TestServer::start();
@@ -263,6 +265,7 @@ fn contract_create_and_delete_topics() {
     assert_eq!(delete_result.error_code, 0);
 }
 
+// @covers US-001-AC1 US-001-AC2 US-013-AC3
 #[test]
 fn contract_produce_fetch_roundtrip() {
     let server = TestServer::start();
@@ -303,6 +306,7 @@ fn contract_produce_fetch_roundtrip() {
     assert_eq!(decoded_records, records);
 }
 
+// @covers US-013-AC3
 #[test]
 fn contract_fetch_respects_max_bytes() {
     let server = TestServer::start();
@@ -394,6 +398,7 @@ fn contract_list_offsets_earliest_latest() {
     assert_eq!(partition_response_latest.offset, 0);
 }
 
+// @covers US-002-AC4
 #[test]
 fn contract_offset_commit_and_fetch() {
     let server = TestServer::start();
@@ -441,6 +446,7 @@ fn contract_offset_commit_and_fetch() {
 // Consumer Group Contract Tests (Phase 2)
 // ============================================================================
 
+// @covers US-002-AC1
 #[test]
 fn contract_find_coordinator_returns_self() {
     let server = TestServer::start();
@@ -459,6 +465,7 @@ fn contract_find_coordinator_returns_self() {
     );
 }
 
+// @covers US-002-AC3
 #[test]
 fn contract_join_group_new_member() {
     let server = TestServer::start();
@@ -499,6 +506,7 @@ fn contract_join_group_new_member() {
     assert!(response2.generation_id > 0, "generation_id should be positive");
 }
 
+// @covers US-002-AC1
 #[test]
 fn contract_sync_group_leader() {
     let server = TestServer::start();
@@ -542,6 +550,7 @@ fn contract_sync_group_leader() {
     assert_eq!(sync_response.error_code, 0, "sync_group should succeed");
 }
 
+// @covers US-002-AC1
 #[test]
 fn contract_heartbeat_active_member() {
     let server = TestServer::start();
@@ -580,6 +589,7 @@ fn contract_heartbeat_active_member() {
     assert_eq!(heartbeat_response.error_code, 0, "heartbeat should succeed for active member");
 }
 
+// @covers US-002-AC2
 #[test]
 fn contract_leave_group_success() {
     let server = TestServer::start();
@@ -616,6 +626,7 @@ fn contract_leave_group_success() {
     assert_eq!(leave_response.error_code, 0, "leave_group should succeed");
 }
 
+// @covers US-002-AC1 US-002-AC2
 #[test]
 fn contract_consumer_group_lifecycle() {
     let server = TestServer::start();

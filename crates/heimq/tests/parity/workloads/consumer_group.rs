@@ -19,6 +19,7 @@ const TOPIC: &str = "parity-consumer-group";
 const GROUP: &str = "parity-cg-lifecycle";
 const N: usize = 6;
 
+// @covers US-002-AC5 US-005-AC4 US-005-AC5
 pub struct ConsumerGroupLifecycle;
 
 #[async_trait]
