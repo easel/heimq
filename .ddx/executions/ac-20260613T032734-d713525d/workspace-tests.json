@@ -1,0 +1,386 @@
+{"verdict": "pass", "output": "warning: fields `kind` and `bootstrap_servers` are never read
+  --> tests/parity/broker.rs:22:9
+   |
+21 | pub struct BrokerTarget {
+   |            ------------ fields in this struct
+22 |     pub kind: BrokerKind,
+   |         ^^^^
+23 |     pub bootstrap_servers: String,
+   |         ^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: method `client_config` is never used
+  --> tests/parity/broker.rs:27:12
+   |
+26 | impl BrokerTarget {
+   | ----------------- method in this implementation
+27 |     pub fn client_config(&self) -> ClientConfig {
+   |            ^^^^^^^^^^^^^
+
+warning: fields `workload`, `step`, and `event` are never read
+  --> tests/parity/driver.rs:8:9
+   |
+ 7 | pub struct Observation {
+   |            ----------- fields in this struct
+ 8 |     pub workload: &'static str,
+   |         ^^^^^^^^
+ 9 |     pub step: u32,
+   |         ^^^^
+10 |     pub event: ObservationEvent,
+   |         ^^^^^
+   |
+   = note: `Observation` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: variants `RecordConsumed`, `ErrorCode`, `GroupState`, and `TxnOutcome` are never constructed
+  --> tests/parity/driver.rs:15:5
+   |
+14 | pub enum ObservationEvent {
+   |          ---------------- variants in this enum
+15 |     RecordConsumed {
+   |     ^^^^^^^^^^^^^^
+...
+23 |     ErrorCode {
+   |     ^^^^^^^^^
+...
+27 |     GroupState {
+   |     ^^^^^^^^^^
+...
+32 |     TxnOutcome {
+   |     ^^^^^^^^^^
+   |
+   = note: `ObservationEvent` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `field`, `scope`, `reason`, and `status` are never read
+  --> tests/parity/exemptions.rs:8:9
+   |
+ 6 | pub struct ExemptionEntry {
+   |            -------------- fields in this struct
+ 7 |     pub id: String,
+ 8 |     pub field: String,
+   |         ^^^^^
+ 9 |     pub scope: String,
+   |         ^^^^^
+10 |     pub reason: String,
+   |         ^^^^^^
+11 |     pub prd_ref: String,
+12 |     pub status: String,
+   |         ^^^^^^
+   |
+   = note: `ExemptionEntry` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: field `entries` is never read
+  --> tests/parity/exemptions.rs:22:9
+   |
+21 | pub struct Exemptions {
+   |            ---------- field in this struct
+22 |     pub entries: Vec<ExemptionEntry>,
+   |         ^^^^^^^
+
+warning: method `find` is never used
+  --> tests/parity/exemptions.rs:27:12
+   |
+25 | impl Exemptions {
+   | --------------- method in this implementation
+26 |     /// Find an active exemption by exact field name. Returns the exemption id.
+27 |     pub fn find(&self, field: &str) -> Option<&str> {
+   |            ^^^^
+
+warning: `heimq` (test \"parity\") generated 7 warnings
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running unittests src/lib.rs (target/debug/deps/heimq-356932bb5bd63a12)
+
+running 161 tests
+test consumer_group::group::tests::test_new_group ... ok
+test consumer_group::group::tests::test_add_member ... ok
+test consumer_group::group::tests::test_heartbeat_and_assignment ... ok
+test consumer_group::group::tests::test_remove_expired_members ... ok
+test consumer_group::group::tests::test_remove_non_leader_keeps_leader ... ok
+test consumer_group::group::tests::test_remove_member_and_leader_election ... ok
+test consumer_group::group::tests::test_set_assignment_missing_member ... ok
+test consumer_group::group::tests::test_protocol_type_and_expired_member_retention ... ok
+test consumer_group::group::tests::test_protocol_selection_and_rebalance ... ok
+test config::tests::test_storage_defaults_to_memory_urls ... ok
+test config::tests::test_storage_overrides_via_flags ... ok
+test config::tests::test_bind_addr ... ok
+test config::tests::test_memory_only_flag ... ok
+test config::tests::test_default_config ... ok
+test consumer_group::coordinator::tests::test_coordinator_fields ... ok
+test config::tests::test_advertised_listener ... ok
+test consumer_group::offset_store::tests::test_capabilities ... ok
+test consumer_group::tests::coordinator_capabilities_describe_memory_backend ... ok
+test error::tests::test_error_codes ... ok
+test consumer_group::offset_store::tests::test_commit_and_fetch ... ok
+test consumer_group::tests::test_with_injected_offset_store ... ok
+test consumer_group::tests::test_list_groups ... ok
+test consumer_group::tests::join_sync_heartbeat_leave_via_trait ... ok
+test consumer_group::tests::sync_group_error_paths ... ok
+test consumer_group::tests::join_group_mints_member_id_when_empty ... ok
+test consumer_group::offset_store::tests::test_default_store ... ok
+test consumer_group::offset_store::tests::test_fetch_all_and_delete_group ... ok
+test consumer_group::offset_store::tests::test_fetch_missing ... ok
+test consumer_group::offset_store::tests::test_trait_object ... ok
+test error::tests::test_str_bytes_helper ... ok
+test handler::tests::create_topics_with_config_values ... ok
+test handler::tests::create_topics_default_partitions_and_duplicate ... ok
+test handler::tests::delete_topics_existing_and_missing ... ok
+test handler::tests::group_handlers_error_paths ... ok
+test handler::tests::delete_topics_truncated_inputs ... ok
+test handler::tests::heartbeat_error_and_read_string_cases ... ok
+test handler::tests::fetch_offsets_and_errors ... ok
+test handler::tests::join_group_leader_includes_metadata ... ok
+test handler::tests::fetch_sets_log_start_offset ... ok
+test handler::tests::find_coordinator_request_ignored ... ok
+test handler::tests::fetch_truncated_inputs ... ok
+test handler::tests::create_topics_truncated_inputs ... ok
+test handler::tests::leave_group_missing_member_is_ignored ... ok
+test handler::tests::find_coordinator_single_node ... ok
+test handler::tests::leave_group_truncated_inputs ... ok
+test handler::tests::api_versions_lists_supported_apis ... ok
+test handler::tests::join_group_select_protocol_fallback_for_non_leader ... ok
+test handler::tests::list_offsets_latest_earliest_and_timestamp ... ok
+test handler::tests::list_offsets_missing_topics_error_codes ... ok
+test handler::tests::join_sync_heartbeat_leave_group_flow ... ok
+test handler::tests::list_offsets_truncated_and_errors ... ok
+test handler::tests::leave_group_parses_member_list ... ok
+test handler::tests::metadata_version_zero_parses_topics ... ok
+test handler::tests::metadata_all_topics_and_unknown_topic ... ok
+test handler::tests::join_group_read_string_edges ... ok
+test handler::tests::fetch_optional_fields_and_records ... ok
+test handler::tests::offset_commit_and_fetch_roundtrip ... ok
+test handler::tests::offset_fetch_truncated_and_missing_offsets ... ok
+test handler::tests::offset_commit_truncated_and_optional_fields ... ok
+test handler::tests::metadata_mixed_existing_and_missing_topics ... ok
+test handler::tests::join_group_additional_error_paths ... ok
+test handler::tests::metadata_parsing_edges ... ok
+test handler::tests::sync_group_leader_applies_assignments_and_stabilizes ... ok
+test handler::tests::sync_group_non_leader_missing_assignment ... ok
+test handler::tests::sync_group_read_string_edges ... ok
+test handler::tests::sync_group_optional_and_errors ... ok
+test handler::tests::produce_appends_records ... ok
+test handler::tests::produce_empty_null_and_unknown_topic ... ok
+test protocol::codec::flexible_tests::test_decode_request_flexible_header ... ok
+test protocol::codec::flexible_tests::test_is_flexible_boundary ... ok
+test protocol::codec::tests::test_compute_size_for_failing_encode ... ok
+test handler::tests::produce_oversize_batch_rejected_with_message_too_large ... ok
+test protocol::codec::flexible_tests::test_encode_response_apiversions_no_flexible_header ... ok
+test protocol::codec::tests::test_decode_request_header ... ok
+test protocol::codec::flexible_tests::test_encode_response_flexible_header ... ok
+test protocol::codec::tests::test_decode_request_too_short ... ok
+test protocol::codec::tests::test_encode_response_body ... ok
+test protocol::codec::tests::test_decode_with_client_id ... ok
+test protocol::codec::tests::test_decode_request_invalid_client_id_length ... ok
+test protocol::codec::tests::test_decode_request_missing_client_id_field ... ok
+test protocol::codec::tests::test_encode_response_body_error_mapping ... ok
+test protocol::codec::tests::test_encode_response_invalid_versions_error ... ok
+test protocol::codec::tests::test_encode_response_body_invalid_version_error ... ok
+test protocol::codec::tests::test_encode_response_error_mapping ... ok
+test protocol::router::tests::encode_response_maps_errors ... ok
+test protocol::tests::capability_gate_assigns_each_api_to_one_backend ... ok
+test protocol::tests::compaction_false_does_not_leak_compaction_specific_apis ... ok
+test protocol::tests::memory_default_advertises_full_supported_set ... ok
+test protocol::router::tests::handle_and_encode_errors_cover_all_responses ... ok
+test protocol::tests::missing_group_coordinator_drops_only_group_apis ... ok
+test protocol::tests::missing_offset_store_drops_only_offset_apis ... ok
+test protocol::tests::presence_helpers_recognize_named_backends ... ok
+test protocol::tests::test_api_supported_and_range ... ok
+test protocol::router::tests::route_supported_apis_and_unsupported ... ok
+test server::tests::test_handle_accept_error ... ok
+test server::tests::test_handle_connection_read_error ... ok
+test server::tests::test_handle_connection_clean_disconnect ... ok
+test server::tests::test_handle_connection_pending_data_error ... ok
+test server::tests::test_handle_connection_scripted_ok ... ok
+test server::tests::test_handle_accept_result_no_limit ... ok
+test server::tests::test_handle_connection_write_error ... ok
+test server::tests::test_handle_connection_warn_on_route_error ... ok
+test server::tests::test_run_with_listener_stops_at_max ... ok
+test server::tests::test_run_with_listener_serves_connection ... ok
+test server::tests::test_run_with_listener_continues_then_stops ... ok
+test server::tests::test_scripted_stream_flush_shutdown ... ok
+test server::tests::test_server_creation ... ok
+test server::tests::test_run_with_max_connections_bind_error ... ok
+test server::tests::test_unknown_groups_scheme_fails_at_startup ... ok
+test storage::capabilities::tests::construct_custom_capabilities ... ok
+test storage::capabilities::tests::default_minimal_capabilities ... ok
+test server::tests::test_unknown_storage_scheme_fails_at_startup ... ok
+test storage::dispatch::tests::dispatches_memory_groups ... ok
+test storage::dispatch::tests::dispatches_memory_log ... ok
+test storage::dispatch::tests::dispatches_memory_offsets ... ok
+test storage::dispatch::tests::missing_scheme_errors ... ok
+test storage::dispatch::tests::unknown_group_scheme_errors ... ok
+test storage::dispatch::tests::unknown_log_scheme_errors ... ok
+test storage::memory::tests::test_append_fetch_total_messages ... ok
+test storage::memory::tests::test_auto_create_disabled ... ok
+test storage::memory::tests::test_capabilities_name_is_in_memory ... ok
+test storage::memory::tests::test_create_topic ... ok
+test storage::memory::tests::test_fetch_invalid_offset ... ok
+test storage::memory::tests::test_get_all_metadata_and_delete_missing ... ok
+test storage::memory::tests::test_invalid_partition_errors ... ok
+test storage::memory::tests::test_list_topics ... ok
+test storage::memory::tests::test_trait_path_append_and_read ... ok
+test protocol::codec::flexible_tests::prop_compact_string_varint_boundary ... ok
+test storage::partition::tests::test_new_partition ... ok
+test storage::partition::tests::trait_append_and_read_match_inherent ... ok
+test storage::partition::tests::truncate_before_moves_log_start ... ok
+test storage::postgres_offsets::tests::parse_url_extracts_schema_param ... ok
+test storage::postgres_offsets::tests::parse_url_preserves_other_query_params ... ok
+test storage::postgres_offsets::tests::parse_url_rejects_invalid_schema_name ... ok
+test storage::postgres_offsets::tests::parse_url_rejects_quoted_schema ... ok
+test storage::postgres_offsets::tests::parse_url_without_query_uses_public_schema ... ok
+test storage::record_batch_view::tests::view_exposes_batch_metadata ... ok
+test storage::record_batch_view::tests::view_iterates_records_as_deltas ... ok
+test storage::record_batch_view::tests::view_rejects_malformed_bytes ... ok
+test storage::record_batch_view::tests::view_reports_compression_codec ... ok
+test protocol::codec::flexible_tests::prop_compact_array_roundtrip ... ok
+test storage::partition::tests::prop_append_advances_offsets ... ok
+test storage::segment::tests::test_append_and_read ... ok
+test storage::segment::tests::test_contains_and_last_offset ... ok
+test storage::segment::tests::test_new_segment ... ok
+test storage::segment::tests::test_read_from_offset ... ok
+test storage::topic::tests::test_get_partition ... ok
+test storage::topic::tests::test_new_topic ... ok
+test storage::topic::tests::test_partitions_slice ... ok
+test test_support::diff_record_round_trips_through_json ... ok
+test protocol::codec::flexible_tests::prop_tagged_fields_empty_block_roundtrip ... ok
+test protocol::codec::flexible_tests::prop_compact_string_null_roundtrip ... ok
+test protocol::codec::flexible_tests::prop_unsigned_varint_via_compact_array ... ok
+test server::tests::test_unknown_offsets_scheme_fails_at_startup ... ok
+test server::tests::test_run_with_max_connections ... ok
+test server::tests::test_run_with_env_max_connections ... ok
+test storage::dispatch::tests::unknown_offset_scheme_errors ... ok
+test server::tests::test_handle_accept_result_limit_and_spawn_error ... ok
+test protocol::codec::flexible_tests::prop_compact_string_roundtrip ... ok
+test storage::segment::tests::prop_segment_size_matches_appends ... ok
+test storage::segment::tests::prop_read_matches_reference ... ok
+
+test result: ok. 161 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running unittests src/main.rs (target/debug/deps/heimq-426456d605878b9a)
+
+running 5 tests
+test tests::test_config_from_env_defaults ... ok
+\u001b[2m2026-06-13T03:27:34.780246Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq\u001b[0m\u001b[2m:\u001b[0m Starting heimq v0.1.0 on 127.0.0.1:45851
+\u001b[2m2026-06-13T03:27:34.780310Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq\u001b[0m\u001b[2m:\u001b[0m Running in memory-only mode (no persistence)
+\u001b[2m2026-06-13T03:27:34.780319Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::storage::memory\u001b[0m\u001b[2m:\u001b[0m Initializing in-memory storage backend
+\u001b[2m2026-06-13T03:27:34.780644Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::consumer_group\u001b[0m\u001b[2m:\u001b[0m Initializing consumer group manager
+\u001b[2m2026-06-13T03:27:34.780687Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::server\u001b[0m\u001b[2m:\u001b[0m Listening on 127.0.0.1:45851
+\u001b[2m2026-06-13T03:27:34.781445Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq\u001b[0m\u001b[2m:\u001b[0m Starting heimq v0.1.0 on 127.0.0.1:44381
+\u001b[2m2026-06-13T03:27:34.781458Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq\u001b[0m\u001b[2m:\u001b[0m Running in memory-only mode (no persistence)
+\u001b[2m2026-06-13T03:27:34.781465Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::storage::memory\u001b[0m\u001b[2m:\u001b[0m Initializing in-memory storage backend
+\u001b[2m2026-06-13T03:27:34.781480Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::consumer_group\u001b[0m\u001b[2m:\u001b[0m Initializing consumer group manager
+\u001b[2m2026-06-13T03:27:34.781512Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::server\u001b[0m\u001b[2m:\u001b[0m Listening on 127.0.0.1:44381
+\u001b[2m2026-06-13T03:27:34.802536Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq\u001b[0m\u001b[2m:\u001b[0m Starting heimq v0.1.0 on 127.0.0.1:35191
+\u001b[2m2026-06-13T03:27:34.802557Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq\u001b[0m\u001b[2m:\u001b[0m Data directory: /tmp/heimq-test
+\u001b[2m2026-06-13T03:27:34.802566Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::storage::memory\u001b[0m\u001b[2m:\u001b[0m Initializing in-memory storage backend
+\u001b[2m2026-06-13T03:27:34.802582Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::consumer_group\u001b[0m\u001b[2m:\u001b[0m Initializing consumer group manager
+\u001b[2m2026-06-13T03:27:34.802611Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::server\u001b[0m\u001b[2m:\u001b[0m Listening on 127.0.0.1:35191
+test tests::test_main_uses_env_args ... ok
+test tests::test_max_connections_from_env ... ok
+\u001b[2m2026-06-13T03:27:34.803205Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq\u001b[0m\u001b[2m:\u001b[0m Starting heimq v0.1.0 on 127.0.0.1:39223
+\u001b[2m2026-06-13T03:27:34.803233Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq\u001b[0m\u001b[2m:\u001b[0m Running in memory-only mode (no persistence)
+\u001b[2m2026-06-13T03:27:34.803241Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::storage::memory\u001b[0m\u001b[2m:\u001b[0m Initializing in-memory storage backend
+\u001b[2m2026-06-13T03:27:34.803253Z\u001b[0m \u001b[32m INFO\u001b[0m \u001b[2mheimq::consumer_group\u001b[0m\u001b[2m:\u001b[0m Initializing consumer group manager
+test tests::test_run_with_config_bind_error ... ok
+test tests::test_run_with_config_memory_modes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/contract.rs (target/debug/deps/contract-73aabb342571e766)
+
+running 14 tests
+test contract_find_coordinator_returns_self ... ok
+test contract_metadata_auto_creates_topic ... ok
+test contract_api_versions_matches_supported_range ... ok
+test contract_metadata_unknown_topic_no_autocreate ... ok
+test contract_heartbeat_active_member ... ok
+test contract_list_offsets_earliest_latest ... ok
+test contract_create_and_delete_topics ... ok
+test contract_offset_commit_and_fetch ... ok
+test contract_consumer_group_lifecycle ... ok
+test contract_join_group_new_member ... ok
+test contract_fetch_respects_max_bytes ... ok
+test contract_leave_group_success ... ok
+test contract_sync_group_leader ... ok
+test contract_produce_fetch_roundtrip ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/integration.rs (target/debug/deps/integration-b660e2085dfe4c4e)
+
+running 58 tests
+test test_legacy_empty_topic_name_handling ... ok
+test test_legacy_produce_with_key ... ok
+test test_legacy_empty_message ... ok
+test test_legacy_produce ... ok
+test test_legacy_multiple_topics ... ok
+test test_legacy_produce_varying_sizes ... ok
+test test_legacy_metadata_refresh_after_topic_creation ... ok
+test test_rdkafka_auto_commit_interval ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_auto_create_toggle ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_auto_offset_reset_earliest_vs_latest ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_compression_codecs ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_concurrent_producers ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_consumer_group_empty_topic ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_consumer_group_join ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_consumer_group_lifecycle ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_consumer_group_manual_offset_fetch ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_consumer_group_offset_commit ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_consumer_rebalance_on_new_member ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_consumer_seek_to_beginning ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_empty_topic_poll_timeout ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_explicit_partition_target ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_fetch_long_poll ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_group_multi_partition_delivery ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_group_rebalance_on_graceful_leave ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_group_rebalance_on_session_timeout ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_group_resume_from_committed ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_independent_consumer_groups ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_keyed_partitioner_determinism ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_manual_commit_offset_roundtrip ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_multi_partition_autocreate_roundtrip ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_multi_partition_roundtrip ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_multiple_consumers_same_group ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_multiple_topics ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_oversized_message ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_pause_resume_partitions ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_per_partition_ordering ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_produce_consume_roundtrip ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_produce_consume_soak ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_produce_empty_value ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_produce_large_message ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_produce_no_autocreate_errors ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_produce_no_key ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_produce_with_key ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_rapid_produce ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_record_headers_roundtrip ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_rdkafka_seek_to_end ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_seek_to_offset ... ignored, rdkafka tests are run via scripts/compatibility-test.sh
+test test_rdkafka_simple_produce ... ignored, rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)
+test test_legacy_binary_payload_produce ... ok
+test test_legacy_keyed_messages_produce ... ok
+test test_legacy_concurrent_producers ... ok
+test test_legacy_produce_many_small_messages ... ok
+test test_legacy_large_batch_produce ... ok
+test test_legacy_special_characters_in_topic_name ... ok
+test test_metadata_fetch ... ok
+test test_legacy_various_message_formats ... ok
+test test_legacy_rapid_metadata_refresh ... ok
+test test_legacy_sequential_produce ... ok
+
+test result: ok. 17 passed; 0 failed; 41 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/parity/main.rs (target/debug/deps/parity-cd7fe5a228c85276)
+parity tests skipped (set PARITY_TESTS=1 to run; requires Docker)
+     Running tests/postgres_offsets.rs (target/debug/deps/postgres_offsets-960f9254dcd92629)
+
+running 1 test
+test postgres_offset_store_survives_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests heimq
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+"}

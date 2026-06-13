@@ -1,0 +1,14 @@
+name: workspace-tests
+when: pre_merge
+command: |
+  set -euo pipefail
+  result_file="${EVIDENCE_DIR}/workspace-tests.json"
+  cd "${PROJECT_ROOT}/heimq"
+  if cargo test --workspace --all-features --no-fail-fast > /tmp/ws-test-out.txt 2>&1; then
+    printf '{"status":"pass","summary":"workspace tests passed"}' > "$result_file"
+  else
+    failing=$(grep "^test .* FAILED" /tmp/ws-test-out.txt | head -20 | tr '\n' '|' | sed 's/|$//')
+    printf '{"status":"block","summary":"workspace tests failed","failing_tests":"%s"}' "$failing" > "$result_file"
+    exit 1
+  fi
+applies_to: {}
