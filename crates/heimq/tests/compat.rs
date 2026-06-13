@@ -7,10 +7,11 @@
 //! Current oracles:
 //!   - franz-go (pure-Go Kafka client, no librdkafka dependency)
 //!   - sarama (IBM/sarama pure-Go Kafka client, independent of franz-go)
+//!   - java kafka-clients (Apache reference implementation)
 //!
-//! Tests are skipped when the required runtime (go, java, …) is absent from
-//! PATH, so they never break a developer's environment. In CI the runtimes are
-//! assumed present.
+//! Tests are skipped when the required runtime (go, java, mvn, …) is absent
+//! from PATH, so they never break a developer's environment. In CI the
+//! runtimes are assumed present.
 
 use heimq::test_support::TestServer;
 use std::path::PathBuf;
@@ -36,6 +37,31 @@ fn sarama_oracle_dir() -> PathBuf {
         .join("tests")
         .join("compat")
         .join("sarama_oracle")
+}
+
+fn java_oracle_jar() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("compat")
+        .join("java_oracle")
+        .join("target")
+        .join("kafka-oracle-1.0-SNAPSHOT.jar")
+}
+
+fn java_available() -> bool {
+    Command::new("java")
+        .arg("-version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn mvn_available() -> bool {
+    Command::new("mvn")
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
 }
 
 /// Run the franz-go compat binary against a live heimq instance.
@@ -110,6 +136,67 @@ fn test_sarama_produce_consume_consumer_group() {
     assert!(
         out.status.success(),
         "sarama oracle failed (exit {:?})\nstdout: {stdout}\nstderr: {stderr}",
+        out.status.code()
+    );
+}
+
+/// Run the official Apache Kafka Java client (kafka-clients) oracle against heimq.
+///
+/// Exercises: Produce (synchronous), JoinGroup/SyncGroup/Heartbeat (consumer
+/// group), Fetch, OffsetCommit, and record headers — through the reference
+/// Java implementation. This is the fourth independent client stack alongside
+/// rdkafka (C), franz-go (Go), and sarama (Go).
+///
+/// The JAR is built at test time via `mvn package` if not already present.
+#[test]
+fn test_java_kafka_clients_produce_consume() {
+    if !java_available() {
+        eprintln!("SKIP: java not in PATH");
+        return;
+    }
+
+    let jar = java_oracle_jar();
+
+    // Build the JAR if it doesn't exist (first run).
+    if !jar.exists() {
+        if !mvn_available() {
+            eprintln!("SKIP: mvn not in PATH and kafka-oracle jar not pre-built");
+            return;
+        }
+        let jar_dir = jar.parent().unwrap().parent().unwrap();
+        let build_out = Command::new("mvn")
+            .args(["-q", "package", "-DskipTests"])
+            .current_dir(jar_dir)
+            .output()
+            .expect("mvn package failed to spawn");
+        assert!(
+            build_out.status.success(),
+            "mvn package failed:\n{}",
+            String::from_utf8_lossy(&build_out.stderr)
+        );
+    }
+
+    let topic = "java-compat-topic";
+    let server = TestServer::start();
+
+    let out = Command::new("java")
+        .args(["-jar"])
+        .arg(&jar)
+        .arg(server.bootstrap_servers())
+        .arg(topic)
+        .output()
+        .expect("failed to spawn java oracle");
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    print!("{stdout}");
+    if !stderr.is_empty() {
+        eprint!("{stderr}");
+    }
+
+    assert!(
+        out.status.success(),
+        "java kafka-clients oracle failed (exit {:?})\nstdout: {stdout}\nstderr: {stderr}",
         out.status.code()
     );
 }
