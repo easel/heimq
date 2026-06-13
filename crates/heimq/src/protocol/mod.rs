@@ -42,8 +42,10 @@ pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     (35, 0, 4),  // DescribeLogDirs
     (33, 0, 2),  // AlterConfigs
     (42, 0, 2),  // DeleteGroups
+    (43, 0, 2),  // ElectLeaders
     (44, 0, 1),  // IncrementalAlterConfigs
     (60, 0, 1),  // DescribeCluster
+    (66, 0, 1),  // ListTransactions
     (47, 0, 0),  // OffsetDelete
     (19, 0, 7),  // CreateTopics
     (37, 0, 3),  // CreatePartitions
@@ -100,8 +102,8 @@ fn capability_gate(api_key: i16) -> CapabilityGate {
         8 | 9 | 47 => CapabilityGate::OffsetStore,
         // Group-coordinator APIs.
         10 | 11 | 12 | 13 | 14 | 15 | 16 | 42 => CapabilityGate::GroupCoordinator,
-        // Transaction APIs, InitProducerId, ApiVersions, config APIs are always available.
-        22 | 24 | 25 | 26 | 27 | 28 | 32 | 33 | 44 | 60 | _ => CapabilityGate::Always,
+        // Transaction APIs, InitProducerId, ApiVersions, config APIs, admin stubs are always available.
+        22 | 24 | 25 | 26 | 27 | 28 | 32 | 33 | 43 | 44 | 60 | 66 | _ => CapabilityGate::Always,
     }
 }
 

@@ -131,6 +131,18 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("elect-leaders", func() error {
+		return electLeaders(ctx, bootstrap, topic)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("list-transactions", func() error {
+		return listTransactions(ctx, bootstrap)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("delete-records", func() error {
 		return deleteRecords(ctx, bootstrap, topic)
 	}); err != nil {
@@ -642,6 +654,49 @@ func describeCluster(ctx context.Context, bootstrap string) error {
 	}
 	if len(dcr.Brokers) == 0 {
 		return fmt.Errorf("describe cluster returned no brokers")
+	}
+	return nil
+}
+
+// electLeaders exercises ElectLeaders (API 43).
+// Elects the preferred replica for partition 0 of the topic.
+func electLeaders(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	var ts kadm.TopicsSet
+	ts.Add(topic, 0)
+	results, err := adm.ElectLeaders(ctx, kadm.ElectPreferredReplica, ts)
+	if err != nil {
+		return fmt.Errorf("elect leaders rpc: %w", err)
+	}
+	for _, partRes := range results {
+		for pid, r := range partRes {
+			if r.Err != nil {
+				return fmt.Errorf("elect leaders partition %d: %w", pid, r.Err)
+			}
+		}
+	}
+	return nil
+}
+
+// listTransactions exercises ListTransactions (API 66).
+// With no in-flight transactions the response must be an empty list.
+func listTransactions(ctx context.Context, bootstrap string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	_, err = adm.ListTransactions(ctx, nil, nil)
+	if err != nil {
+		return fmt.Errorf("list transactions: %w", err)
 	}
 	return nil
 }
