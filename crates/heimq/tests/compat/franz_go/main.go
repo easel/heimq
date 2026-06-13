@@ -237,6 +237,13 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	txnUncommitGroup := fmt.Sprintf("franz-txn-uncommit-group-%d", ts)
+	if err := check("transactional-consume-uncommitted", func() error {
+		return transactionalConsumeUncommitted(ctx, bootstrap, txnTopic, txnUncommitGroup)
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -1221,6 +1228,56 @@ func transactionalConsumeCommitted(ctx context.Context, bootstrap, topic, group 
 
 	if err := cl.CommitUncommittedOffsets(ctx); err != nil {
 		return fmt.Errorf("commit offsets: %w", err)
+	}
+	return nil
+}
+
+// transactionalConsumeUncommitted reads txnTopic with read_uncommitted isolation
+// and verifies that BOTH committed (tkey-*) and aborted (akey-*) records are visible.
+func transactionalConsumeUncommitted(ctx context.Context, bootstrap, topic, group string) error {
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.ConsumerGroup(group),
+		kgo.ConsumeTopics(topic),
+		kgo.FetchIsolationLevel(kgo.ReadUncommitted()),
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+	)
+	if err != nil {
+		return fmt.Errorf("new consumer client: %w", err)
+	}
+	defer cl.Close()
+
+	got := make(map[string]string)
+	deadline := time.Now().Add(30 * time.Second)
+	// Expect 5 records: 3 committed (tkey-0..2) + 2 aborted (akey-0..1).
+	for len(got) < 5 && time.Now().Before(deadline) {
+		fetches := cl.PollFetches(ctx)
+		if errs := fetches.Errors(); len(errs) > 0 {
+			return fmt.Errorf("txn uncommit fetch error: %v", errs[0].Err)
+		}
+		fetches.EachRecord(func(r *kgo.Record) {
+			got[string(r.Key)] = string(r.Value)
+		})
+	}
+
+	if len(got) < 5 {
+		return fmt.Errorf("timeout: read_uncommitted consumed %d/5 records; keys: %v", len(got), got)
+	}
+	// Committed records present.
+	for i := 0; i < 3; i++ {
+		if _, ok := got[fmt.Sprintf("tkey-%d", i)]; !ok {
+			return fmt.Errorf("read_uncommitted missing committed record tkey-%d", i)
+		}
+	}
+	// Aborted records also present under read_uncommitted.
+	for i := 0; i < 2; i++ {
+		if _, ok := got[fmt.Sprintf("akey-%d", i)]; !ok {
+			return fmt.Errorf("read_uncommitted missing aborted record akey-%d", i)
+		}
+	}
+
+	if err := cl.CommitUncommittedOffsets(ctx); err != nil {
+		return fmt.Errorf("commit uncommitted: %w", err)
 	}
 	return nil
 }

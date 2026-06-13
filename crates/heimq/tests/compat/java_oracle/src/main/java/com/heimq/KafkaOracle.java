@@ -89,6 +89,7 @@ public class KafkaOracle {
         String txnTopic = topic + "-txn";
         check("transactional-produce", () -> transactionalProduce(bootstrap, txnTopic));
         check("transactional-consume-committed", () -> transactionalConsumeCommitted(bootstrap, txnTopic));
+        check("transactional-consume-uncommitted", () -> transactionalConsumeUncommitted(bootstrap, txnTopic));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
         check("delete-topic", () -> deleteTopic(bootstrap, topic));
@@ -530,6 +531,39 @@ public class KafkaOracle {
         // Aborted records must not appear in read_committed view.
         if (got.containsKey("akey-0") || got.containsKey("akey-1")) {
             throw new RuntimeException("aborted records leaked into read_committed consumer");
+        }
+    }
+
+    private static void transactionalConsumeUncommitted(String bootstrap, String topic) throws Exception {
+        // read_uncommitted must see both committed (tkey-*) and aborted (akey-*) records.
+        String group = "java-txn-uncommit-group-" + System.nanoTime();
+        Properties props = consumerProps(bootstrap, group);
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted");
+        Map<String, String> got = new LinkedHashMap<>();
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList(topic));
+            long deadline = System.currentTimeMillis() + 30_000;
+            // Expect 5 records total: 3 committed + 2 aborted.
+            while (got.size() < 5 && System.currentTimeMillis() < deadline) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<String, String> r : records) {
+                    got.put(r.key(), r.value());
+                }
+            }
+            consumer.commitSync();
+        }
+        if (got.size() < 5) {
+            throw new RuntimeException("timeout: read_uncommitted consumed " + got.size() + "/5 records; got: " + got.keySet());
+        }
+        // Committed records present.
+        for (int i = 0; i < 3; i++) {
+            String key = "tkey-" + i;
+            if (!got.containsKey(key)) throw new RuntimeException("missing committed record " + key);
+        }
+        // Aborted records also present (read_uncommitted semantics).
+        for (int i = 0; i < 2; i++) {
+            String key = "akey-" + i;
+            if (!got.containsKey(key)) throw new RuntimeException("read_uncommitted missing aborted record " + key);
         }
     }
 
