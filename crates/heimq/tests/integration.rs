@@ -4045,3 +4045,181 @@ async fn test_rdkafka_pause_resume_partitions() {
         "Partition 0 payloads must match what was produced before pause"
     );
 }
+
+// ============================================================================
+// Transactional Producer Tests
+// ============================================================================
+
+/// Transactional produce + commit: records produced inside a committed transaction
+/// must be visible to a read_committed consumer.
+#[tokio::test]
+async fn test_rdkafka_transactional_produce_commit() {
+    use rdkafka::producer::{BaseRecord, DefaultProducerContext, Producer, ThreadedProducer};
+
+    let server = TestServer::start();
+    let bootstrap = server.bootstrap_servers();
+    let topic = "txn-commit-topic";
+
+    tokio::task::spawn_blocking({
+        let bootstrap = bootstrap.clone();
+        move || {
+            let producer: ThreadedProducer<DefaultProducerContext> = ClientConfig::new()
+                .set("bootstrap.servers", &bootstrap)
+                .set("transactional.id", "test-txn-commit")
+                .set("enable.idempotence", "true")
+                .set("acks", "all")
+                .set("message.timeout.ms", "10000")
+                .create()
+                .expect("Failed to create transactional producer");
+
+            producer
+                .init_transactions(Duration::from_secs(10))
+                .expect("init_transactions failed");
+            producer.begin_transaction().expect("begin_transaction failed");
+
+            for i in 0usize..3 {
+                producer
+                    .send(
+                        BaseRecord::to(topic)
+                            .payload(format!("val-{}", i).as_bytes())
+                            .key(format!("key-{}", i).as_bytes()),
+                    )
+                    .expect("Failed to enqueue record");
+            }
+
+            producer
+                .flush(Duration::from_secs(10))
+                .expect("flush failed");
+            producer
+                .commit_transaction(Duration::from_secs(10))
+                .expect("commit_transaction failed");
+        }
+    })
+    .await
+    .expect("spawn_blocking panicked");
+
+    // Consume with read_committed isolation — all 3 records must be visible.
+    let consumer: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", "txn-commit-group")
+        .set("auto.offset.reset", "earliest")
+        .set("isolation.level", "read_committed")
+        .set("enable.auto.commit", "false")
+        .create()
+        .expect("Failed to create read_committed consumer");
+
+    consumer.subscribe(&[topic]).expect("subscribe failed");
+
+    let mut got: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(10);
+    while got.len() < 3 && start.elapsed() < timeout {
+        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(100)) {
+            let key = msg
+                .key()
+                .map(|k| String::from_utf8_lossy(k).to_string())
+                .unwrap_or_default();
+            let val = msg
+                .payload()
+                .map(|v| String::from_utf8_lossy(v).to_string())
+                .unwrap_or_default();
+            got.insert(key, val);
+        }
+    }
+
+    assert_eq!(
+        got.len(),
+        3,
+        "Expected 3 committed records from read_committed consumer, got: {:?}",
+        got
+    );
+    for i in 0usize..3 {
+        let key = format!("key-{}", i);
+        let expected_val = format!("val-{}", i);
+        assert_eq!(
+            got.get(&key),
+            Some(&expected_val),
+            "Committed record {} missing or wrong value",
+            i
+        );
+    }
+}
+
+/// Transactional produce + abort: records produced inside an aborted transaction
+/// must NOT be visible to a read_committed consumer.
+#[tokio::test]
+async fn test_rdkafka_transactional_produce_abort() {
+    use rdkafka::producer::{BaseRecord, DefaultProducerContext, Producer, ThreadedProducer};
+
+    let server = TestServer::start();
+    let bootstrap = server.bootstrap_servers();
+    let topic = "txn-abort-topic";
+
+    tokio::task::spawn_blocking({
+        let bootstrap = bootstrap.clone();
+        move || {
+            let producer: ThreadedProducer<DefaultProducerContext> = ClientConfig::new()
+                .set("bootstrap.servers", &bootstrap)
+                .set("transactional.id", "test-txn-abort")
+                .set("enable.idempotence", "true")
+                .set("acks", "all")
+                .set("message.timeout.ms", "10000")
+                .create()
+                .expect("Failed to create transactional producer");
+
+            producer
+                .init_transactions(Duration::from_secs(10))
+                .expect("init_transactions failed");
+            producer.begin_transaction().expect("begin_transaction failed");
+
+            for i in 0usize..3 {
+                producer
+                    .send(
+                        BaseRecord::to(topic)
+                            .payload(format!("aborted-val-{}", i).as_bytes())
+                            .key(format!("aborted-key-{}", i).as_bytes()),
+                    )
+                    .expect("Failed to enqueue record");
+            }
+
+            producer
+                .flush(Duration::from_secs(10))
+                .expect("flush failed");
+            producer
+                .abort_transaction(Duration::from_secs(10))
+                .expect("abort_transaction failed");
+        }
+    })
+    .await
+    .expect("spawn_blocking panicked");
+
+    // Consume with read_committed — aborted records must be invisible.
+    let consumer: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", "txn-abort-group")
+        .set("auto.offset.reset", "earliest")
+        .set("isolation.level", "read_committed")
+        .set("enable.auto.commit", "false")
+        .create()
+        .expect("Failed to create read_committed consumer");
+
+    consumer.subscribe(&[topic]).expect("subscribe failed");
+
+    let poll_end = std::time::Instant::now() + Duration::from_millis(800);
+    let mut leaked: Vec<String> = Vec::new();
+    while std::time::Instant::now() < poll_end {
+        if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(50)) {
+            let val = msg
+                .payload()
+                .map(|v| String::from_utf8_lossy(v).to_string())
+                .unwrap_or_default();
+            leaked.push(val);
+        }
+    }
+
+    assert!(
+        leaked.is_empty(),
+        "read_committed consumer must not see aborted transactional records, but got: {:?}",
+        leaked
+    );
+}
