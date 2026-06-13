@@ -1002,6 +1002,7 @@ mod tests {
     }
 }
 
+#[cfg(test)]
 struct CapturingStream {
     input: Vec<u8>,
     pos: usize,
@@ -1009,14 +1010,17 @@ struct CapturingStream {
     captured: *mut Vec<u8>,
 }
 
+#[cfg(test)]
 impl CapturingStream {
     fn new(input: Vec<u8>, captured: *mut Vec<u8>) -> Self {
         Self { input, pos: 0, captured }
     }
 }
 
+#[cfg(test)]
 unsafe impl Send for CapturingStream {}
 
+#[cfg(test)]
 impl AsyncRead for CapturingStream {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
@@ -1035,6 +1039,7 @@ impl AsyncRead for CapturingStream {
     }
 }
 
+#[cfg(test)]
 impl AsyncWrite for CapturingStream {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,

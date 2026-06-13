@@ -284,7 +284,7 @@ impl TransactionManager {
 
                 // Reset transaction state
                 let entry = state.transactions.get_mut(txn_id).unwrap();
-                let pending = std::mem::take(&mut entry.pending_offsets);
+                let _pending = std::mem::take(&mut entry.pending_offsets);
                 entry.partitions.clear();
                 entry.groups.clear();
                 entry.status = TxnStatus::Empty;
@@ -292,18 +292,6 @@ impl TransactionManager {
                 (0, affected)
             }
         }
-    }
-
-    /// Get pending offsets for a transaction (called after successful EndTxn commit).
-    pub fn take_pending_offsets(
-        &self,
-        txn_id: &str,
-    ) -> HashMap<(String, i32, String), (i64, Option<String>)> {
-        // Note: end_txn already cleared pending_offsets, so this is used differently.
-        // We need to capture them BEFORE end_txn clears them. This method is for
-        // callers that need them after end_txn. We'll restructure the end_txn handler
-        // to get pending offsets first.
-        HashMap::new()
     }
 
     /// End txn and return pending offsets along with affected partitions.

@@ -21,7 +21,7 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
-    transaction_manager: &Arc<TransactionManager>,
+    _transaction_manager: &Arc<TransactionManager>,
 ) -> Result<WriteTxnMarkersResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match WriteTxnMarkersRequest::decode(&mut buf, api_version) {
