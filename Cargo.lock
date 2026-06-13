@@ -881,6 +881,7 @@ dependencies = [
  "dashmap",
  "flate2",
  "heimq",
+ "heimq-broker",
  "kafka",
  "kafka-protocol",
  "lz4",
@@ -908,6 +909,12 @@ dependencies = [
 [[package]]
 name = "heimq-broker"
 version = "0.1.0"
+dependencies = [
+ "bytes",
+ "kafka-protocol",
+ "parking_lot",
+ "thiserror 2.0.18",
+]
 
 [[package]]
 name = "heimq-testkit"

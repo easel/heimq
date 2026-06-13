@@ -1,46 +1,17 @@
 //! Error types for heimq
 
 use kafka_protocol::protocol::StrBytes;
-use thiserror::Error;
 
-/// Main error type for heimq
-#[derive(Error, Debug)]
-#[allow(dead_code)]
-pub enum HeimqError {
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+// Re-export core error types from heimq-broker so all crates use one error type.
+pub use heimq_broker::error::{HeimqError, Result};
 
-    #[error("Protocol error: {0}")]
-    Protocol(String),
-
-    #[error("Topic not found: {0}")]
-    TopicNotFound(String),
-
-    #[error("Partition not found: {topic} partition {partition}")]
-    PartitionNotFound { topic: String, partition: i32 },
-
-    #[error("Invalid offset: {0}")]
-    InvalidOffset(i64),
-
-    #[error("Consumer group error: {0}")]
-    ConsumerGroup(String),
-
-    #[error("Configuration error: {0}")]
-    Config(String),
-
-    #[error("Storage error: {0}")]
-    Storage(String),
-
-    #[error("Compression error: {0}")]
-    Compression(String),
+/// Extension trait for converting heimq errors to Kafka wire error codes.
+pub trait ErrorCode {
+    fn to_error_code(&self) -> i16;
 }
 
-/// Result type alias for heimq operations
-pub type Result<T> = std::result::Result<T, HeimqError>;
-
-/// Convert heimq errors to Kafka error codes
-impl HeimqError {
-    pub fn to_error_code(&self) -> i16 {
+impl ErrorCode for HeimqError {
+    fn to_error_code(&self) -> i16 {
         match self {
             HeimqError::TopicNotFound(_) => 3,  // UNKNOWN_TOPIC_OR_PARTITION
             HeimqError::PartitionNotFound { .. } => 3,

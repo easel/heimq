@@ -11,6 +11,8 @@ keywords = ["kafka", "messaging", "streaming", "queue"]
 categories = ["network-programming", "asynchronous"]
 
 [dependencies]
+heimq-broker = { path = "../heimq-broker" }
+
 # Async runtime
 tokio = { version = "1.44", features = ["full"] }
 

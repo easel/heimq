@@ -1,6 +1,6 @@
 //! Fetch request handler (API Key 1)
 
-use crate::error::Result;
+use crate::error::{ErrorCode, Result};
 use crate::storage::LogBackend;
 use bytes::Bytes;
 use kafka_protocol::messages::fetch_request::FetchRequest;

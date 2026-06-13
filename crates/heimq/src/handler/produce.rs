@@ -1,6 +1,6 @@
 //! Produce request handler (API Key 0)
 
-use crate::error::Result;
+use crate::error::{ErrorCode, Result};
 use crate::storage::LogBackend;
 use bytes::Bytes;
 use kafka_protocol::messages::produce_request::ProduceRequest;

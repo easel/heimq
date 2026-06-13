@@ -1,6 +1,6 @@
 //! ListOffsets request handler (API Key 2)
 
-use crate::error::Result;
+use crate::error::{ErrorCode, Result};
 use crate::storage::LogBackend;
 use bytes::Buf;
 use kafka_protocol::messages::list_offsets_response::{

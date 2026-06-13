@@ -9,3 +9,7 @@ repository.workspace = true
 description = "Kafka broker handlers, trait families, and in-memory reference backends for heimq"
 
 [dependencies]
+bytes = "1.10"
+thiserror = "2.0"
+kafka-protocol = "0.15"
+parking_lot = "0.12"
