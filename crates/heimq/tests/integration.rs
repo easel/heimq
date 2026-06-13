@@ -4220,3 +4220,112 @@ async fn test_rdkafka_transactional_produce_abort() {
         leaked
     );
 }
+
+#[tokio::test]
+#[ignore = "rdkafka tests are run via scripts/compatibility-test.sh (can segfault in cargo test)"]
+async fn test_rdkafka_batched_producer_mid_batch_seek() {
+    // Regression test for the mid-batch offset seek bug:
+    // When a batched producer sends multiple records in one RecordBatch, a
+    // consumer that commits at a non-batch-boundary offset and restarts must
+    // still receive the skipped-over records from within the same batch.
+    //
+    // Without the fix in Segment::read() / FjordPartitionLog::read(), the
+    // range(offset..) lookup started at the *next* batch, causing silent loss.
+    let server = TestServer::start();
+    let topic = unique_topic("batched-mid-seek");
+    let group = unique_group("batched-mid-seek-group");
+
+    // Batched producer: linger so rdkafka coalesces all 10 records into one
+    // or a small number of RecordBatches.
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("message.timeout.ms", "10000")
+        .set("linger.ms", "50")
+        .set("batch.num.messages", "100")
+        .create()
+        .expect("Failed to create batched producer");
+
+    const TOTAL: usize = 10;
+    const COMMIT_AFTER: usize = 3; // commit mid-batch
+
+    let payloads: Vec<String> = (0..TOTAL).map(|i| format!("batched-{i}")).collect();
+    for (i, payload) in payloads.iter().enumerate() {
+        let record = FutureRecord::to(&topic).payload(payload.as_str()).key("k");
+        let result = producer.send(record, Duration::from_secs(10)).await;
+        assert!(result.is_ok(), "batched produce failed for record {i}: {result:?}");
+    }
+
+    // Flush so all records are in the broker before the consumer joins.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Consumer A: read COMMIT_AFTER messages and commit the offset after those.
+    {
+        let consumer = server.rdkafka_consumer(&group);
+        consumer.subscribe(&[&topic]).expect("A subscribe");
+
+        let mut received = 0;
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while received < COMMIT_AFTER && std::time::Instant::now() < deadline {
+            if let Some(Ok(msg)) = consumer.poll(Duration::from_millis(100)) {
+                received += 1;
+                if received == COMMIT_AFTER {
+                    consumer
+                        .commit_message(&msg, CommitMode::Sync)
+                        .expect("A commit");
+                }
+            }
+        }
+        assert_eq!(received, COMMIT_AFTER, "Consumer A must receive {COMMIT_AFTER} messages");
+    }
+
+    tokio::time::sleep(Duration::from_millis(500)).await;
+
+    // Consumer B: same group, auto.offset.reset=latest so without the
+    // committed offset it would see nothing.  It must resume from the
+    // committed offset and receive the remaining TOTAL - COMMIT_AFTER records.
+    let consumer_b: BaseConsumer = ClientConfig::new()
+        .set("bootstrap.servers", &server.bootstrap_servers())
+        .set("group.id", &group)
+        .set("auto.offset.reset", "latest")
+        .set("enable.auto.commit", "false")
+        .create()
+        .expect("Failed to create consumer B");
+    consumer_b.subscribe(&[&topic]).expect("B subscribe");
+
+    let expected_tail = TOTAL - COMMIT_AFTER;
+    let mut payloads: Vec<String> = Vec::new();
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+
+    while payloads.len() < expected_tail && std::time::Instant::now() < deadline {
+        if let Some(Ok(msg)) = consumer_b.poll(Duration::from_millis(100)) {
+            payloads.push(
+                String::from_utf8_lossy(msg.payload().unwrap_or_default()).into_owned(),
+            );
+        }
+    }
+
+    // Brief drain to catch any duplicates.
+    let drain_end = std::time::Instant::now() + Duration::from_millis(500);
+    while std::time::Instant::now() < drain_end {
+        if let Some(Ok(msg)) = consumer_b.poll(Duration::from_millis(50)) {
+            payloads.push(
+                String::from_utf8_lossy(msg.payload().unwrap_or_default()).into_owned(),
+            );
+        }
+    }
+
+    assert_eq!(
+        payloads.len(),
+        expected_tail,
+        "Consumer B must see {expected_tail} messages after mid-batch committed offset, got {}: {:?}",
+        payloads.len(),
+        payloads,
+    );
+    for (i, payload) in payloads.iter().enumerate() {
+        let expected = format!("batched-{}", COMMIT_AFTER + i);
+        assert_eq!(
+            *payload, expected,
+            "payload[{i}] should be {expected:?}, got {payload:?}"
+        );
+    }
+}
