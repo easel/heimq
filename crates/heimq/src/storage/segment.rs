@@ -49,7 +49,18 @@ impl Segment {
         let mut result = Vec::new();
         let mut bytes_read = 0;
 
-        for (_offset, batch) in self.batches.range(start_offset..) {
+        // Step back one entry so we include the batch that contains start_offset
+        // when start_offset falls mid-batch (base_offset < start_offset but the
+        // batch spans records up to or past start_offset).  The consumer is
+        // responsible for skipping individual records before start_offset.
+        let first_key = self
+            .batches
+            .range(..=start_offset)
+            .next_back()
+            .map(|(&k, _)| k)
+            .unwrap_or(start_offset);
+
+        for (_offset, batch) in self.batches.range(first_key..) {
             if bytes_read + batch.len() > max_bytes && !result.is_empty() {
                 break;
             }
@@ -123,6 +134,25 @@ mod tests {
         assert!(!segment.contains(4));
         assert_eq!(segment.last_offset(), Some(6));
         assert_eq!(segment.base_offset(), 5);
+    }
+
+    #[test]
+    fn test_read_mid_batch_offset() {
+        // Simulate a batched producer: one batch at base_offset=0 spanning
+        // records 0-4 (count=5), next batch at base_offset=5.
+        let mut segment = Segment::new(0);
+        segment.append(0, vec![1, 2, 3]); // batch spanning offsets 0-4
+        segment.append(5, vec![4, 5, 6]); // batch spanning offsets 5-9
+
+        // A consumer that committed offset=3 restarts and fetches from 3.
+        // It must receive the batch starting at base_offset=0 (which contains
+        // offsets 3-4) plus the batch at 5 — not just the batch at 5.
+        let data = segment.read(3, 1000);
+        assert_eq!(
+            data,
+            vec![1, 2, 3, 4, 5, 6],
+            "read(3) must include the containing batch at base_offset=0"
+        );
     }
 
     proptest! {
