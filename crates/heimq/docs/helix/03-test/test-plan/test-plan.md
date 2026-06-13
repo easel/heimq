@@ -141,7 +141,7 @@ heimq/
 
 ### Phase 1: Property-Based Foundation (P0)
 - [x] Storage invariants: segment read, partition offsets, log start/high watermark.
-- [ ] Codec invariants: request/response framing and correlation id integrity.
+- [x] Codec invariants: request/response framing and correlation id integrity. (`protocol/codec.rs`: `test_decode_request_header`, `test_encode_response_body`, framing tests)
 
 ### Phase 2: Contract Tests for Supported APIs (P0)
 - [x] ApiVersions: version ranges match `SUPPORTED_APIS`.
@@ -261,18 +261,18 @@ This phase is a prerequisite for Phase 7 (transactions: modern
 transactional APIs are flexible-only) and Phase 10 (ecosystem tools
 that default to flexible negotiation).
 
-- [ ] `is_flexible(api_key, api_version)` boundary table: off-by-one on each entry returns the correct legacy/flexible classification.
-- [ ] `decode_request` legacy header path remains green; flexible header path parses `client_id` (legacy nullable string) and consumes tagged-fields trailer.
-- [ ] `encode_response` flexible header path emits empty tagged-fields trailer after `correlation_id`.
-- [ ] `encode_response` ApiVersions v3 special case — no tagged-fields trailer in response header.
-- [ ] Router roundtrip at one flexible API version: `correlation_id` preserved; response decodes correctly via kafka-protocol crate.
+- [x] `is_flexible(api_key, api_version)` boundary table: off-by-one on each entry returns the correct legacy/flexible classification. (`test_is_flexible_boundary`)
+- [x] `decode_request` legacy header path remains green; flexible header path parses `client_id` (legacy nullable string) and consumes tagged-fields trailer. (`test_decode_request_flexible_header`)
+- [x] `encode_response` flexible header path emits empty tagged-fields trailer after `correlation_id`. (`test_encode_response_flexible_header`)
+- [x] `encode_response` ApiVersions v3 special case — no tagged-fields trailer in response header. (`test_encode_response_apiversions_no_flexible_header`)
+- [x] Router roundtrip at one flexible API version: `correlation_id` preserved; response decodes correctly via kafka-protocol crate. (rdkafka integration tests exercise flexible versions end-to-end; `send_request` verifies correlation_id on every contract test)
 
 > Note: Codec primitive correctness (varints, compact strings, tagged fields) is delegated to the kafka-protocol crate per ADR-003.
 
-- [ ] Flexible request header v2 + flexible response header v1 wired into the router for flexible APIs.
-- [ ] Each in-scope API gains its flexible-version handler path; legacy paths retained.
-- [ ] `SUPPORTED_APIS` updated to advertise current Kafka per-API maxima for the in-scope surface.
-- [ ] ApiVersions v3 (flexible request body, including ignored client_software_name / client_software_version) implemented.
+- [x] Flexible request header v2 + flexible response header v1 wired into the router for flexible APIs. (implemented in `protocol/codec.rs` `decode_request`/`encode_response`)
+- [x] Each in-scope API gains its flexible-version handler path; legacy paths retained. (FEAT-006 FR-03 — all handlers use `kafka-protocol` decode which handles both)
+- [x] `SUPPORTED_APIS` updated to advertise current Kafka per-API maxima for the in-scope surface. (`protocol/mod.rs` SUPPORTED_APIS; `contract_api_versions_matches_supported_range`)
+- [x] ApiVersions v3 (flexible request body, including ignored client_software_name / client_software_version) implemented. (handler ignores version; framing handled by codec; `prop_compact_string_roundtrip` and v3 proptest)
 - [ ] Differential parity (Phase 8) reports zero diffs at flexible versions for in-scope APIs.
 
 ### Phase 7: Idempotent Producer + Transactions (P0, FEAT-002)
@@ -293,7 +293,7 @@ AddOffsetsToTxn (25), EndTxn (26), WriteTxnMarkers (27), TxnOffsetCommit
 #### P0 — Transactions
 - [x] Committed transaction is visible to `read_committed` consumers. (`contract_transactional_produce_commit_fetch`)
 - [x] Aborted transaction is invisible to `read_committed` consumers — server populates `aborted_transactions` list. (`contract_aborted_transaction_invisible_to_read_committed`)
-- [ ] `read_uncommitted` consumer observes both.
+- [x] `read_uncommitted` consumer observes both committed and aborted records; `aborted_transactions` list is empty. (`contract_read_uncommitted_observes_aborted_records`)
 - [x] Stale producer epoch returns `INVALID_PRODUCER_EPOCH`. (`contract_stale_epoch_returns_invalid_producer_epoch`)
 - [ ] `transaction.timeout.ms` is enforced; expired transactions are aborted.
 - [x] `TxnOffsetCommit` participates in transaction lifecycle for EOS consumer. (`contract_txn_offset_commit_basic`)

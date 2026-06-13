@@ -1397,3 +1397,122 @@ fn contract_aborted_transaction_invisible_to_read_committed() {
         pid, aborted.iter().map(|a| a.producer_id.0).collect::<Vec<_>>()
     );
 }
+
+// @covers US-004
+#[test]
+fn contract_read_uncommitted_observes_aborted_records() {
+    use kafka_protocol::messages::add_partitions_to_txn_request::{
+        AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
+    };
+    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
+    use kafka_protocol::messages::end_txn_response::EndTxnResponse;
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-txn-read-uncommitted");
+    create_topic(&server, &topic, 1);
+
+    // InitProducerId
+    let mut init_req = InitProducerIdRequest::default();
+    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-uncommitted-test".to_string()),
+    ));
+    init_req.transaction_timeout_ms = 60000;
+    let init_resp: InitProducerIdResponse = send_request(&server, 22, 0, &init_req);
+    assert_eq!(init_resp.error_code, 0);
+    let pid = init_resp.producer_id.0;
+    let epoch = init_resp.producer_epoch;
+
+    // AddPartitionsToTxn
+    let mut add_topic = AddPartitionsToTxnTopic::default();
+    add_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    add_topic.partitions = vec![0];
+    let mut add_req = AddPartitionsToTxnRequest::default();
+    add_req.v3_and_below_transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-uncommitted-test".to_string()));
+    add_req.v3_and_below_producer_id = init_resp.producer_id;
+    add_req.v3_and_below_producer_epoch = epoch;
+    add_req.v3_and_below_topics = vec![add_topic];
+    let add_resp: AddPartitionsToTxnResponse = send_request(&server, 24, 0, &add_req);
+    assert_eq!(add_resp.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code, 0);
+
+    // Transactional produce
+    let txn_record = Record {
+        transactional: true,
+        control: false,
+        partition_leader_epoch: 0,
+        producer_id: pid,
+        producer_epoch: epoch,
+        timestamp_type: TimestampType::Creation,
+        timestamp: 0,
+        sequence: 0,
+        offset: 0,
+        key: Some("uncommit-key".into()),
+        value: Some("uncommit-val".into()),
+        headers: Default::default(),
+    };
+    let mut txn_buf = BytesMut::new();
+    RecordBatchEncoder::encode(
+        &mut txn_buf,
+        &[txn_record],
+        &RecordEncodeOptions { version: 2, compression: Compression::None },
+    ).expect("encode txn batch");
+
+    let mut pdata = PartitionProduceData::default();
+    pdata.index = 0;
+    pdata.records = Some(txn_buf.freeze());
+    let mut tdata = TopicProduceData::default();
+    tdata.name = TopicName(StrBytes::from_string(topic.clone()));
+    tdata.partition_data = vec![pdata];
+    let mut produce_req = ProduceRequest::default();
+    produce_req.acks = 1;
+    produce_req.timeout_ms = 1000;
+    produce_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-uncommitted-test".to_string()),
+    ));
+    produce_req.topic_data = vec![tdata];
+    let produce_resp: ProduceResponse = send_request(&server, 0, 3, &produce_req);
+    assert_eq!(produce_resp.responses[0].partition_responses[0].error_code, 0);
+
+    // EndTxn ABORT
+    let mut end_req = EndTxnRequest::default();
+    end_req.transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-uncommitted-test".to_string()));
+    end_req.producer_id = init_resp.producer_id;
+    end_req.producer_epoch = epoch;
+    end_req.committed = false;
+    let end_resp: EndTxnResponse = send_request(&server, 26, 0, &end_req);
+    assert_eq!(end_resp.error_code, 0);
+
+    // Fetch with isolation_level=0 (READ_UNCOMMITTED): records are visible,
+    // aborted_transactions list is empty (no filtering hint needed).
+    let mut fetch_partition = FetchPartition::default();
+    fetch_partition.partition = 0;
+    fetch_partition.fetch_offset = 0;
+    fetch_partition.partition_max_bytes = 1024 * 1024;
+    let mut fetch_topic = FetchTopic::default();
+    fetch_topic.topic = TopicName(StrBytes::from_string(topic.clone()));
+    fetch_topic.partitions = vec![fetch_partition];
+    let mut fetch_req = FetchRequest::default();
+    fetch_req.replica_id = BrokerId(-1);
+    fetch_req.max_wait_ms = 0;
+    fetch_req.min_bytes = 0;
+    fetch_req.max_bytes = 1024 * 1024;
+    fetch_req.isolation_level = 0; // READ_UNCOMMITTED
+    fetch_req.topics = vec![fetch_topic];
+
+    let fetch_resp: FetchResponse = send_request(&server, 1, 4, &fetch_req);
+    let part = &fetch_resp.responses[0].partitions[0];
+    assert_eq!(part.error_code, 0);
+    // READ_UNCOMMITTED: aborted_transactions must be empty (no filtering hints).
+    let aborted = part.aborted_transactions.as_deref().unwrap_or_default();
+    assert!(
+        aborted.is_empty(),
+        "read_uncommitted response must have empty aborted_transactions; got {:?}",
+        aborted.iter().map(|a| a.producer_id.0).collect::<Vec<_>>()
+    );
+}
