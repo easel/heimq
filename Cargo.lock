@@ -912,6 +912,12 @@ version = "0.1.0"
 [[package]]
 name = "heimq-testkit"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "heimq",
+ "kafka-protocol",
+ "tokio",
+]
 
 [[package]]
 name = "heimq-wire"

@@ -9,3 +9,9 @@ repository.workspace = true
 description = "Per-trait conformance suites and differential parity harness for heimq"
 
 [dependencies]
+heimq = { path = "../heimq", features = ["test-support"] }
+anyhow = "1.0"
+kafka-protocol = "0.15"
+
+[dev-dependencies]
+tokio = { version = "1.44", features = ["full"] }

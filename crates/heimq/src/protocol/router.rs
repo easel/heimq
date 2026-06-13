@@ -5,7 +5,7 @@ use crate::error::Result;
 use crate::handler::*;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend};
-use bytes::Bytes;
+use bytes::{BufMut, Bytes, BytesMut};
 use kafka_protocol::protocol::Encodable;
 use std::sync::Arc;
 use tracing::{debug, warn};
@@ -207,10 +207,15 @@ impl Router {
     }
 
     fn handle_unsupported(&self, header: &RequestHeader) -> Result<Bytes> {
-        // Return an error response
-        use kafka_protocol::messages::ApiVersionsResponse;
-        let response = ApiVersionsResponse::default();
-        self.encode_response_bytes(header, &response)
+        // Minimal error frame: [length][correlation_id][error_code=35 UNSUPPORTED_VERSION].
+        // No Encodable type exists for unknown API keys, so we craft the bytes directly.
+        let mut buf = BytesMut::with_capacity(10);
+        buf.put_i32(0); // length placeholder
+        buf.put_i32(header.correlation_id);
+        buf.put_i16(35); // UNSUPPORTED_VERSION
+        let len = (buf.len() - 4) as i32;
+        buf[0..4].copy_from_slice(&len.to_be_bytes());
+        Ok(buf.freeze())
     }
 }
 

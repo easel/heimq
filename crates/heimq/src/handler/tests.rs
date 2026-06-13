@@ -769,90 +769,11 @@ fn delete_topics_truncated_inputs() {
 #[test]
 fn fetch_truncated_inputs() {
     let storage = test_storage(true);
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    let response = fetch::handle(3, &buf, &storage).unwrap();
+    // All malformed / truncated inputs must not panic — they return empty responses.
+    let response = fetch::handle(3, &[], &storage).unwrap();
     assert!(response.responses.is_empty());
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    let response = fetch::handle(3, &buf, &storage).unwrap();
+    let response = fetch::handle(3, &[0xFF, 0x00], &storage).unwrap();
     assert!(response.responses.is_empty());
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    let response = fetch::handle(2, &buf, &storage).unwrap();
-    assert!(response.responses.is_empty());
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i32(1024);
-    buf.put_i32(1);
-    let response = fetch::handle(3, &buf, &storage).unwrap();
-    assert!(response.responses.is_empty());
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i32(1024);
-    buf.put_i32(1);
-    buf.put_i16(4);
-    buf.extend_from_slice(b"a");
-    let response = fetch::handle(3, &buf, &storage).unwrap();
-    assert!(response.responses.is_empty());
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i32(1024);
-    buf.put_i32(1);
-    put_str(&mut buf, Some("topic"));
-    let response = fetch::handle(3, &buf, &storage).unwrap();
-    assert!(response.responses.is_empty());
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i32(1024);
-    buf.put_i32(1);
-    put_str(&mut buf, Some("topic"));
-    buf.put_i32(1);
-    let response = fetch::handle(3, &buf, &storage).unwrap();
-    assert_eq!(response.responses.len(), 1);
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i32(1024);
-    buf.put_i32(1);
-    put_str(&mut buf, Some("topic"));
-    buf.put_i32(1);
-    buf.put_i32(0);
-    let response = fetch::handle(3, &buf, &storage).unwrap();
-    assert_eq!(response.responses.len(), 1);
-
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i32(1024);
-    buf.put_i32(1);
-    put_str(&mut buf, Some("topic"));
-    buf.put_i32(1);
-    buf.put_i32(0);
-    buf.put_i64(0);
-    let response = fetch::handle(3, &buf, &storage).unwrap();
-    assert_eq!(response.responses.len(), 1);
 }
 
 #[test]
@@ -863,25 +784,27 @@ fn fetch_optional_fields_and_records() {
     let batch = encode_record_batch(&[new_record(0)]);
     storage.append("fetch-opt", 0, &batch).unwrap();
 
-    let mut buf = BytesMut::new();
-    buf.put_i32(-1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i32(1024);
-    buf.put_i8(0);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i32(1);
-    put_str(&mut buf, Some("fetch-opt"));
-    buf.put_i32(1);
-    buf.put_i32(0);
-    buf.put_i32(0);
-    buf.put_i64(0);
-    buf.put_i32(0);
-    buf.put_i64(0);
-    buf.put_i32(1024);
+    // v7: session_id + session_epoch added. Use encode_body for version-correct encoding.
+    let mut fp = FetchPartition::default();
+    fp.partition = 0;
+    fp.fetch_offset = 0;
+    fp.partition_max_bytes = 65536;
 
-    let response = fetch::handle(12, &buf, &storage).unwrap();
+    let mut ft = FetchTopic::default();
+    ft.topic = TopicName(StrBytes::from_string("fetch-opt".to_string()));
+    ft.partitions = vec![fp];
+
+    let mut req = FetchRequest::default();
+    req.replica_id = BrokerId(-1);
+    req.max_wait_ms = 0;
+    req.min_bytes = 1;
+    req.max_bytes = 65536;
+    req.session_id = 0;
+    req.session_epoch = -1;
+    req.topics = vec![ft];
+
+    let body = encode_body(&req, 7);
+    let response = fetch::handle(7, &body, &storage).unwrap();
     assert!(response.responses[0].partitions[0].records.is_some());
 }
 

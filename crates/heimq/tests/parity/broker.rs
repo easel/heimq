@@ -2,9 +2,8 @@ use anyhow::Result;
 use heimq::test_support::TestServer;
 use rdkafka::consumer::{BaseConsumer, Consumer};
 use rdkafka::ClientConfig;
-use std::net::TcpListener;
 use std::time::Duration;
-use testcontainers::core::{IntoContainerPort, WaitFor};
+use testcontainers::core::WaitFor;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{ContainerAsync, GenericImage, ImageExt};
 
@@ -38,35 +37,33 @@ pub struct Targets {
 }
 
 pub async fn boot() -> Result<(ContainerAsync<GenericImage>, TestServer, Targets)> {
-    // Reserve an ephemeral port then release it so testcontainers can bind the same port.
-    // This avoids pinning host port 9092, allowing concurrent test runs.
-    let ephemeral_port = {
-        let listener = TcpListener::bind("127.0.0.1:0")?;
-        listener.local_addr()?.port()
-        // listener drops here, releasing the port
-    };
-    let advertise_addr = format!("localhost:{}", ephemeral_port);
+    // Start Redpanda using a shell entrypoint that auto-detects the container's bridge IP
+    // and passes it as --advertise-kafka-addr. This avoids the port-mapping issues that
+    // arise in OrbStack where Docker's bridge IPs are routable from the Linux VM but
+    // host port mappings are not.
+    //
+    // The WaitFor message confirms the Kafka listener is up, then we query
+    // the container's bridge IP via Docker inspect to build the bootstrap address.
+    let startup_script = "\
+        IP=$(hostname -I | awk '{print $1}'); \
+        exec /entrypoint.sh redpanda start \
+            --smp 1 \
+            --memory 512M \
+            --overprovisioned \
+            --kafka-addr 0.0.0.0:9092 \
+            --advertise-kafka-addr ${IP}:9092";
+
     let redpanda_container = GenericImage::new(REDPANDA_IMAGE, REDPANDA_TAG)
-        .with_exposed_port(KAFKA_PORT.tcp())
         .with_wait_for(WaitFor::message_on_stderr("Successfully started Redpanda!"))
-        .with_cmd([
-            "redpanda",
-            "start",
-            "--smp",
-            "1",
-            "--memory",
-            "512M",
-            "--overprovisioned",
-            "--kafka-addr",
-            "0.0.0.0:9092",
-            "--advertise-kafka-addr",
-            &advertise_addr,
-        ])
-        .with_mapped_port(ephemeral_port, KAFKA_PORT.tcp())
+        .with_entrypoint("/bin/sh")
+        .with_cmd(["-c", startup_script])
         .start()
         .await?;
 
-    let redpanda_bootstrap = format!("127.0.0.1:{}", ephemeral_port);
+    // Query the container's bridge IP — this is the address the container advertises
+    // and the address our test binary uses to connect.
+    let bridge_ip = redpanda_container.get_bridge_ip_address().await?;
+    let redpanda_bootstrap = format!("{}:{}", bridge_ip, KAFKA_PORT);
 
     let heimq_server = TestServer::start();
     let heimq_bootstrap = heimq_server.bootstrap_servers();
