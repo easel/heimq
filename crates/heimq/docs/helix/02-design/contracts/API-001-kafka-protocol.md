@@ -56,16 +56,14 @@ ddx:
 - The static version table is `SUPPORTED_APIS` in `src/protocol/mod.rs`;
   the matrix below mirrors it. Any change to advertised versions must
   update both.
-- **Per-API target maxima** (initial targets — to be confirmed against
-  the current `kafka-protocol` spec at FEAT-006 implementation time):
-  Produce v11, Fetch v17, ListOffsets v9, Metadata v12, OffsetCommit v9,
-  OffsetFetch v9, FindCoordinator v6, JoinGroup v9, Heartbeat v4,
-  LeaveGroup v5, SyncGroup v5, ApiVersions v3, CreateTopics v7,
-  DeleteTopics v6, InitProducerId v5, AddPartitionsToTxn v5,
-  AddOffsetsToTxn v4, EndTxn v4, WriteTxnMarkers v1,
-  TxnOffsetCommit v4, DescribeProducers v0, DescribeTransactions v0,
-  ListTransactions v1. Final maxima are pinned during FEAT-006
-  implementation; the matrix below records advertised support state.
+- **Per-API maxima** (pinned by FEAT-006 FR-03):
+  Produce v11, Fetch v12 (v13+ drops topic name — capped), ListOffsets v9,
+  Metadata v12, OffsetCommit v9, OffsetFetch v9 (v8+ uses groups structure),
+  FindCoordinator v6, JoinGroup v9, Heartbeat v4, LeaveGroup v5, SyncGroup v5,
+  ApiVersions v3, CreateTopics v7, DeleteTopics v6, InitProducerId v5,
+  AddPartitionsToTxn v5, AddOffsetsToTxn v4, EndTxn v4, WriteTxnMarkers v1,
+  TxnOffsetCommit v4. The matrix below mirrors `SUPPORTED_APIS` in
+  `src/protocol/mod.rs`; any change to advertised versions must update both.
 - **Capability-derived advertisement**: The ApiVersions response is not a verbatim copy of `SUPPORTED_APIS`. At runtime, `compute_supported_apis` (`src/protocol/mod.rs`) intersects the static table with the per-API `CapabilityGate` against each backend's descriptor (`BackendCapabilities`, `OffsetStoreCapabilities`, `GroupCoordinatorCapabilities`). APIs whose required backend is absent (e.g. no group coordinator) are filtered out before the response is encoded, so heimq advertises only what its currently configured backends can actually serve. Gating is per-API, not a global meet — a backend that lacks compaction does not lose unrelated APIs.
 
 ### Support Matrix (Kafka API Keys)
@@ -85,31 +83,31 @@ Reason codes (Exclusions):
 
 | API Key | Name | heimq Status | Supported Versions | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 0 | Produce | Supported | 0-8 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory append only |
-| 1 | Fetch | Supported | 0-11 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory read only |
-| 2 | ListOffsets | Supported | 0-5 | `src/handler/tests.rs`; `tests/contract.rs` | Timestamp lookups simplified |
-| 3 | Metadata | Supported | 0-8 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | Single broker only |
-| 8 | OffsetCommit | Supported | 0-7 | `src/handler/tests.rs`; `tests/contract.rs` | In-memory offsets |
-| 9 | OffsetFetch | Supported | 0-5 | `src/handler/tests.rs`; `tests/contract.rs` | In-memory offsets |
-| 10 | FindCoordinator | Supported | 0-2 | `src/handler/tests.rs` | Single coordinator (self) |
-| 11 | JoinGroup | Supported | 0-5 | `src/handler/tests.rs` | Simplified group state |
-| 12 | Heartbeat | Supported | 0-3 | `src/handler/tests.rs` | Simplified liveness |
-| 13 | LeaveGroup | Supported | 0-3 | `src/handler/tests.rs` | Member removal only |
-| 14 | SyncGroup | Supported | 0-3 | `src/handler/tests.rs` | Simplified assignment |
+| 0 | Produce | Supported | 0-11 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory append only |
+| 1 | Fetch | Supported | 0-12 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory read only; capped at v12 (v13+ uses topic_id UUID, name-based lookup unsupported) |
+| 2 | ListOffsets | Supported | 0-9 | `src/handler/tests.rs`; `tests/contract.rs` | Timestamp lookups simplified |
+| 3 | Metadata | Supported | 0-12 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | Single broker only |
+| 8 | OffsetCommit | Supported | 0-9 | `src/handler/tests.rs`; `tests/contract.rs` | In-memory offsets |
+| 9 | OffsetFetch | Supported | 0-9 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory offsets; v8+ uses groups response structure |
+| 10 | FindCoordinator | Supported | 0-6 | `src/handler/tests.rs` | Single coordinator (self) |
+| 11 | JoinGroup | Supported | 0-9 | `src/handler/tests.rs` | Simplified group state |
+| 12 | Heartbeat | Supported | 0-4 | `src/handler/tests.rs` | Simplified liveness |
+| 13 | LeaveGroup | Supported | 0-5 | `src/handler/tests.rs` | Member removal only |
+| 14 | SyncGroup | Supported | 0-5 | `src/handler/tests.rs` | Simplified assignment |
 | 15 | DescribeGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
 | 16 | ListGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
 | 17 | SaslHandshake | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
-| 18 | ApiVersions | Supported | 0-2 | `src/handler/tests.rs`; `tests/contract.rs`; `src/protocol/router.rs` | Version negotiation only |
-| 19 | CreateTopics | Supported | 0-4 | `src/handler/tests.rs`; `tests/contract.rs` | No config validation |
-| 20 | DeleteTopics | Supported | 0-3 | `src/handler/tests.rs`; `tests/contract.rs` | Best-effort delete |
+| 18 | ApiVersions | Supported | 0-3 | `src/handler/tests.rs`; `tests/contract.rs`; `src/protocol/router.rs` | Version negotiation only |
+| 19 | CreateTopics | Supported | 0-7 | `src/handler/tests.rs`; `tests/contract.rs` | No config validation |
+| 20 | DeleteTopics | Supported | 0-6 | `src/handler/tests.rs`; `tests/contract.rs` | Best-effort delete |
 | 21 | DeleteRecords | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
-| 22 | InitProducerId | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Required for idempotent producer + transactions |
+| 22 | InitProducerId | Supported (FEAT-002) | 0-5 | `tests/contract.rs` | Required for idempotent producer + transactions |
 | 23 | OffsetForLeaderEpoch | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
-| 24 | AddPartitionsToTxn | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Single-coordinator transaction state machine |
-| 25 | AddOffsetsToTxn | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Single-coordinator transaction state machine |
-| 26 | EndTxn | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Single-coordinator transaction state machine |
-| 27 | WriteTxnMarkers | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Control batches drive read_committed visibility |
-| 28 | TxnOffsetCommit | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | EOS consumer offset commits |
+| 24 | AddPartitionsToTxn | Supported (FEAT-002) | 0-5 | `tests/contract.rs` | Single-coordinator transaction state machine |
+| 25 | AddOffsetsToTxn | Supported (FEAT-002) | 0-4 | `tests/contract.rs` | Single-coordinator transaction state machine |
+| 26 | EndTxn | Supported (FEAT-002) | 0-4 | `tests/contract.rs` | Single-coordinator transaction state machine |
+| 27 | WriteTxnMarkers | Supported (FEAT-002) | 0-1 | `tests/contract.rs` | Control batches drive read_committed visibility |
+| 28 | TxnOffsetCommit | Supported (FEAT-002) | 0-4 | `tests/contract.rs` | EOS consumer offset commits |
 | 29 | DescribeAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
 | 30 | CreateAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
 | 31 | DeleteAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
