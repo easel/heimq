@@ -157,16 +157,20 @@ fn test_java_kafka_clients_produce_consume() {
 
     let jar = java_oracle_jar();
 
-    // Build the JAR if it doesn't exist (first run).
-    if !jar.exists() {
-        if !mvn_available() {
+    // Build (or rebuild) the JAR. We always invoke mvn so that source changes
+    // are picked up without manual intervention; mvn's incremental compilation
+    // makes this cheap when nothing changed.
+    if !mvn_available() {
+        if !jar.exists() {
             eprintln!("SKIP: mvn not in PATH and kafka-oracle jar not pre-built");
             return;
         }
-        let jar_dir = jar.parent().unwrap().parent().unwrap();
+        // JAR exists but mvn is absent — run with the stale JAR and hope it's close enough.
+    } else {
+        let jar_dir = java_oracle_jar().parent().unwrap().parent().unwrap().to_path_buf();
         let build_out = Command::new("mvn")
             .args(["-q", "package", "-DskipTests"])
-            .current_dir(jar_dir)
+            .current_dir(&jar_dir)
             .output()
             .expect("mvn package failed to spawn");
         assert!(

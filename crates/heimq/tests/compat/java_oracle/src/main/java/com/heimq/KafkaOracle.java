@@ -1,7 +1,6 @@
 package com.heimq;
 
-import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -10,6 +9,8 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -49,10 +50,15 @@ public class KafkaOracle {
     }
 
     private static void run(String bootstrap, String topic) throws Exception {
+        check("create-topic", () -> createTopic(bootstrap, topic));
         check("produce", () -> produce(bootstrap, topic));
         check("consume-via-group", () -> consumeViaGroup(bootstrap, topic));
+        check("describe-configs", () -> describeConfigs(bootstrap, topic));
+        check("alter-configs", () -> alterConfigs(bootstrap, topic));
+        check("list-offsets", () -> listOffsets(bootstrap, topic));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
+        check("delete-topic", () -> deleteTopic(bootstrap, topic));
     }
 
     @FunctionalInterface
@@ -63,6 +69,13 @@ public class KafkaOracle {
     private static void check(String name, Checker fn) throws Exception {
         fn.run();
         System.out.printf("  ok  %s%n", name);
+    }
+
+    private static Properties adminProps(String bootstrap) {
+        Properties props = new Properties();
+        props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap);
+        props.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10000");
+        return props;
     }
 
     private static Properties producerProps(String bootstrap) {
@@ -85,6 +98,57 @@ public class KafkaOracle {
         props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "100");
         return props;
+    }
+
+    private static void createTopic(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
+            admin.createTopics(Collections.singletonList(newTopic)).all().get();
+        }
+    }
+
+    private static void deleteTopic(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            admin.deleteTopics(Collections.singletonList(topic)).all().get();
+        }
+    }
+
+    private static void describeConfigs(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            Map<ConfigResource, Config> configs = admin.describeConfigs(
+                    Collections.singletonList(resource)).all().get();
+            Config config = configs.get(resource);
+            if (config == null) {
+                throw new RuntimeException("no config returned for topic " + topic);
+            }
+            if (config.entries().isEmpty()) {
+                throw new RuntimeException("expected config entries, got none");
+            }
+        }
+    }
+
+    private static void alterConfigs(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
+            Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
+            alterEntries.put(resource, Collections.singletonList(
+                    new AlterConfigOp(new ConfigEntry("retention.ms", "86400000"),
+                            AlterConfigOp.OpType.SET)));
+            admin.incrementalAlterConfigs(alterEntries).all().get();
+        }
+    }
+
+    private static void listOffsets(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            TopicPartition tp = new TopicPartition(topic, 0);
+            Map<TopicPartition, OffsetSpec> query = Collections.singletonMap(tp, OffsetSpec.latest());
+            ListOffsetsResult result = admin.listOffsets(query);
+            ListOffsetsResult.ListOffsetsResultInfo info = result.partitionResult(tp).get();
+            if (info.offset() < 5) {
+                throw new RuntimeException("expected end offset >= 5, got " + info.offset());
+            }
+        }
     }
 
     private static void produce(String bootstrap, String topic) throws Exception {
