@@ -42,6 +42,10 @@ func run(bootstrap string) error {
 	hdrGroup := fmt.Sprintf("franz-hdrs-group-%d", ts)
 	compTopic := fmt.Sprintf("franz-comp-%d", ts)
 	compGroup := fmt.Sprintf("franz-comp-group-%d", ts)
+	lz4Topic := fmt.Sprintf("franz-lz4-%d", ts)
+	lz4Group := fmt.Sprintf("franz-lz4-group-%d", ts)
+	resumeTopic := fmt.Sprintf("franz-resume-%d", ts)
+	resumeGroup := fmt.Sprintf("franz-resume-group-%d", ts)
 
 	if err := check("create-topic", func() error {
 		return createTopic(ctx, bootstrap, topic)
@@ -183,6 +187,24 @@ func run(bootstrap string) error {
 
 	if err := check("consume-compressed-roundtrip", func() error {
 		return consumeCompressedRoundtrip(ctx, bootstrap, compTopic, compGroup)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("produce-lz4-compressed", func() error {
+		return produceWithCodec(ctx, bootstrap, lz4Topic, kgo.Lz4Compression())
+	}); err != nil {
+		return err
+	}
+
+	if err := check("consume-lz4-roundtrip", func() error {
+		return consumeCompressedRoundtrip(ctx, bootstrap, lz4Topic, lz4Group)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("offset-resume", func() error {
+		return offsetResume(ctx, bootstrap, resumeTopic, resumeGroup)
 	}); err != nil {
 		return err
 	}
@@ -910,5 +932,162 @@ func consumeCompressedRoundtrip(ctx context.Context, bootstrap, topic, group str
 	if err := cl.CommitUncommittedOffsets(ctx); err != nil {
 		return fmt.Errorf("commit offsets: %w", err)
 	}
+	return nil
+}
+
+// produceWithCodec creates the given topic and produces 4 records with the specified
+// compression codec. Reuses consumeCompressedRoundtrip for the consume side.
+func produceWithCodec(ctx context.Context, bootstrap, topic string, codec kgo.CompressionCodec) error {
+	{
+		cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+		if err != nil {
+			return fmt.Errorf("new client: %w", err)
+		}
+		adm := kadm.NewClient(cl)
+		resp, err := adm.CreateTopics(ctx, 1, 1, nil, topic)
+		cl.Close()
+		if err != nil {
+			return fmt.Errorf("create topic: %w", err)
+		}
+		if r, ok := resp[topic]; ok && r.Err != nil {
+			return fmt.Errorf("create topic %q: %w", topic, r.Err)
+		}
+	}
+
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.DefaultProduceTopic(topic),
+		kgo.ProducerBatchCompression(codec),
+	)
+	if err != nil {
+		return fmt.Errorf("new producer: %w", err)
+	}
+	defer cl.Close()
+
+	for i := 0; i < 4; i++ {
+		res := cl.ProduceSync(ctx, &kgo.Record{
+			Key:   []byte(fmt.Sprintf("comp-key-%d", i)),
+			Value: []byte(fmt.Sprintf("comp-val-%d", i)),
+		})
+		if err := res.FirstErr(); err != nil {
+			return fmt.Errorf("record %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// offsetResume verifies that committed consumer group offsets are persisted and
+// respected when a new consumer session joins the same group.
+//
+// 1. Creates resumeTopic, produces 8 records.
+// 2. Admin client explicitly commits offset 4 for resumeGroup on partition 0.
+//    (This simulates a prior consumer session that processed records 0-3.)
+// 3. Session B (resumeGroup) subscribes and must start from offset 4,
+//    receiving only records 4-7.
+func offsetResume(ctx context.Context, bootstrap, topic, group string) error {
+	// Create topic.
+	{
+		cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+		if err != nil {
+			return fmt.Errorf("new client: %w", err)
+		}
+		adm := kadm.NewClient(cl)
+		resp, err := adm.CreateTopics(ctx, 1, 1, nil, topic)
+		cl.Close()
+		if err != nil {
+			return fmt.Errorf("create resume topic: %w", err)
+		}
+		if r, ok := resp[topic]; ok && r.Err != nil {
+			return fmt.Errorf("create resume topic %q: %w", topic, r.Err)
+		}
+	}
+
+	// Produce 8 records.
+	{
+		cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap), kgo.DefaultProduceTopic(topic))
+		if err != nil {
+			return fmt.Errorf("new producer: %w", err)
+		}
+		for i := 0; i < 8; i++ {
+			res := cl.ProduceSync(ctx, &kgo.Record{
+				Key:   []byte(fmt.Sprintf("rkey-%d", i)),
+				Value: []byte(fmt.Sprintf("rval-%d", i)),
+			})
+			if err := res.FirstErr(); err != nil {
+				cl.Close()
+				return fmt.Errorf("produce record %d: %w", i, err)
+			}
+		}
+		cl.Close()
+	}
+
+	// Admin-commit offset 4 for the group. This bypasses consumer-session lifecycle
+	// and directly tests the OffsetCommit → OffsetFetch persisting path.
+	{
+		cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+		if err != nil {
+			return fmt.Errorf("admin client: %w", err)
+		}
+		adm := kadm.NewClient(cl)
+		offsets := make(kadm.Offsets)
+		offsets.Add(kadm.Offset{Topic: topic, Partition: 0, At: 4})
+		_, err = adm.CommitOffsets(ctx, group, offsets)
+		if err != nil {
+			cl.Close()
+			return fmt.Errorf("commit offsets: %w", err)
+		}
+		cl.Close()
+	}
+
+	// Session B: subscribe with the same group; must resume from offset 4, not 0.
+	{
+		cl, err := kgo.NewClient(
+			kgo.SeedBrokers(bootstrap),
+			kgo.ConsumeTopics(topic),
+			kgo.ConsumerGroup(group),
+			// AtEnd is the no-committed-offset fallback; committed offset (4) takes priority.
+			kgo.ConsumeResetOffset(kgo.NewOffset().AtEnd()),
+		)
+		if err != nil {
+			return fmt.Errorf("session B client: %w", err)
+		}
+		defer cl.Close()
+
+		gotB := make(map[string]string)
+		for len(gotB) < 4 {
+			if ctx.Err() != nil {
+				return fmt.Errorf("session B timeout: consumed %d/4 records after resume", len(gotB))
+			}
+			fetches := cl.PollFetches(ctx)
+			if errs := fetches.Errors(); len(errs) > 0 {
+				return fmt.Errorf("session B fetch error: %v", errs[0].Err)
+			}
+			fetches.EachRecord(func(r *kgo.Record) {
+				gotB[string(r.Key)] = string(r.Value)
+			})
+		}
+
+		// Verify records 4-7 arrived (not 0-3).
+		for i := 4; i < 8; i++ {
+			key := fmt.Sprintf("rkey-%d", i)
+			wantVal := fmt.Sprintf("rval-%d", i)
+			v, ok := gotB[key]
+			if !ok {
+				return fmt.Errorf("session B missing key %s; got keys: %v", key, gotB)
+			}
+			if v != wantVal {
+				return fmt.Errorf("session B key %s: got %q want %q", key, v, wantVal)
+			}
+		}
+		for i := 0; i < 4; i++ {
+			if _, ok := gotB[fmt.Sprintf("rkey-%d", i)]; ok {
+				return fmt.Errorf("session B re-read committed record rkey-%d (started before offset 4)", i)
+			}
+		}
+		if err := cl.CommitUncommittedOffsets(ctx); err != nil {
+			return fmt.Errorf("session B commit: %w", err)
+		}
+	}
+
 	return nil
 }
