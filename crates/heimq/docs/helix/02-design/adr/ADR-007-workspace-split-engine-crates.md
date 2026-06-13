@@ -44,7 +44,7 @@ currently 0.15, upgraded to the current release during IP-001 Slice 2 and
 recorded here. Header-version selection delegates to
 `ApiKey::{request,response}_header_version`; no hand-rolled version tables.
 
-**Niflheim port baseline:** TBD at Slice 2 — Slice 9 forward-port diffs against this commit.
+**Niflheim port baseline:** `762b210` (2026-06-13) — Slice 9 forward-port diffs against this commit.
 
 ## Alternatives
 
