@@ -25,7 +25,7 @@ use crate::storage::{BackendCapabilities, OffsetStoreCapabilities};
 pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     // (api_key, min_version, max_version)
     (0, 0, 11),  // Produce
-    (1, 0, 17),  // Fetch
+    (1, 0, 12),  // Fetch (v13+ uses topic_id UUID instead of name; name-based handler supports ≤12)
     (2, 0, 9),   // ListOffsets
     (3, 0, 12),  // Metadata
     (8, 0, 9),   // OffsetCommit

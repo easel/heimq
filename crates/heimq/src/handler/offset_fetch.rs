@@ -5,9 +5,10 @@ use crate::storage::OffsetStore;
 use bytes::Bytes;
 use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequest;
 use kafka_protocol::messages::offset_fetch_response::{
-    OffsetFetchResponsePartition, OffsetFetchResponseTopic,
+    OffsetFetchResponseGroup, OffsetFetchResponsePartition, OffsetFetchResponsePartitions,
+    OffsetFetchResponseTopic, OffsetFetchResponseTopics,
 };
-use kafka_protocol::messages::{OffsetFetchResponse, TopicName};
+use kafka_protocol::messages::{GroupId, OffsetFetchResponse, TopicName};
 use kafka_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
@@ -24,69 +25,111 @@ pub fn handle(
 
     let mut response = OffsetFetchResponse::default();
 
-    // v8+ uses `groups` for multi-group batch requests.
-    // v0-7 uses top-level `group_id` and `topics`.
     if api_version >= 8 {
-        // Handle the first group only (single-group case, which is the common path).
+        // v8+: response uses `groups` (OffsetFetchResponseGroup).
         if let Some(group) = request.groups.into_iter().next() {
             let group_id = group.group_id.0.to_string();
-            fetch_group_offsets(&group_id, group.topics.as_deref(), offset_store, &mut response);
+            let mut resp_group = OffsetFetchResponseGroup::default();
+            resp_group.group_id = GroupId(StrBytes::from_string(group_id.clone()));
+            build_group_topics_v8(&group_id, group.topics.as_deref(), offset_store, &mut resp_group);
+            response.groups.push(resp_group);
         }
     } else {
+        // v0-7: response uses top-level `topics` (OffsetFetchResponseTopic).
         let group_id = request.group_id.0.to_string();
-        // Convert Option<Vec<OffsetFetchRequestTopic>> → slice of (name, partition_indexes)
         let topics_slice: Option<Vec<(String, &[i32])>> = request.topics.as_ref().map(|ts| {
             ts.iter()
                 .map(|t| (t.name.0.to_string(), t.partition_indexes.as_slice()))
                 .collect()
         });
-        fetch_group_offsets_raw(&group_id, topics_slice.as_deref(), offset_store, &mut response);
+        build_group_topics_v0_7(&group_id, topics_slice.as_deref(), offset_store, &mut response);
+        response.error_code = 0;
     }
 
-    response.error_code = 0;
     Ok(response)
 }
 
-fn fetch_group_offsets(
+fn build_group_topics_v8(
     group_id: &str,
     topics: Option<&[kafka_protocol::messages::offset_fetch_request::OffsetFetchRequestTopics]>,
     offset_store: &Arc<dyn OffsetStore>,
-    response: &mut OffsetFetchResponse,
+    resp_group: &mut OffsetFetchResponseGroup,
 ) {
     match topics {
-        None => fetch_all(group_id, offset_store, response),
+        None => fetch_all_v8(group_id, offset_store, resp_group),
         Some(ts) => {
             for topic in ts {
                 let topic_name = topic.name.0.to_string();
-                let mut topic_response = OffsetFetchResponseTopic::default();
-                topic_response.name = TopicName(StrBytes::from_string(topic_name.clone()));
+                let mut topic_resp = OffsetFetchResponseTopics::default();
+                topic_resp.name = TopicName(StrBytes::from_string(topic_name.clone()));
                 for &pi in &topic.partition_indexes {
-                    topic_response
-                        .partitions
-                        .push(build_partition_response(group_id, &topic_name, pi, offset_store));
+                    topic_resp.partitions.push(build_partition_v8(group_id, &topic_name, pi, offset_store));
                 }
-                response.topics.push(topic_response);
+                resp_group.topics.push(topic_resp);
             }
         }
     }
 }
 
-fn fetch_group_offsets_raw(
+fn fetch_all_v8(
+    group_id: &str,
+    offset_store: &Arc<dyn OffsetStore>,
+    resp_group: &mut OffsetFetchResponseGroup,
+) {
+    let all_offsets = offset_store.fetch_all_for_group(group_id);
+    let mut topic_map: std::collections::HashMap<String, Vec<(i32, i64, Option<String>)>> =
+        std::collections::HashMap::new();
+    for ((topic, partition), committed) in all_offsets {
+        topic_map.entry(topic).or_default().push((partition, committed.offset, committed.metadata));
+    }
+    for (topic_name, partitions) in topic_map {
+        let mut topic_resp = OffsetFetchResponseTopics::default();
+        topic_resp.name = TopicName(StrBytes::from_string(topic_name.clone()));
+        for (partition, offset, metadata) in partitions {
+            let mut p = OffsetFetchResponsePartitions::default();
+            p.partition_index = partition;
+            p.committed_offset = offset;
+            p.metadata = metadata.map(StrBytes::from_string);
+            p.error_code = 0;
+            topic_resp.partitions.push(p);
+        }
+        resp_group.topics.push(topic_resp);
+    }
+}
+
+fn build_partition_v8(
+    group_id: &str,
+    topic_name: &str,
+    partition_index: i32,
+    offset_store: &Arc<dyn OffsetStore>,
+) -> OffsetFetchResponsePartitions {
+    let mut p = OffsetFetchResponsePartitions::default();
+    p.partition_index = partition_index;
+    if let Some(committed) = offset_store.fetch(group_id, topic_name, partition_index) {
+        p.committed_offset = committed.offset;
+        p.metadata = committed.metadata.map(StrBytes::from_string);
+        p.error_code = 0;
+    } else {
+        p.committed_offset = -1;
+        p.error_code = 0;
+    }
+    p
+}
+
+fn build_group_topics_v0_7(
     group_id: &str,
     topics: Option<&[(String, &[i32])]>,
     offset_store: &Arc<dyn OffsetStore>,
     response: &mut OffsetFetchResponse,
 ) {
     match topics {
-        None => fetch_all(group_id, offset_store, response),
+        None => fetch_all_v0_7(group_id, offset_store, response),
         Some(ts) => {
             for (topic_name, partition_indexes) in ts {
                 let mut topic_response = OffsetFetchResponseTopic::default();
                 topic_response.name = TopicName(StrBytes::from_string(topic_name.clone()));
                 for &pi in *partition_indexes {
-                    topic_response
-                        .partitions
-                        .push(build_partition_response(group_id, topic_name, pi, offset_store));
+                    topic_response.partitions.push(build_partition_v0_7(group_id, topic_name, pi, offset_store));
                 }
                 response.topics.push(topic_response);
             }
@@ -94,7 +137,7 @@ fn fetch_group_offsets_raw(
     }
 }
 
-fn fetch_all(
+fn fetch_all_v0_7(
     group_id: &str,
     offset_store: &Arc<dyn OffsetStore>,
     response: &mut OffsetFetchResponse,
@@ -103,10 +146,7 @@ fn fetch_all(
     let mut topic_map: std::collections::HashMap<String, Vec<(i32, i64, Option<String>)>> =
         std::collections::HashMap::new();
     for ((topic, partition), committed) in all_offsets {
-        topic_map
-            .entry(topic)
-            .or_default()
-            .push((partition, committed.offset, committed.metadata));
+        topic_map.entry(topic).or_default().push((partition, committed.offset, committed.metadata));
     }
     for (topic_name, partitions) in topic_map {
         let mut topic_response = OffsetFetchResponseTopic::default();
@@ -123,7 +163,7 @@ fn fetch_all(
     }
 }
 
-fn build_partition_response(
+fn build_partition_v0_7(
     group_id: &str,
     topic_name: &str,
     partition_index: i32,

@@ -87,12 +87,18 @@ impl TestServer {
             })
             .expect("heimq binary not found - run 'cargo build' first");
 
+        let log_output = if std::env::var("HEIMQ_LOG").as_deref() == Ok("1") {
+            Stdio::inherit()
+        } else {
+            Stdio::null()
+        };
         let child = Command::new(&binary)
             .args(["--port", &port.to_string(), "--memory-only"])
             .env("HEIMQ_AUTO_CREATE_TOPICS", auto_value)
             .env("HEIMQ_DEFAULT_PARTITIONS", default_partitions.to_string())
+            .env("RUST_LOG", "heimq=debug")
             .stdout(Stdio::null())
-            .stderr(Stdio::null())
+            .stderr(log_output)
             .spawn()
             .expect("Failed to start heimq");
 
