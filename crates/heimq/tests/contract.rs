@@ -1619,3 +1619,189 @@ fn contract_fetch_long_poll_waits_on_empty_partition() {
         elapsed
     );
 }
+
+/// Verify that DeleteRecords advances the log start offset and that fetching
+/// before the new LSO returns OFFSET_OUT_OF_RANGE (error code 1).
+#[test]
+fn contract_delete_records_advances_lso() {
+    use kafka_protocol::messages::delete_records_request::{
+        DeleteRecordsPartition, DeleteRecordsTopic, DeleteRecordsRequest,
+    };
+    use kafka_protocol::messages::delete_records_response::DeleteRecordsResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-delete-records");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0, "create failed");
+
+    // Produce 5 records.
+    for i in 0..5i64 {
+        let record = new_record(i);
+        let batch = encode_record_batch(&[record]);
+        let produce_resp = produce_batch(&server, &topic, batch);
+        assert_eq!(
+            produce_resp.responses[0].partition_responses[0].error_code,
+            0,
+            "produce {i} failed"
+        );
+    }
+
+    // DeleteRecords: truncate before offset 3 (keep offsets 3, 4).
+    let mut partition = DeleteRecordsPartition::default();
+    partition.partition_index = 0;
+    partition.offset = 3;
+
+    let mut del_topic = DeleteRecordsTopic::default();
+    del_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    del_topic.partitions = vec![partition];
+
+    let mut del_req = DeleteRecordsRequest::default();
+    del_req.topics = vec![del_topic];
+    del_req.timeout_ms = 5000;
+
+    let del_resp: DeleteRecordsResponse = send_request(&server, 21, 1, &del_req);
+    assert_eq!(del_resp.topics[0].partitions[0].error_code, 0, "DeleteRecords error");
+    assert_eq!(
+        del_resp.topics[0].partitions[0].low_watermark, 3,
+        "low watermark should be 3 after deleting before offset 3"
+    );
+
+    // Fetch from offset 0 — must return OFFSET_OUT_OF_RANGE (1).
+    let mut fetch_part = FetchPartition::default();
+    fetch_part.partition = 0;
+    fetch_part.fetch_offset = 0;
+    fetch_part.partition_max_bytes = 1024 * 1024;
+
+    let mut fetch_topic = FetchTopic::default();
+    fetch_topic.topic = TopicName(StrBytes::from_string(topic.clone()));
+    fetch_topic.partitions = vec![fetch_part];
+
+    let mut fetch_req = FetchRequest::default();
+    fetch_req.replica_id = BrokerId(-1);
+    fetch_req.max_wait_ms = 0;
+    fetch_req.min_bytes = 0;
+    fetch_req.max_bytes = 1024 * 1024;
+    fetch_req.isolation_level = 0;
+    fetch_req.topics = vec![fetch_topic];
+
+    let fetch_resp: FetchResponse = send_request(&server, 1, 4, &fetch_req);
+    assert_eq!(
+        fetch_resp.responses[0].partitions[0].error_code, 1,
+        "fetch from before LSO must return OFFSET_OUT_OF_RANGE"
+    );
+
+    // Fetch from offset 3 — must succeed and return records 3 and 4.
+    let mut fetch_part2 = FetchPartition::default();
+    fetch_part2.partition = 0;
+    fetch_part2.fetch_offset = 3;
+    fetch_part2.partition_max_bytes = 1024 * 1024;
+
+    let mut fetch_topic2 = FetchTopic::default();
+    fetch_topic2.topic = TopicName(StrBytes::from_string(topic.clone()));
+    fetch_topic2.partitions = vec![fetch_part2];
+
+    let mut fetch_req2 = FetchRequest::default();
+    fetch_req2.replica_id = BrokerId(-1);
+    fetch_req2.max_wait_ms = 0;
+    fetch_req2.min_bytes = 0;
+    fetch_req2.max_bytes = 1024 * 1024;
+    fetch_req2.isolation_level = 0;
+    fetch_req2.topics = vec![fetch_topic2];
+
+    let fetch_resp2: FetchResponse = send_request(&server, 1, 4, &fetch_req2);
+    assert_eq!(
+        fetch_resp2.responses[0].partitions[0].error_code, 0,
+        "fetch from LSO must succeed"
+    );
+    let records_bytes = fetch_resp2.responses[0].partitions[0]
+        .records
+        .as_ref()
+        .expect("should have record data");
+    assert!(!records_bytes.is_empty(), "should have records starting at offset 3");
+}
+
+/// Verify that DescribeLogDirs returns the memory:// synthetic log dir
+/// with the correct topic/partition structure.
+#[test]
+fn contract_describe_log_dirs_returns_memory_dir() {
+    use kafka_protocol::messages::describe_log_dirs_request::{
+        DescribeLogDirsRequest, DescribableLogDirTopic as ReqTopic,
+    };
+    use kafka_protocol::messages::describe_log_dirs_response::DescribeLogDirsResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-logdirs");
+
+    let create_resp = create_topic(&server, &topic, 2);
+    assert_eq!(create_resp.topics[0].error_code, 0, "create failed");
+
+    // Request log dirs for the specific topic.
+    let mut req_topic = ReqTopic::default();
+    req_topic.topic = TopicName(StrBytes::from_string(topic.clone()));
+    req_topic.partitions = vec![0, 1];
+
+    let mut req = DescribeLogDirsRequest::default();
+    req.topics = Some(vec![req_topic]);
+
+    let resp: DescribeLogDirsResponse = send_request(&server, 35, 1, &req);
+
+    assert_eq!(resp.results.len(), 1, "should have one log dir result");
+    let dir = &resp.results[0];
+    assert_eq!(dir.error_code, 0, "DescribeLogDirs error");
+    assert_eq!(
+        dir.log_dir.as_str(), "memory://",
+        "log dir must be memory://"
+    );
+    assert_eq!(dir.topics.len(), 1, "should have one topic entry");
+    assert_eq!(dir.topics[0].partitions.len(), 2, "should describe both partitions");
+}
+
+/// Verify that CreatePartitions adds partitions to an existing topic and
+/// that the new count is visible in Metadata.
+#[test]
+fn contract_create_partitions_increases_count() {
+    use kafka_protocol::messages::create_partitions_request::{
+        CreatePartitionsTopic, CreatePartitionsRequest,
+    };
+    use kafka_protocol::messages::create_partitions_response::CreatePartitionsResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-create-parts");
+
+    // Create with 1 partition.
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0, "create failed");
+
+    // Expand to 3 partitions.
+    let mut cp_topic = CreatePartitionsTopic::default();
+    cp_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    cp_topic.count = 3;
+
+    let mut cp_req = CreatePartitionsRequest::default();
+    cp_req.topics = vec![cp_topic];
+    cp_req.timeout_ms = 5000;
+    cp_req.validate_only = false;
+
+    let cp_resp: CreatePartitionsResponse = send_request(&server, 37, 1, &cp_req);
+    assert_eq!(
+        cp_resp.results[0].error_code, 0,
+        "CreatePartitions must succeed: {}",
+        cp_resp.results[0].error_message.as_ref().map(|s| s.as_str()).unwrap_or("(none)")
+    );
+
+    // Verify via Metadata that partition count is now 3.
+    let mut meta_req_topic = MetadataRequestTopic::default();
+    meta_req_topic.name = Some(TopicName(StrBytes::from_string(topic.clone())));
+
+    let mut meta_req = MetadataRequest::default();
+    meta_req.topics = Some(vec![meta_req_topic]);
+    meta_req.allow_auto_topic_creation = false;
+
+    let meta_resp: MetadataResponse = send_request(&server, 3, 4, &meta_req);
+    assert_eq!(meta_resp.topics.len(), 1, "metadata must return topic");
+    assert_eq!(
+        meta_resp.topics[0].partitions.len(), 3,
+        "topic should now have 3 partitions after CreatePartitions"
+    );
+}
