@@ -51,6 +51,9 @@ public class KafkaOracle {
     }
 
     private static void run(String bootstrap, String topic) throws Exception {
+        String resumeTopic = topic + "-resume";
+        String resumeGroup = "java-resume-" + System.nanoTime();
+
         check("create-topic", () -> createTopic(bootstrap, topic));
         check("produce", () -> produce(bootstrap, topic));
         check("consume-via-group", () -> consumeViaGroup(bootstrap, topic));
@@ -60,6 +63,7 @@ public class KafkaOracle {
         check("describe-cluster", () -> describeCluster(bootstrap));
         check("describe-log-dirs", () -> describeLogDirs(bootstrap));
         check("create-partitions", () -> createPartitions(bootstrap, topic));
+        check("offset-resume", () -> offsetResume(bootstrap, resumeTopic, resumeGroup));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
         check("delete-topic", () -> deleteTopic(bootstrap, topic));
@@ -239,6 +243,83 @@ public class KafkaOracle {
             Map<String, NewPartitions> newPartitions = Collections.singletonMap(
                     topic, NewPartitions.increaseTo(3));
             admin.createPartitions(newPartitions).all().get();
+        }
+    }
+
+    /**
+     * Verifies that committed consumer group offsets persist across consumer sessions.
+     *
+     * 1. Creates a fresh topic and produces 8 records.
+     * 2. Consumer session A reads the first 4, commits offset 4, then closes.
+     * 3. Consumer session B (same group_id) subscribes and must start at offset 4,
+     *    receiving only records 4-7 — not the already-committed 0-3.
+     */
+    private static void offsetResume(String bootstrap, String topic, String group) throws Exception {
+        // Create topic and produce 8 records.
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1))).all().get();
+        }
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps(bootstrap))) {
+            for (int i = 0; i < 8; i++) {
+                producer.send(new ProducerRecord<>(topic, "rkey-" + i, "rval-" + i)).get();
+            }
+        }
+
+        // Session A: consume exactly 4 records and commit offset.
+        Properties sessionProps = consumerProps(bootstrap, group);
+        sessionProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "4");
+        try (KafkaConsumer<String, String> consumerA = new KafkaConsumer<>(sessionProps)) {
+            consumerA.subscribe(Collections.singletonList(topic));
+            Map<String, String> got = new LinkedHashMap<>();
+            long deadline = System.currentTimeMillis() + 20_000;
+            while (got.size() < 4 && System.currentTimeMillis() < deadline) {
+                ConsumerRecords<String, String> recs = consumerA.poll(Duration.ofMillis(300));
+                for (ConsumerRecord<String, String> r : recs) {
+                    got.put(r.key(), r.value());
+                }
+            }
+            if (got.size() < 4) {
+                throw new RuntimeException("session A timeout: only got " + got.size() + "/4 records");
+            }
+            consumerA.commitSync();
+        } // consumerA closed here — offset committed to store
+
+        // Session B (same group): must resume from offset 4, getting exactly 4 more records.
+        Properties sessionBProps = consumerProps(bootstrap, group);
+        sessionBProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest"); // should not matter; committed offset wins
+        sessionBProps.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "10");
+        try (KafkaConsumer<String, String> consumerB = new KafkaConsumer<>(sessionBProps)) {
+            consumerB.subscribe(Collections.singletonList(topic));
+            Map<String, String> got = new LinkedHashMap<>();
+            long deadline = System.currentTimeMillis() + 20_000;
+            while (got.size() < 4 && System.currentTimeMillis() < deadline) {
+                ConsumerRecords<String, String> recs = consumerB.poll(Duration.ofMillis(300));
+                for (ConsumerRecord<String, String> r : recs) {
+                    got.put(r.key(), r.value());
+                }
+            }
+            if (got.size() < 4) {
+                throw new RuntimeException("session B timeout: only got " + got.size() + "/4 records after resume");
+            }
+            // Verify the 4 resumed records are keys 4-7, not 0-3.
+            for (int i = 4; i < 8; i++) {
+                String key = "rkey-" + i;
+                String wantVal = "rval-" + i;
+                String gotVal = got.get(key);
+                if (gotVal == null) {
+                    throw new RuntimeException("session B missing key " + key + "; got keys: " + got.keySet());
+                }
+                if (!gotVal.equals(wantVal)) {
+                    throw new RuntimeException("session B key " + key + ": got " + gotVal + " want " + wantVal);
+                }
+            }
+            // Verify session B did NOT re-read the first 4.
+            for (int i = 0; i < 4; i++) {
+                if (got.containsKey("rkey-" + i)) {
+                    throw new RuntimeException("session B re-read committed record rkey-" + i);
+                }
+            }
+            consumerB.commitSync();
         }
     }
 

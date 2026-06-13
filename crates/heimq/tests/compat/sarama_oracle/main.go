@@ -151,6 +151,26 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	compTopic := topic + "-snappy"
+	snappyCfg := sarama.NewConfig()
+	snappyCfg.Version = sarama.V2_6_0_0
+	snappyCfg.Producer.Return.Successes = true
+	snappyCfg.Producer.RequiredAcks = sarama.WaitForLocal
+	snappyCfg.Producer.Compression = sarama.CompressionSnappy
+	snappyCfg.Consumer.Offsets.Initial = sarama.OffsetOldest
+
+	if err := check("produce-snappy-compressed", func() error {
+		return produceCompressed(brokers, compTopic, snappyCfg)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("consume-snappy-roundtrip", func() error {
+		return consumeCompressedRoundtrip(brokers, compTopic, snappyCfg)
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -624,4 +644,80 @@ func deleteTopic(brokers []string, topic string, cfg *sarama.Config) error {
 	defer admin.Close()
 
 	return admin.DeleteTopic(topic)
+}
+
+// produceCompressed creates compTopic and produces 4 records with the compression
+// codec configured in cfg. Tests that compressed batches are correctly stored.
+func produceCompressed(brokers []string, topic string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	if err := admin.CreateTopic(topic, &sarama.TopicDetail{NumPartitions: 1, ReplicationFactor: 1}, false); err != nil {
+		admin.Close()
+		return fmt.Errorf("create topic: %w", err)
+	}
+	admin.Close()
+
+	producer, err := sarama.NewSyncProducer(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new producer: %w", err)
+	}
+	defer producer.Close()
+
+	for i := 0; i < 4; i++ {
+		msg := &sarama.ProducerMessage{
+			Topic: topic,
+			Key:   sarama.StringEncoder(fmt.Sprintf("ckey-%d", i)),
+			Value: sarama.StringEncoder(fmt.Sprintf("cval-%d", i)),
+		}
+		_, _, err := producer.SendMessage(msg)
+		if err != nil {
+			return fmt.Errorf("record %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// consumeCompressedRoundtrip consumes the 4 records and verifies data integrity,
+// exercising the server-side decompression path during fetch.
+func consumeCompressedRoundtrip(brokers []string, topic string, cfg *sarama.Config) error {
+	consumer, err := sarama.NewConsumer(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new consumer: %w", err)
+	}
+	defer consumer.Close()
+
+	pc, err := consumer.ConsumePartition(topic, 0, sarama.OffsetOldest)
+	if err != nil {
+		return fmt.Errorf("consume partition: %w", err)
+	}
+	defer pc.Close()
+
+	got := make(map[string]string)
+	want := 4
+	timeout := time.After(20 * time.Second)
+	for len(got) < want {
+		select {
+		case msg := <-pc.Messages():
+			got[string(msg.Key)] = string(msg.Value)
+		case err := <-pc.Errors():
+			return fmt.Errorf("partition error: %w", err.Err)
+		case <-timeout:
+			return fmt.Errorf("timeout: consumed %d/%d compressed records", len(got), want)
+		}
+	}
+
+	for i := 0; i < want; i++ {
+		key := fmt.Sprintf("ckey-%d", i)
+		wantVal := fmt.Sprintf("cval-%d", i)
+		v, ok := got[key]
+		if !ok {
+			return fmt.Errorf("missing key %s", key)
+		}
+		if v != wantVal {
+			return fmt.Errorf("key %s: got %q want %q", key, v, wantVal)
+		}
+	}
+	return nil
 }
