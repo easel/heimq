@@ -15,3 +15,7 @@ kafka-protocol = "0.15"
 
 [dev-dependencies]
 tokio = { version = "1.44", features = ["full"] }
+testcontainers = "0.23"
+
+[features]
+backend-postgres = ["heimq/backend-postgres"]

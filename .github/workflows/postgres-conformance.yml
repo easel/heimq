@@ -1,0 +1,18 @@
+name: postgres-conformance
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  postgres-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: sudo apt-get update && sudo apt-get install -y libpq-dev
+      - run: docker pull postgres:16
+      - run: >
+          cargo test -p heimq-testkit
+          --features backend-postgres
+          --test postgres_offset_store_conformance
+          -- --test-threads=1
+        env:
+          HEIMQ_PG_TESTS: "1"
