@@ -927,3 +927,134 @@ fn contract_end_txn_basic() {
     let end_resp: EndTxnResponse = send_request(&server, 26, 0, &end_req);
     assert_eq!(end_resp.error_code, 0, "EndTxn commit should succeed");
 }
+
+// @covers US-004 AddOffsetsToTxn basic flow
+#[test]
+fn contract_add_offsets_to_txn_basic() {
+    use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+    use kafka_protocol::messages::add_offsets_to_txn_response::AddOffsetsToTxnResponse;
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+
+    let mut init_req = InitProducerIdRequest::default();
+    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-add-offsets".to_string()),
+    ));
+    init_req.transaction_timeout_ms = 60000;
+    let init_resp: InitProducerIdResponse = send_request(&server, 22, 0, &init_req);
+    assert_eq!(init_resp.error_code, 0);
+
+    let mut req = AddOffsetsToTxnRequest::default();
+    req.transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-add-offsets".to_string()));
+    req.producer_id = init_resp.producer_id;
+    req.producer_epoch = init_resp.producer_epoch;
+    req.group_id = kafka_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
+
+    let resp: AddOffsetsToTxnResponse = send_request(&server, 25, 0, &req);
+    assert_eq!(resp.error_code, 0, "AddOffsetsToTxn should succeed");
+}
+
+// @covers US-004 TxnOffsetCommit basic flow
+#[test]
+fn contract_txn_offset_commit_basic() {
+    use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+    use kafka_protocol::messages::add_offsets_to_txn_response::AddOffsetsToTxnResponse;
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::messages::txn_offset_commit_request::{
+        TxnOffsetCommitRequest, TxnOffsetCommitRequestPartition, TxnOffsetCommitRequestTopic,
+    };
+    use kafka_protocol::messages::txn_offset_commit_response::TxnOffsetCommitResponse;
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-txn-offset");
+    create_topic(&server, &topic, 1);
+
+    let mut init_req = InitProducerIdRequest::default();
+    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+        StrBytes::from_string("txn-offset-commit".to_string()),
+    ));
+    init_req.transaction_timeout_ms = 60000;
+    let init_resp: InitProducerIdResponse = send_request(&server, 22, 0, &init_req);
+    assert_eq!(init_resp.error_code, 0);
+
+    // AddOffsetsToTxn moves the transaction to Ongoing, required before TxnOffsetCommit.
+    let mut add_offsets_req = AddOffsetsToTxnRequest::default();
+    add_offsets_req.transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-offset-commit".to_string()));
+    add_offsets_req.producer_id = init_resp.producer_id;
+    add_offsets_req.producer_epoch = init_resp.producer_epoch;
+    add_offsets_req.group_id =
+        kafka_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
+    let add_offsets_resp: AddOffsetsToTxnResponse = send_request(&server, 25, 0, &add_offsets_req);
+    assert_eq!(add_offsets_resp.error_code, 0, "AddOffsetsToTxn must succeed");
+
+    let mut part = TxnOffsetCommitRequestPartition::default();
+    part.partition_index = 0;
+    part.committed_offset = 10;
+
+    let mut txn_topic = TxnOffsetCommitRequestTopic::default();
+    txn_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    txn_topic.partitions = vec![part];
+
+    let mut req = TxnOffsetCommitRequest::default();
+    req.transactional_id =
+        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-offset-commit".to_string()));
+    req.group_id = kafka_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
+    req.producer_id = init_resp.producer_id;
+    req.producer_epoch = init_resp.producer_epoch;
+    req.topics = vec![txn_topic];
+
+    let resp: TxnOffsetCommitResponse = send_request(&server, 28, 0, &req);
+    assert_eq!(
+        resp.topics[0].partitions[0].error_code,
+        0,
+        "TxnOffsetCommit should succeed"
+    );
+}
+
+// @covers US-004 WriteTxnMarkers basic flow
+#[test]
+fn contract_write_txn_markers_basic() {
+    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use kafka_protocol::messages::write_txn_markers_request::{
+        WriteTxnMarkersRequest, WritableTxnMarker, WritableTxnMarkerTopic,
+    };
+    use kafka_protocol::messages::write_txn_markers_response::WriteTxnMarkersResponse;
+    use kafka_protocol::messages::ProducerId;
+    use kafka_protocol::protocol::StrBytes;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-txn-markers");
+    create_topic(&server, &topic, 1);
+
+    let init_resp: InitProducerIdResponse =
+        send_request(&server, 22, 0, &InitProducerIdRequest::default());
+    assert_eq!(init_resp.error_code, 0);
+
+    let mut marker_topic = WritableTxnMarkerTopic::default();
+    marker_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    marker_topic.partition_indexes = vec![0];
+
+    let mut marker = WritableTxnMarker::default();
+    marker.producer_id = init_resp.producer_id;
+    marker.producer_epoch = init_resp.producer_epoch;
+    marker.transaction_result = true;
+    marker.topics = vec![marker_topic];
+
+    let mut req = WriteTxnMarkersRequest::default();
+    req.markers = vec![marker];
+
+    let resp: WriteTxnMarkersResponse = send_request(&server, 27, 0, &req);
+    assert_eq!(
+        resp.markers[0].topics[0].partitions[0].error_code,
+        0,
+        "WriteTxnMarkers should succeed"
+    );
+}
