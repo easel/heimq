@@ -86,6 +86,9 @@ public class KafkaOracle {
         check("produce-zstd-compressed", () -> produceCompressed(bootstrap, zstdTopic, "zstd"));
         check("consume-zstd-roundtrip", () -> consumeCompressedRoundtrip(bootstrap, zstdTopic));
         check("offset-resume", () -> offsetResume(bootstrap, resumeTopic, resumeGroup));
+        String txnTopic = topic + "-txn";
+        check("transactional-produce", () -> transactionalProduce(bootstrap, txnTopic));
+        check("transactional-consume-committed", () -> transactionalConsumeCommitted(bootstrap, txnTopic));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
         check("delete-topic", () -> deleteTopic(bootstrap, topic));
@@ -466,6 +469,67 @@ public class KafkaOracle {
             if (transactions == null) {
                 throw new RuntimeException("listTransactions returned null");
             }
+        }
+    }
+
+    private static Properties txnProducerProps(String bootstrap, String txnId) {
+        Properties props = producerProps(bootstrap);
+        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, txnId);
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true");
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        return props;
+    }
+
+    private static void transactionalProduce(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1))).all().get();
+        }
+        String txnId = "java-oracle-txn-" + System.nanoTime();
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(txnProducerProps(bootstrap, txnId))) {
+            producer.initTransactions();
+            // Committed transaction: records tkey-0..tkey-2 should be visible to read_committed.
+            producer.beginTransaction();
+            for (int i = 0; i < 3; i++) {
+                producer.send(new ProducerRecord<>(topic, "tkey-" + i, "tval-" + i)).get();
+            }
+            producer.commitTransaction();
+            // Aborted transaction: records akey-0..akey-1 must NOT be visible.
+            producer.beginTransaction();
+            producer.send(new ProducerRecord<>(topic, "akey-0", "aval-0")).get();
+            producer.send(new ProducerRecord<>(topic, "akey-1", "aval-1")).get();
+            producer.abortTransaction();
+        }
+    }
+
+    private static void transactionalConsumeCommitted(String bootstrap, String topic) throws Exception {
+        String group = "java-txn-group-" + System.nanoTime();
+        Properties props = consumerProps(bootstrap, group);
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed");
+        Map<String, String> got = new LinkedHashMap<>();
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList(topic));
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (got.size() < 3 && System.currentTimeMillis() < deadline) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<String, String> r : records) {
+                    got.put(r.key(), r.value());
+                }
+            }
+            consumer.commitSync();
+        }
+        if (got.size() < 3) {
+            throw new RuntimeException("timeout: consumed " + got.size() + "/3 committed txn records");
+        }
+        for (int i = 0; i < 3; i++) {
+            String key = "tkey-" + i;
+            String want = "tval-" + i;
+            String val = got.get(key);
+            if (val == null) throw new RuntimeException("committed record missing: " + key);
+            if (!val.equals(want)) throw new RuntimeException(key + ": got " + val + " want " + want);
+        }
+        // Aborted records must not appear in read_committed view.
+        if (got.containsKey("akey-0") || got.containsKey("akey-1")) {
+            throw new RuntimeException("aborted records leaked into read_committed consumer");
         }
     }
 
