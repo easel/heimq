@@ -58,6 +58,18 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("list-groups", func() error {
+		return listGroups(ctx, bootstrap, group)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("describe-groups", func() error {
+		return describeGroups(ctx, bootstrap, group)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("list-offsets", func() error {
 		return listOffsets(ctx, bootstrap, topic, 5)
 	}); err != nil {
@@ -352,6 +364,52 @@ func consumeHeadersRoundtrip(ctx context.Context, bootstrap, topic, group string
 
 	if err := cl.CommitUncommittedOffsets(ctx); err != nil {
 		return fmt.Errorf("commit offsets: %w", err)
+	}
+	return nil
+}
+
+// listGroups verifies that ListGroups (API 16) returns the consumer group that
+// was created by consumeViaGroup.
+func listGroups(ctx context.Context, bootstrap, wantGroup string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	listed, err := adm.ListGroups(ctx)
+	if err != nil {
+		return fmt.Errorf("list groups rpc: %w", err)
+	}
+	for _, g := range listed {
+		if g.Group == wantGroup {
+			return nil
+		}
+	}
+	return fmt.Errorf("group %q not found in list; got %d groups", wantGroup, len(listed))
+}
+
+// describeGroups verifies that DescribeGroups (API 15) returns valid state for
+// a known group.
+func describeGroups(ctx context.Context, bootstrap, wantGroup string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	described, err := adm.DescribeGroups(ctx, wantGroup)
+	if err != nil {
+		return fmt.Errorf("describe groups rpc: %w", err)
+	}
+	dg, ok := described[wantGroup]
+	if !ok {
+		return fmt.Errorf("group %q missing from describe response", wantGroup)
+	}
+	if dg.Err != nil {
+		return fmt.Errorf("group %q describe error: %w", wantGroup, dg.Err)
 	}
 	return nil
 }

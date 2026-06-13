@@ -116,6 +116,30 @@ pub struct LeaveResult {
     pub error_code: i16,
 }
 
+/// Member description returned by `describe_group`.
+#[derive(Debug, Clone)]
+pub struct MemberDescription {
+    pub member_id: String,
+    pub client_id: String,
+    pub client_host: String,
+    /// Protocol-specific subscription metadata from the member's JoinGroup request.
+    pub member_metadata: Vec<u8>,
+    /// Assignment bytes set by the group leader in SyncGroup.
+    pub member_assignment: Vec<u8>,
+}
+
+/// Group description returned by `describe_group`.
+#[derive(Debug, Clone)]
+pub struct GroupDescription {
+    pub group_id: String,
+    /// Kafka group state string (e.g. "Stable", "Empty", "PreparingRebalance").
+    pub group_state: String,
+    pub protocol_type: String,
+    /// Selected protocol name (e.g. "range").
+    pub protocol_name: String,
+    pub members: Vec<MemberDescription>,
+}
+
 /// Pluggable group-coordinator backend.
 ///
 /// All methods are infallible at the trait level — protocol-level error
@@ -137,6 +161,12 @@ pub trait GroupCoordinatorBackend: Send + Sync {
 
     /// Remove one or more members from a group.
     fn leave_group(&self, group_id: &str, member_ids: &[String]) -> LeaveResult;
+
+    /// List all known group IDs.
+    fn list_groups(&self) -> Vec<String>;
+
+    /// Describe a single group. Returns `None` if the group does not exist.
+    fn describe_group(&self, group_id: &str) -> Option<GroupDescription>;
 
     /// Backend capabilities descriptor.
     fn capabilities(&self) -> &GroupCoordinatorCapabilities;

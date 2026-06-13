@@ -87,6 +87,8 @@ impl Router {
             12 => self.handle_heartbeat(&header, &body),
             13 => self.handle_leave_group(&header, &body),
             14 => self.handle_sync_group(&header, &body),
+            15 => self.handle_describe_groups(&header, &body),
+            16 => self.handle_list_groups(&header, &body),
             18 => self.handle_api_versions(&header, &body),
             19 => self.handle_create_topics(&header, &body),
             20 => self.handle_delete_topics(&header, &body),
@@ -260,6 +262,20 @@ impl Router {
         )
     }
 
+    fn handle_describe_groups(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| describe_groups::handle(header.api_version, body, self.consumer_groups.as_ref())),
+        )
+    }
+
+    fn handle_list_groups(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| list_groups::handle(header.api_version, body, self.consumer_groups.as_ref())),
+        )
+    }
+
     fn handle_offset_commit(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
@@ -313,6 +329,8 @@ mod tests {
     use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequest;
     use kafka_protocol::messages::produce_request::{PartitionProduceData, ProduceRequest, TopicProduceData};
     use kafka_protocol::messages::sync_group_request::SyncGroupRequest;
+    use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
+    use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
     use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
     use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
     use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
@@ -535,6 +553,20 @@ mod tests {
             .with_member_id(StrBytes::from_string("member".to_string()));
         let body = encode_body(&sync, 0);
         let req = build_request(14, 0, correlation_id, &body);
+        let resp = router.route(&req).unwrap();
+        assert_eq!(response_correlation_id(resp), correlation_id);
+
+        // DescribeGroups (API 15)
+        let mut describe = DescribeGroupsRequest::default();
+        describe.groups = vec![GroupId(StrBytes::from_string("group".to_string()))];
+        let body = encode_body(&describe, 0);
+        let req = build_request(15, 0, correlation_id, &body);
+        let resp = router.route(&req).unwrap();
+        assert_eq!(response_correlation_id(resp), correlation_id);
+
+        // ListGroups (API 16)
+        let body = encode_body(&ListGroupsRequest::default(), 0);
+        let req = build_request(16, 0, correlation_id, &body);
         let resp = router.route(&req).unwrap();
         assert_eq!(response_correlation_id(resp), correlation_id);
 

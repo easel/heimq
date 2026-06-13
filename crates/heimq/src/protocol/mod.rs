@@ -35,6 +35,8 @@ pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     (12, 0, 4),  // Heartbeat
     (13, 0, 5),  // LeaveGroup
     (14, 0, 5),  // SyncGroup
+    (15, 0, 5),  // DescribeGroups
+    (16, 0, 4),  // ListGroups
     (18, 0, 3),  // ApiVersions
     (19, 0, 7),  // CreateTopics
     (20, 0, 6),  // DeleteTopics
@@ -87,7 +89,7 @@ fn capability_gate(api_key: i16) -> CapabilityGate {
         // Offset-store APIs.
         8 | 9 => CapabilityGate::OffsetStore,
         // Group-coordinator APIs.
-        10 | 11 | 12 | 13 | 14 => CapabilityGate::GroupCoordinator,
+        10 | 11 | 12 | 13 | 14 | 15 | 16 => CapabilityGate::GroupCoordinator,
         // Transaction APIs and InitProducerId and ApiVersions are always available.
         22 | 24 | 25 | 26 | 27 | 28 | _ => CapabilityGate::Always,
     }

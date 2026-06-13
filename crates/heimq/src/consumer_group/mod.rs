@@ -9,8 +9,8 @@ mod group;
 mod offset_store;
 
 pub use backend::{
-    GroupCoordinatorBackend, GroupCoordinatorCapabilities, HeartbeatResult, JoinMember,
-    JoinRequest, JoinResult, LeaveResult, SyncRequest, SyncResult,
+    GroupCoordinatorBackend, GroupCoordinatorCapabilities, GroupDescription, HeartbeatResult,
+    JoinMember, JoinRequest, JoinResult, LeaveResult, MemberDescription, SyncRequest, SyncResult,
 };
 #[allow(unused_imports)]
 pub use coordinator::Coordinator;
@@ -230,6 +230,49 @@ impl GroupCoordinatorBackend for ConsumerGroupManager {
         }
 
         LeaveResult { error_code: 0 }
+    }
+
+    fn list_groups(&self) -> Vec<String> {
+        self.groups.iter().map(|e| e.key().clone()).collect()
+    }
+
+    fn describe_group(&self, group_id: &str) -> Option<GroupDescription> {
+        let group = self.get_group(group_id)?;
+        let group_state = match group.state() {
+            GroupState::Empty => "Empty",
+            GroupState::PreparingRebalance => "PreparingRebalance",
+            GroupState::CompletingRebalance => "CompletingRebalance",
+            GroupState::Stable => "Stable",
+            GroupState::Dead => "Dead",
+        };
+        let protocol_type = group.protocol_type().unwrap_or_default();
+        let protocol_name = group.protocol().unwrap_or_default();
+        let members = group
+            .members()
+            .into_iter()
+            .map(|m| {
+                let member_metadata = m
+                    .protocols
+                    .iter()
+                    .find(|(n, _)| n == &protocol_name)
+                    .map(|(_, md)| md.clone())
+                    .unwrap_or_default();
+                MemberDescription {
+                    member_id: m.member_id,
+                    client_id: m.client_id,
+                    client_host: m.client_host,
+                    member_metadata,
+                    member_assignment: m.assignment,
+                }
+            })
+            .collect();
+        Some(GroupDescription {
+            group_id: group_id.to_string(),
+            group_state: group_state.to_string(),
+            protocol_type,
+            protocol_name,
+            members,
+        })
     }
 
     fn capabilities(&self) -> &GroupCoordinatorCapabilities {
