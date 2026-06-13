@@ -40,6 +40,7 @@ pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     (18, 0, 3),  // ApiVersions
     (32, 0, 4),  // DescribeConfigs
     (42, 0, 2),  // DeleteGroups
+    (47, 0, 0),  // OffsetDelete
     (19, 0, 7),  // CreateTopics
     (20, 0, 6),  // DeleteTopics
     (22, 0, 5),  // InitProducerId
@@ -89,7 +90,7 @@ fn capability_gate(api_key: i16) -> CapabilityGate {
         // Log-backend APIs.
         0 | 1 | 2 | 3 | 19 | 20 => CapabilityGate::Log,
         // Offset-store APIs.
-        8 | 9 => CapabilityGate::OffsetStore,
+        8 | 9 | 47 => CapabilityGate::OffsetStore,
         // Group-coordinator APIs.
         10 | 11 | 12 | 13 | 14 | 15 | 16 | 42 => CapabilityGate::GroupCoordinator,
         // Transaction APIs, InitProducerId, ApiVersions, DescribeConfigs are always available.

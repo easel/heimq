@@ -96,6 +96,15 @@ impl OffsetStore for MemoryOffsetStore {
         self.offsets.retain(|k, _| k.group_id != group_id);
     }
 
+    fn delete_offset(&self, group_id: &str, topic: &str, partition: i32) {
+        let key = OffsetKey {
+            group_id: group_id.to_string(),
+            topic: topic.to_string(),
+            partition,
+        };
+        self.offsets.remove(&key);
+    }
+
     fn capabilities(&self) -> &OffsetStoreCapabilities {
         &self.capabilities
     }

@@ -80,6 +80,10 @@ pub trait OffsetStore: Send + Sync {
     /// Drop all committed offsets for a group.
     fn delete_group(&self, group_id: &str);
 
+    /// Drop the committed offset for a specific (group, topic, partition) triple.
+    /// No-op if the offset does not exist.
+    fn delete_offset(&self, group_id: &str, topic: &str, partition: i32);
+
     /// Backend capabilities descriptor.
     fn capabilities(&self) -> &OffsetStoreCapabilities;
 }

@@ -92,6 +92,7 @@ impl Router {
             18 => self.handle_api_versions(&header, &body),
             32 => self.handle_describe_configs(&header, &body),
             42 => self.handle_delete_groups(&header, &body),
+            47 => self.handle_offset_delete(&header, &body),
             19 => self.handle_create_topics(&header, &body),
             20 => self.handle_delete_topics(&header, &body),
             22 => self.handle_init_producer_id(&header, &body),
@@ -282,6 +283,16 @@ impl Router {
         self.handle_and_encode(
             header,
             Box::new(|| delete_groups::handle(header.api_version, body, self.consumer_groups.as_ref())),
+        )
+    }
+
+    fn handle_offset_delete(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| {
+                let store = self.consumer_groups.offset_store();
+                offset_delete::handle(header.api_version, body, &store)
+            }),
         )
     }
 

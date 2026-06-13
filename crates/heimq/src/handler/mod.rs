@@ -19,6 +19,7 @@ pub mod list_groups;
 pub mod list_offsets;
 pub mod metadata;
 pub mod offset_commit;
+pub mod offset_delete;
 pub mod offset_fetch;
 pub mod produce;
 pub mod sync_group;

@@ -50,6 +50,19 @@ pub fn check_delete_group(store: &dyn OffsetStore) {
     assert!(fetched.is_none(), "fetch after delete_group must return None");
 }
 
+/// delete_offset removes a single committed offset without affecting others.
+pub fn check_delete_offset(store: &dyn OffsetStore) {
+    store.commit("suite-grp-do", "t", 0, 10, 0, None).expect("commit p0");
+    store.commit("suite-grp-do", "t", 1, 20, 0, None).expect("commit p1");
+    store.delete_offset("suite-grp-do", "t", 0);
+    assert!(store.fetch("suite-grp-do", "t", 0).is_none(), "fetch after delete_offset must return None");
+    assert_eq!(
+        store.fetch("suite-grp-do", "t", 1).map(|c| c.offset),
+        Some(20),
+        "sibling partition must be unaffected by delete_offset"
+    );
+}
+
 /// capabilities() returns a descriptor with a non-empty name.
 pub fn check_capabilities(store: &dyn OffsetStore) {
     let caps = store.capabilities();
@@ -64,4 +77,5 @@ pub fn run_all(store: &dyn OffsetStore) {
     check_commit_overwrites(store);
     check_fetch_all_for_group(store);
     check_delete_group(store);
+    check_delete_offset(store);
 }

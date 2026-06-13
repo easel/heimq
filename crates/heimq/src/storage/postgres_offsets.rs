@@ -170,6 +170,19 @@ impl OffsetStore for PostgresOffsetStore {
         }
     }
 
+    fn delete_offset(&self, group_id: &str, topic: &str, partition: i32) {
+        let sql = format!(
+            "DELETE FROM \"{schema}\".heimq_committed_offsets \
+             WHERE group_id = $1 AND topic = $2 AND partition = $3",
+            schema = self.schema
+        );
+        let partition_i64 = partition as i64;
+        let mut client = self.client.lock();
+        if let Err(e) = client.execute(sql.as_str(), &[&group_id, &topic, &partition_i64]) {
+            error!(error = %e, group = group_id, topic, partition, "postgres delete_offset failed");
+        }
+    }
+
     fn capabilities(&self) -> &OffsetStoreCapabilities {
         &self.capabilities
     }
