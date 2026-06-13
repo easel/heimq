@@ -32,9 +32,6 @@ jobs:
           --health-retries 10
     env:
       POSTGRES_URL: postgres://heimq:heimq@127.0.0.1:5432/heimq
-    defaults:
-      run:
-        working-directory: heimq
     steps:
       - uses: actions/checkout@v4
 
@@ -43,11 +40,9 @@ jobs:
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: heimq
 
       - name: Install kcat
         run: sudo apt-get update && sudo apt-get install -y kcat
 
       - name: Run backend matrix
-        run: ./scripts/stress-matrix.sh
+        run: ./crates/heimq/scripts/stress-matrix.sh

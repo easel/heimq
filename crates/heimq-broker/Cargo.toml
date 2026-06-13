@@ -1,0 +1,11 @@
+[package]
+name = "heimq-broker"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Kafka broker handlers, trait families, and in-memory reference backends for heimq"
+
+[dependencies]

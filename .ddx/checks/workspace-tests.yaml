@@ -3,7 +3,7 @@ when: pre_merge
 command: |
   set -euo pipefail
   result_file="${EVIDENCE_DIR}/workspace-tests.json"
-  cd "${PROJECT_ROOT}/heimq"
+  cd "${PROJECT_ROOT}"
   if cargo test --workspace --all-features --no-fail-fast > /tmp/ws-test-out.txt 2>&1; then
     printf '{"status":"pass","summary":"workspace tests passed"}' > "$result_file"
   else
