@@ -90,6 +90,7 @@ impl Router {
             15 => self.handle_describe_groups(&header, &body),
             16 => self.handle_list_groups(&header, &body),
             18 => self.handle_api_versions(&header, &body),
+            32 => self.handle_describe_configs(&header, &body),
             42 => self.handle_delete_groups(&header, &body),
             19 => self.handle_create_topics(&header, &body),
             20 => self.handle_delete_topics(&header, &body),
@@ -281,6 +282,13 @@ impl Router {
         self.handle_and_encode(
             header,
             Box::new(|| delete_groups::handle(header.api_version, body, self.consumer_groups.as_ref())),
+        )
+    }
+
+    fn handle_describe_configs(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| describe_configs::handle(header.api_version, body)),
         )
     }
 

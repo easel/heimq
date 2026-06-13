@@ -76,6 +76,12 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("describe-configs", func() error {
+		return describeConfigs(ctx, bootstrap, topic)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("list-offsets", func() error {
 		return listOffsets(ctx, bootstrap, topic, 5)
 	}); err != nil {
@@ -416,6 +422,28 @@ func describeGroups(ctx context.Context, bootstrap, wantGroup string) error {
 	}
 	if dg.Err != nil {
 		return fmt.Errorf("group %q describe error: %w", wantGroup, dg.Err)
+	}
+	return nil
+}
+
+// describeConfigs verifies that DescribeConfigs (API 32) returns a non-error
+// response for a topic resource.
+func describeConfigs(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	resp, err := adm.DescribeTopicConfigs(ctx, topic)
+	if err != nil {
+		return fmt.Errorf("describe topic configs rpc: %w", err)
+	}
+	for _, r := range resp {
+		if r.Err != nil {
+			return fmt.Errorf("describe configs %q: %w", topic, r.Err)
+		}
 	}
 	return nil
 }
