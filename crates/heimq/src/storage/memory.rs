@@ -34,6 +34,9 @@ impl MemoryLog {
                 name: "in-memory",
                 transactions: true,
                 idempotent_producer: true,
+                // Memory is the only limit; no artificial cap on message size.
+                max_message_bytes: usize::MAX,
+                max_batch_bytes: usize::MAX,
                 ..BackendCapabilities::minimal()
             },
         )
