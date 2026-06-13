@@ -88,6 +88,18 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("alter-configs", func() error {
+		return alterConfigs(ctx, bootstrap, topic)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("incremental-alter-configs", func() error {
+		return incrementalAlterConfigs(ctx, bootstrap, topic)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("list-offsets", func() error {
 		return listOffsets(ctx, bootstrap, topic, 5)
 	}); err != nil {
@@ -489,6 +501,46 @@ func deleteGroups(ctx context.Context, bootstrap, group string) error {
 	}
 	if r, ok := resp[group]; ok && r.Err != nil {
 		return fmt.Errorf("delete group %q: %w", group, r.Err)
+	}
+	return nil
+}
+
+// alterConfigs exercises AlterConfigs (API 33) by setting a no-op config.
+func alterConfigs(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	v := "604800000"
+	resp, err := adm.AlterTopicConfigsState(ctx, []kadm.AlterConfig{{Name: "retention.ms", Value: &v}}, topic)
+	if err != nil {
+		return fmt.Errorf("alter configs rpc: %w", err)
+	}
+	if _, err := resp.On(topic, func(r *kadm.AlterConfigsResponse) error { return r.Err }); err != nil {
+		return fmt.Errorf("alter configs response for %q: %w", topic, err)
+	}
+	return nil
+}
+
+// incrementalAlterConfigs exercises IncrementalAlterConfigs (API 44).
+func incrementalAlterConfigs(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	v := "604800000"
+	resp, err := adm.AlterTopicConfigs(ctx, []kadm.AlterConfig{{Name: "retention.ms", Value: &v}}, topic)
+	if err != nil {
+		return fmt.Errorf("incremental alter configs rpc: %w", err)
+	}
+	if _, err := resp.On(topic, func(r *kadm.AlterConfigsResponse) error { return r.Err }); err != nil {
+		return fmt.Errorf("incremental alter configs response for %q: %w", topic, err)
 	}
 	return nil
 }
