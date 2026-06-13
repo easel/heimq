@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn dispatches_memory_offsets() {
         let store = dispatch_offset_store("memory://").unwrap();
-        store.commit("g", "t", 0, 7, 0, None);
+        store.commit("g", "t", 0, 7, 0, None).unwrap();
         assert_eq!(store.fetch("g", "t", 0).unwrap().offset, 7);
     }
 

@@ -101,7 +101,7 @@ pub fn handle(
 
         // Use default partitions if -1
         let partitions = if num_partitions <= 0 {
-            storage.config().default_partitions
+            storage.default_num_partitions()
         } else {
             num_partitions
         };

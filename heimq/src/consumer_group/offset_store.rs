@@ -53,7 +53,7 @@ impl OffsetStore for MemoryOffsetStore {
         offset: i64,
         leader_epoch: i32,
         metadata: Option<String>,
-    ) {
+    ) -> crate::error::Result<()> {
         let key = OffsetKey {
             group_id: group_id.to_string(),
             topic: topic.to_string(),
@@ -68,6 +68,7 @@ impl OffsetStore for MemoryOffsetStore {
         };
 
         self.offsets.insert(key, committed);
+        Ok(())
     }
 
     fn fetch(&self, group_id: &str, topic: &str, partition: i32) -> Option<CommittedOffset> {
@@ -107,7 +108,7 @@ mod tests {
     #[test]
     fn test_commit_and_fetch() {
         let store = MemoryOffsetStore::new();
-        store.commit("group1", "topic1", 0, 100, 0, None);
+        store.commit("group1", "topic1", 0, 100, 0, None).unwrap();
 
         let offset = store.fetch("group1", "topic1", 0).unwrap();
         assert_eq!(offset.offset, 100);
@@ -122,9 +123,9 @@ mod tests {
     #[test]
     fn test_fetch_all_and_delete_group() {
         let store = MemoryOffsetStore::new();
-        store.commit("group1", "topic1", 0, 10, 0, None);
-        store.commit("group1", "topic2", 1, 20, 0, Some("meta".into()));
-        store.commit("group2", "topic1", 0, 30, 0, None);
+        store.commit("group1", "topic1", 0, 10, 0, None).unwrap();
+        store.commit("group1", "topic2", 1, 20, 0, Some("meta".into())).unwrap();
+        store.commit("group2", "topic1", 0, 30, 0, None).unwrap();
 
         let all = store.fetch_all_for_group("group1");
         assert_eq!(all.len(), 2);
@@ -154,7 +155,7 @@ mod tests {
     fn test_trait_object() {
         let store: std::sync::Arc<dyn OffsetStore> =
             std::sync::Arc::new(MemoryOffsetStore::new());
-        store.commit("g", "t", 0, 5, 0, None);
+        store.commit("g", "t", 0, 5, 0, None).unwrap();
         assert_eq!(store.fetch("g", "t", 0).unwrap().offset, 5);
     }
 }

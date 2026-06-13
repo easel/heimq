@@ -78,8 +78,8 @@ pub fn handle(
                 .unwrap_or(false)
         }) {
             // Auto-create topic if enabled
-            if storage.config().auto_create_topics {
-                let topic = storage.get_or_create_topic(&topic_name, config.default_partitions);
+            if storage.auto_create_topics() {
+                let topic = storage.get_or_create_topic(&topic_name, storage.default_num_partitions());
                 let mut topic_meta = MetadataResponseTopic::default();
                 topic_meta.name = Some(TopicName(StrBytes::from_string(topic_name)));
                 topic_meta.error_code = 0;

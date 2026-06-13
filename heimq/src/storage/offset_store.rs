@@ -11,6 +11,7 @@
 
 #![allow(dead_code)]
 
+use crate::error::Result;
 use crate::storage::Durability;
 use std::collections::HashMap;
 
@@ -57,6 +58,11 @@ impl Default for OffsetStoreCapabilities {
 /// A pluggable consumer-group offset store.
 pub trait OffsetStore: Send + Sync {
     /// Commit an offset for `(group, topic, partition)`.
+    ///
+    /// Returns `Ok(())` when the commit is durable per the backend's
+    /// `OffsetStoreCapabilities::durability` guarantee. A durable backend MUST
+    /// complete all persistence work before returning so callers can rely on
+    /// read-your-writes semantics (TRAIT-001 complete-work-before-ack).
     fn commit(
         &self,
         group_id: &str,
@@ -65,7 +71,7 @@ pub trait OffsetStore: Send + Sync {
         offset: i64,
         leader_epoch: i32,
         metadata: Option<String>,
-    );
+    ) -> Result<()>;
 
     /// Fetch the committed offset for `(group, topic, partition)`.
     fn fetch(&self, group_id: &str, topic: &str, partition: i32) -> Option<CommittedOffset>;

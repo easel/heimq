@@ -96,26 +96,23 @@ pub fn handle(
             let metadata = read_string(&mut cursor);
 
             // Commit the offset
-            offset_store.commit(
-                &group_id,
-                &topic_name,
-                partition,
-                committed_offset,
-                leader_epoch,
-                metadata,
-            );
+            let commit_error = offset_store
+                .commit(&group_id, &topic_name, partition, committed_offset, leader_epoch, metadata)
+                .err();
 
-            debug!(
-                group = %group_id,
-                topic = %topic_name,
-                partition = partition,
-                offset = committed_offset,
-                "Committed offset"
-            );
+            if commit_error.is_none() {
+                debug!(
+                    group = %group_id,
+                    topic = %topic_name,
+                    partition = partition,
+                    offset = committed_offset,
+                    "Committed offset"
+                );
+            }
 
             let mut partition_response = OffsetCommitResponsePartition::default();
             partition_response.partition_index = partition;
-            partition_response.error_code = 0;
+            partition_response.error_code = if commit_error.is_some() { -1 } else { 0 };
             topic_response.partitions.push(partition_response);
         }
 

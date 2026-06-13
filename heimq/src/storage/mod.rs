@@ -27,7 +27,6 @@ pub use record_batch_view::{RecordBatchView, RecordView};
 pub use segment::Segment;
 pub use topic::MemoryTopicLog;
 
-use crate::config::Config;
 use crate::error::Result;
 use bytes::Bytes;
 use std::sync::Arc;
@@ -83,13 +82,18 @@ pub trait LogBackend: Send + Sync {
     /// Return `(topic_name, num_partitions)` for every known topic.
     fn get_all_topic_metadata(&self) -> Vec<(String, i32)>;
 
-    /// Runtime configuration of this backend.
-    fn config(&self) -> &Config;
+    /// Default number of partitions to create for new topics when the request
+    /// does not specify a partition count explicitly.
+    fn default_num_partitions(&self) -> i32;
+
+    /// Whether this backend should create topics on first produce or fetch
+    /// when the topic does not already exist.
+    fn auto_create_topics(&self) -> bool;
 
     /// Append a raw record-batch to a (topic, partition) pair.
     ///
     /// Convenience that replicates the pre-trait `Storage::append` behaviour
-    /// and auto-creates the topic when `config().auto_create_topics` is set.
+    /// and auto-creates the topic when `auto_create_topics()` is set.
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
 
     /// Fetch records starting at `offset`, up to `max_bytes`.

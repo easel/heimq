@@ -75,7 +75,7 @@ impl OffsetStore for PostgresOffsetStore {
         offset: i64,
         _leader_epoch: i32,
         metadata: Option<String>,
-    ) {
+    ) -> crate::error::Result<()> {
         let sql = format!(
             "INSERT INTO \"{schema}\".heimq_committed_offsets \
                  (group_id, topic, partition, committed_offset, metadata) \
@@ -87,12 +87,13 @@ impl OffsetStore for PostgresOffsetStore {
             schema = self.schema
         );
         let mut client = self.client.lock();
-        if let Err(e) = client.execute(
-            sql.as_str(),
-            &[&group_id, &topic, &partition, &offset, &metadata],
-        ) {
-            error!(error = %e, group = group_id, topic, partition, "postgres offset commit failed");
-        }
+        client
+            .execute(sql.as_str(), &[&group_id, &topic, &partition, &offset, &metadata])
+            .map(|_| ())
+            .map_err(|e| {
+                error!(error = %e, group = group_id, topic, partition, "postgres offset commit failed");
+                crate::error::HeimqError::Storage(format!("postgres offset commit failed: {}", e))
+            })
     }
 
     fn fetch(&self, group_id: &str, topic: &str, partition: i32) -> Option<CommittedOffset> {

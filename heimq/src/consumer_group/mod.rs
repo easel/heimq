@@ -250,7 +250,7 @@ mod tests {
         let config = Arc::new(Config::parse_from(["heimq"]));
         let store: Arc<dyn OffsetStore> = Arc::new(MemoryOffsetStore::new());
         let manager = ConsumerGroupManager::with_offset_store(config, store.clone());
-        manager.offset_store().commit("g", "t", 0, 42, 0, None);
+        manager.offset_store().commit("g", "t", 0, 42, 0, None).unwrap();
         assert_eq!(store.fetch("g", "t", 0).unwrap().offset, 42);
     }
 

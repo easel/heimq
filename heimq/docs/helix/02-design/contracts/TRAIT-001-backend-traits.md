@@ -83,7 +83,9 @@ pub trait LogBackend: Send + Sync {
     fn capabilities(&self) -> &BackendCapabilities;
     fn get_or_create_topic(&self, name: &str, num_partitions: i32) -> Arc<dyn TopicLog>;
     fn get_all_topic_metadata(&self) -> Vec<(String, i32)>;
-    fn config(&self) -> &Config;
+    // Narrow accessors replacing fn config(&self) -> &Config (removed in seam heimq-5c4ad46f)
+    fn default_num_partitions(&self) -> i32;
+    fn auto_create_topics(&self) -> bool;
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
     fn fetch(&self, topic_name: &str, partition: i32, offset: i64, max_bytes: i32) -> Result<(Vec<u8>, i64)>;
     fn high_watermark(&self, topic_name: &str, partition: i32) -> Result<i64>;
@@ -131,8 +133,10 @@ Provenance: `src/storage/offset_store.rs:58–84`
 ```rust
 // src/storage/offset_store.rs:58
 pub trait OffsetStore: Send + Sync {
+    // Returns Result<()> since seam heimq-ec30673c: completion semantics require
+    // the impl to complete all durability work before returning and signal failure.
     fn commit(&self, group_id: &str, topic: &str, partition: i32,
-              offset: i64, leader_epoch: i32, metadata: Option<String>);
+              offset: i64, leader_epoch: i32, metadata: Option<String>) -> Result<()>;
     fn fetch(&self, group_id: &str, topic: &str, partition: i32) -> Option<CommittedOffset>;
     fn fetch_all_for_group(&self, group_id: &str) -> HashMap<(String, i32), CommittedOffset>;
     fn delete_group(&self, group_id: &str);
@@ -178,6 +182,19 @@ Normative rules:
 - Stale `generation_id` in heartbeat or sync_group MUST return
   `ILLEGAL_GENERATION` (22).
 - Durable group state (`survives_restart: true`) is an impl property.
+
+**Manager-above-trait contract (ADR — join/sync hold semantics)**: The trait
+methods are sync and return immediately. Rebalance hold-until-all-joined
+behaviour (blocking `sync_group` until all members have called it) is
+implemented by the coordinator manager layer above the trait
+(`ConsumerGroupManager`), not by the trait implementation. A durable or
+multi-node backend implementing this trait MUST NOT assume the caller holds
+a long-lived connection open — the manager owns the retry loop and will
+call `sync_group` again for each arriving member. This design keeps the
+trait surface simple and testable without async complexity. If a future
+backend requires genuine async state holds, a `GroupCoordinatorBackendV2`
+trait with `async fn` methods should be introduced rather than complicating
+the current synchronous surface.
 
 Key DTOs are normative: `JoinRequest`, `JoinResult`, `JoinMember`,
 `SyncRequest`, `SyncResult`, `HeartbeatResult`, `LeaveResult`

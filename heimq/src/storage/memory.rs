@@ -131,8 +131,12 @@ impl LogBackend for MemoryLog {
             .collect()
     }
 
-    fn config(&self) -> &Config {
-        &self.config
+    fn default_num_partitions(&self) -> i32 {
+        self.config.default_partitions
+    }
+
+    fn auto_create_topics(&self) -> bool {
+        self.config.auto_create_topics
     }
 
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)> {
