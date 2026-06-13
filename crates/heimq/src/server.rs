@@ -7,7 +7,7 @@ use crate::producer_state::ProducerStateManager;
 use crate::protocol::{compute_supported_apis, Router};
 use crate::storage::{
     dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store, ClusterView,
-    LogBackend, SingleNodeClusterView,
+    LogBackend, OffsetStore, SingleNodeClusterView,
 };
 use crate::transaction_state::TransactionManager;
 use bytes::{Buf, Bytes, BytesMut};
@@ -35,6 +35,20 @@ pub struct Server {
 }
 
 impl Server {
+    /// Create a new server with externally provided log and offset backends.
+    ///
+    /// The group coordinator is wired to use the provided offset_store; all
+    /// other config-driven storage URLs are ignored. Primarily for tests and
+    /// embeddings that need to inject custom backends.
+    pub fn with_backends(
+        config: Config,
+        storage: Arc<dyn LogBackend>,
+        offset_store: Arc<dyn OffsetStore>,
+    ) -> Result<Self> {
+        let config = Arc::new(config);
+        Self::build_with_offsets(config, storage, offset_store)
+    }
+
     /// Create a new server with an externally provided log backend.
     ///
     /// All other storage (offsets, groups) is still dispatched from config URLs.
@@ -51,6 +65,55 @@ impl Server {
         let storage: Arc<dyn LogBackend> =
             dispatch_log_backend(&storage_cfg.log, config.clone())?;
         Self::build(config, storage)
+    }
+
+    fn build_with_offsets(
+        config: Arc<Config>,
+        storage: Arc<dyn LogBackend>,
+        offset_store: Arc<dyn OffsetStore>,
+    ) -> Result<Self> {
+        let consumer_groups = Arc::new(ConsumerGroupManager::with_offset_store(
+            config.clone(),
+            offset_store,
+        ));
+        let storage_cfg = config.storage();
+        let coordinator: Arc<dyn GroupCoordinatorBackend> =
+            dispatch_group_coordinator(&storage_cfg.groups, consumer_groups.clone())?;
+
+        let advertised_apis = Arc::new(compute_supported_apis(
+            storage.capabilities(),
+            consumer_groups.offset_store().capabilities(),
+            coordinator.capabilities(),
+        ));
+        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+
+        for spec in &config.create_topics {
+            match spec.split_once(':') {
+                Some((name, partitions)) if !name.is_empty() => {
+                    match partitions.trim().parse::<i32>() {
+                        Ok(n) if n > 0 => {
+                            if let Err(e) = storage.create_topic(name.trim(), n) {
+                                warn!(topic = name, error = %e, "pre-create topic failed");
+                            } else {
+                                info!(topic = name, partitions = n, "pre-created topic");
+                            }
+                        }
+                        _ => warn!(spec = %spec, "invalid partition count in --create-topic"),
+                    }
+                }
+                _ => warn!(spec = %spec, "invalid --create-topic spec; expected name:partitions"),
+            }
+        }
+
+        Ok(Self {
+            config,
+            storage,
+            consumer_groups,
+            cluster_view,
+            advertised_apis,
+            producer_state: ProducerStateManager::new(),
+            transaction_manager: TransactionManager::new(),
+        })
     }
 
     fn build(config: Arc<Config>, storage: Arc<dyn LogBackend>) -> Result<Self> {
