@@ -15,7 +15,7 @@ use kafka_protocol::messages::leave_group_request::{LeaveGroupRequest, MemberIde
 use kafka_protocol::messages::list_offsets_request::{ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic};
 use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
 use kafka_protocol::messages::offset_commit_request::{OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic};
-use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
+use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestGroup, OffsetFetchRequestTopic, OffsetFetchRequestTopics};
 use kafka_protocol::messages::produce_request::{PartitionProduceData, ProduceRequest, TopicProduceData};
 use kafka_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
 use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
@@ -1122,6 +1122,65 @@ fn offset_fetch_truncated_and_missing_offsets() {
     buf.put_i32(0);
     let response = offset_fetch::handle(1, &buf, consumer_groups.offset_store()).unwrap();
     assert_eq!(response.topics[0].partitions[0].committed_offset, -1);
+}
+
+#[test]
+fn offset_fetch_v8_groups_response_path() {
+    use crate::handler::offset_commit;
+    use kafka_protocol::messages::offset_commit_request::{OffsetCommitRequestPartition, OffsetCommitRequestTopic};
+
+    let config = test_config(true);
+    let consumer_groups = test_consumer_groups(config);
+
+    // Commit an offset at v1 so we have something to fetch.
+    let mut commit_part = OffsetCommitRequestPartition::default();
+    commit_part.partition_index = 0;
+    commit_part.committed_offset = 42;
+
+    let mut commit_topic = OffsetCommitRequestTopic::default();
+    commit_topic.name = TopicName(StrBytes::from_string("t".to_string()));
+    commit_topic.partitions = vec![commit_part];
+
+    let mut commit_req = OffsetCommitRequest::default();
+    commit_req.group_id = GroupId(StrBytes::from_string("g".to_string()));
+    commit_req.topics = vec![commit_topic];
+    let body = encode_body(&commit_req, 1);
+    offset_commit::handle(1, &body, consumer_groups.offset_store()).unwrap();
+
+    // v8 request: uses groups, not group_id + topics.
+    let mut fetch_topics = OffsetFetchRequestTopics::default();
+    fetch_topics.name = TopicName(StrBytes::from_string("t".to_string()));
+    fetch_topics.partition_indexes = vec![0];
+
+    let mut grp = OffsetFetchRequestGroup::default();
+    grp.group_id = GroupId(StrBytes::from_string("g".to_string()));
+    grp.topics = Some(vec![fetch_topics]);
+
+    let mut req = OffsetFetchRequest::default();
+    req.groups = vec![grp];
+
+    let body = encode_body(&req, 8);
+    let response = offset_fetch::handle(8, &body, consumer_groups.offset_store()).unwrap();
+    assert_eq!(response.groups.len(), 1);
+    assert!(response.topics.is_empty()); // v8+ uses groups, not topics
+    let g = &response.groups[0];
+    assert_eq!(g.topics[0].partitions[0].committed_offset, 42);
+
+    // v8 with topics=None fetches all offsets for the group.
+    let mut grp_all = OffsetFetchRequestGroup::default();
+    grp_all.group_id = GroupId(StrBytes::from_string("g".to_string()));
+    grp_all.topics = None;
+
+    let mut req_all = OffsetFetchRequest::default();
+    req_all.groups = vec![grp_all];
+
+    let body = encode_body(&req_all, 8);
+    let response = offset_fetch::handle(8, &body, consumer_groups.offset_store()).unwrap();
+    assert_eq!(response.groups[0].topics[0].partitions[0].committed_offset, 42);
+
+    // Truncated v8 body → default (empty groups).
+    let response = offset_fetch::handle(8, &[], consumer_groups.offset_store()).unwrap();
+    assert!(response.groups.is_empty());
 }
 
 #[test]
