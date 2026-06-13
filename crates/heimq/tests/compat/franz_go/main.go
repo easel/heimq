@@ -37,6 +37,8 @@ func run(bootstrap string) error {
 	ts := time.Now().UnixNano()
 	topic := fmt.Sprintf("franz-compat-%d", ts)
 	group := fmt.Sprintf("franz-group-%d", ts)
+	hdrTopic := fmt.Sprintf("franz-hdrs-%d", ts)
+	hdrGroup := fmt.Sprintf("franz-hdrs-group-%d", ts)
 
 	if err := check("create-topic", func() error {
 		return createTopic(ctx, bootstrap, topic)
@@ -52,6 +54,30 @@ func run(bootstrap string) error {
 
 	if err := check("consume-via-group", func() error {
 		return consumeViaGroup(ctx, bootstrap, topic, group, 5)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("list-offsets", func() error {
+		return listOffsets(ctx, bootstrap, topic, 5)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("delete-topic", func() error {
+		return deleteTopic(ctx, bootstrap, topic)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("produce-with-headers", func() error {
+		return produceWithHeaders(ctx, bootstrap, hdrTopic)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("consume-headers-roundtrip", func() error {
+		return consumeHeadersRoundtrip(ctx, bootstrap, hdrTopic, hdrGroup)
 	}); err != nil {
 		return err
 	}
@@ -135,13 +161,192 @@ func consumeViaGroup(ctx context.Context, bootstrap, topic, group string, want i
 
 	for i := 0; i < want; i++ {
 		key := fmt.Sprintf("key-%d", i)
-		want_val := fmt.Sprintf("val-%d", i)
+		wantVal := fmt.Sprintf("val-%d", i)
 		v, ok := got[key]
 		if !ok {
 			return fmt.Errorf("missing key %s", key)
 		}
-		if v != want_val {
-			return fmt.Errorf("key %s: got %q want %q", key, v, want_val)
+		if v != wantVal {
+			return fmt.Errorf("key %s: got %q want %q", key, v, wantVal)
+		}
+	}
+
+	if err := cl.CommitUncommittedOffsets(ctx); err != nil {
+		return fmt.Errorf("commit offsets: %w", err)
+	}
+	return nil
+}
+
+// listOffsets checks that the high-watermark equals wantHWM and LSO equals 0.
+func listOffsets(ctx context.Context, bootstrap, topic string, wantHWM int64) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+
+	endOffsets, err := adm.ListEndOffsets(ctx, topic)
+	if err != nil {
+		return fmt.Errorf("list end offsets rpc: %w", err)
+	}
+	foundEnd := false
+	endOffsets.Each(func(lo kadm.ListedOffset) {
+		if lo.Topic != topic {
+			return
+		}
+		if lo.Err != nil {
+			err = fmt.Errorf("end offset partition %d: %w", lo.Partition, lo.Err)
+			return
+		}
+		if lo.Offset != wantHWM {
+			err = fmt.Errorf("end offset partition %d: got %d want %d", lo.Partition, lo.Offset, wantHWM)
+			return
+		}
+		foundEnd = true
+	})
+	if err != nil {
+		return err
+	}
+	if !foundEnd {
+		return fmt.Errorf("no end offset result for topic %s", topic)
+	}
+
+	startOffsets, err := adm.ListStartOffsets(ctx, topic)
+	if err != nil {
+		return fmt.Errorf("list start offsets rpc: %w", err)
+	}
+	foundStart := false
+	startOffsets.Each(func(lo kadm.ListedOffset) {
+		if lo.Topic != topic {
+			return
+		}
+		if lo.Err != nil {
+			err = fmt.Errorf("start offset partition %d: %w", lo.Partition, lo.Err)
+			return
+		}
+		if lo.Offset != 0 {
+			err = fmt.Errorf("start offset partition %d: got %d want 0", lo.Partition, lo.Offset)
+			return
+		}
+		foundStart = true
+	})
+	if err != nil {
+		return err
+	}
+	if !foundStart {
+		return fmt.Errorf("no start offset result for topic %s", topic)
+	}
+
+	return nil
+}
+
+// deleteTopic creates then deletes a topic and verifies no error from the broker.
+func deleteTopic(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	resp, err := adm.DeleteTopics(ctx, topic)
+	if err != nil {
+		return fmt.Errorf("delete topics rpc: %w", err)
+	}
+	if r, ok := resp[topic]; ok && r.Err != nil {
+		return fmt.Errorf("delete topic %s: %w", topic, r.Err)
+	}
+	return nil
+}
+
+// produceWithHeaders sends 3 records each carrying x-trace and x-seq headers.
+func produceWithHeaders(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.DefaultProduceTopic(topic),
+	)
+	if err != nil {
+		return fmt.Errorf("new producer: %w", err)
+	}
+	defer cl.Close()
+
+	for i := 0; i < 3; i++ {
+		rec := &kgo.Record{
+			Key:   []byte(fmt.Sprintf("hdr-key-%d", i)),
+			Value: []byte(fmt.Sprintf("hdr-val-%d", i)),
+			Headers: []kgo.RecordHeader{
+				{Key: "x-trace", Value: []byte(fmt.Sprintf("trace-%d", i))},
+				{Key: "x-seq", Value: []byte(fmt.Sprintf("%d", i))},
+			},
+		}
+		res := cl.ProduceSync(ctx, rec)
+		if err := res.FirstErr(); err != nil {
+			return fmt.Errorf("record %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// consumeHeadersRoundtrip consumes 3 records and verifies x-trace and x-seq headers.
+func consumeHeadersRoundtrip(ctx context.Context, bootstrap, topic, group string) error {
+	cl, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.ConsumeTopics(topic),
+		kgo.ConsumerGroup(group),
+		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+	)
+	if err != nil {
+		return fmt.Errorf("new consumer: %w", err)
+	}
+	defer cl.Close()
+
+	type hdrRecord struct {
+		val, trace, seq string
+	}
+	got := make(map[string]hdrRecord)
+	want := 3
+
+	for len(got) < want {
+		if ctx.Err() != nil {
+			return fmt.Errorf("timeout: consumed %d/%d header records", len(got), want)
+		}
+		fetches := cl.PollFetches(ctx)
+		if errs := fetches.Errors(); len(errs) > 0 {
+			return fmt.Errorf("fetch: %v", errs[0].Err)
+		}
+		fetches.EachRecord(func(r *kgo.Record) {
+			hr := hdrRecord{val: string(r.Value)}
+			for _, h := range r.Headers {
+				switch h.Key {
+				case "x-trace":
+					hr.trace = string(h.Value)
+				case "x-seq":
+					hr.seq = string(h.Value)
+				}
+			}
+			got[string(r.Key)] = hr
+		})
+	}
+
+	for i := 0; i < want; i++ {
+		key := fmt.Sprintf("hdr-key-%d", i)
+		hr, ok := got[key]
+		if !ok {
+			return fmt.Errorf("missing record %s", key)
+		}
+		wantVal := fmt.Sprintf("hdr-val-%d", i)
+		wantTrace := fmt.Sprintf("trace-%d", i)
+		wantSeq := fmt.Sprintf("%d", i)
+		if hr.val != wantVal {
+			return fmt.Errorf("key %s value: got %q want %q", key, hr.val, wantVal)
+		}
+		if hr.trace != wantTrace {
+			return fmt.Errorf("key %s x-trace: got %q want %q", key, hr.trace, wantTrace)
+		}
+		if hr.seq != wantSeq {
+			return fmt.Errorf("key %s x-seq: got %q want %q", key, hr.seq, wantSeq)
 		}
 	}
 
