@@ -151,24 +151,38 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
-	compTopic := topic + "-snappy"
-	snappyCfg := sarama.NewConfig()
-	snappyCfg.Version = sarama.V2_6_0_0
-	snappyCfg.Producer.Return.Successes = true
-	snappyCfg.Producer.RequiredAcks = sarama.WaitForLocal
-	snappyCfg.Producer.Compression = sarama.CompressionSnappy
-	snappyCfg.Consumer.Offsets.Initial = sarama.OffsetOldest
-
-	if err := check("produce-snappy-compressed", func() error {
-		return produceCompressed(brokers, compTopic, snappyCfg)
-	}); err != nil {
-		return err
+	makeCompCfg := func(codec sarama.CompressionCodec) *sarama.Config {
+		c := sarama.NewConfig()
+		c.Version = sarama.V2_6_0_0
+		c.Producer.Return.Successes = true
+		c.Producer.RequiredAcks = sarama.WaitForLocal
+		c.Producer.Compression = codec
+		c.Consumer.Offsets.Initial = sarama.OffsetOldest
+		return c
 	}
 
-	if err := check("consume-snappy-roundtrip", func() error {
-		return consumeCompressedRoundtrip(brokers, compTopic, snappyCfg)
-	}); err != nil {
-		return err
+	for _, codec := range []struct {
+		name string
+		cfg  *sarama.Config
+	}{
+		{"snappy", makeCompCfg(sarama.CompressionSnappy)},
+		{"gzip", makeCompCfg(sarama.CompressionGZIP)},
+		{"lz4", makeCompCfg(sarama.CompressionLZ4)},
+		{"zstd", makeCompCfg(sarama.CompressionZSTD)},
+	} {
+		compTopic := topic + "-" + codec.name
+		codecName := codec.name
+		compCfg := codec.cfg
+		if err := check("produce-"+codecName+"-compressed", func() error {
+			return produceCompressed(brokers, compTopic, compCfg)
+		}); err != nil {
+			return err
+		}
+		if err := check("consume-"+codecName+"-roundtrip", func() error {
+			return consumeCompressedRoundtrip(brokers, compTopic, compCfg)
+		}); err != nil {
+			return err
+		}
 	}
 
 	if err := check("elect-leaders", func() error {
