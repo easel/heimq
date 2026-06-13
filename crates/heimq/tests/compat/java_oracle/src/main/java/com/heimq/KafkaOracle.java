@@ -9,6 +9,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.header.Header;
@@ -70,6 +71,17 @@ public class KafkaOracle {
         check("describe-groups", () -> describeGroups(bootstrap, oracleGroup));
         check("offset-delete", () -> offsetDelete(bootstrap, topic, oracleGroup));
         check("delete-groups", () -> deleteGroups(bootstrap, oracleGroup));
+        check("list-transactions", () -> listTransactions(bootstrap));
+        check("elect-leaders", () -> electLeaders(bootstrap, topic));
+        String gzipTopic = topic + "-gzip";
+        check("produce-gzip-compressed", () -> produceCompressed(bootstrap, gzipTopic, "gzip"));
+        check("consume-gzip-roundtrip", () -> consumeCompressedRoundtrip(bootstrap, gzipTopic));
+        String snappyTopic = topic + "-snappy";
+        check("produce-snappy-compressed", () -> produceCompressed(bootstrap, snappyTopic, "snappy"));
+        check("consume-snappy-roundtrip", () -> consumeCompressedRoundtrip(bootstrap, snappyTopic));
+        String lz4Topic = topic + "-lz4";
+        check("produce-lz4-compressed", () -> produceCompressed(bootstrap, lz4Topic, "lz4"));
+        check("consume-lz4-roundtrip", () -> consumeCompressedRoundtrip(bootstrap, lz4Topic));
         check("offset-resume", () -> offsetResume(bootstrap, resumeTopic, resumeGroup));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
@@ -439,6 +451,73 @@ public class KafkaOracle {
                 result.all().get();
             } catch (ExecutionException e) {
                 // GROUP_ID_NOT_FOUND is acceptable — group was never joined.
+            }
+        }
+    }
+
+    private static void listTransactions(String bootstrap) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            ListTransactionsResult result = admin.listTransactions(new ListTransactionsOptions());
+            // The response must be parseable; there may be zero active transactions.
+            Collection<TransactionListing> transactions = result.all().get();
+            if (transactions == null) {
+                throw new RuntimeException("listTransactions returned null");
+            }
+        }
+    }
+
+    private static Properties compressedProducerProps(String bootstrap, String codec) {
+        Properties props = producerProps(bootstrap);
+        props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, codec); // gzip, snappy, lz4, zstd
+        return props;
+    }
+
+    private static void produceCompressed(String bootstrap, String topic, String codec) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            admin.createTopics(Collections.singletonList(new NewTopic(topic, 1, (short) 1))).all().get();
+        }
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(compressedProducerProps(bootstrap, codec))) {
+            for (int i = 0; i < 4; i++) {
+                producer.send(new ProducerRecord<>(topic, "ckey-" + i, "cval-" + i)).get();
+            }
+        }
+    }
+
+    private static void consumeCompressedRoundtrip(String bootstrap, String topic) throws Exception {
+        String group = "java-comp-group-" + System.nanoTime();
+        Map<String, String> got = new LinkedHashMap<>();
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps(bootstrap, group))) {
+            consumer.subscribe(Collections.singletonList(topic));
+            long deadline = System.currentTimeMillis() + 30_000;
+            while (got.size() < 4 && System.currentTimeMillis() < deadline) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<String, String> r : records) {
+                    got.put(r.key(), r.value());
+                }
+            }
+            consumer.commitSync();
+        }
+        if (got.size() < 4) {
+            throw new RuntimeException("timeout: consumed " + got.size() + "/4 compressed records");
+        }
+        for (int i = 0; i < 4; i++) {
+            String key = "ckey-" + i;
+            String want = "cval-" + i;
+            String val = got.get(key);
+            if (val == null) throw new RuntimeException("missing key " + key);
+            if (!val.equals(want)) throw new RuntimeException(key + ": got " + val + " want " + want);
+        }
+    }
+
+    private static void electLeaders(String bootstrap, String topic) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            // Elect preferred leader for partition 0; heimq always is the leader so this is a no-op.
+            Set<TopicPartition> partitions = Collections.singleton(new TopicPartition(topic, 0));
+            ElectLeadersResult result = admin.electLeaders(ElectionType.PREFERRED, partitions);
+            try {
+                result.all().get();
+            } catch (ExecutionException e) {
+                // ELECTION_NOT_NEEDED is acceptable — we're already the preferred leader.
             }
         }
     }
