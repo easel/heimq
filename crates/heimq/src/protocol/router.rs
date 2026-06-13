@@ -97,6 +97,7 @@ impl Router {
             60 => self.handle_describe_cluster(&header, &body),
             47 => self.handle_offset_delete(&header, &body),
             19 => self.handle_create_topics(&header, &body),
+            37 => self.handle_create_partitions(&header, &body),
             20 => self.handle_delete_topics(&header, &body),
             21 => self.handle_delete_records(&header, &body),
             22 => self.handle_init_producer_id(&header, &body),
@@ -224,6 +225,13 @@ impl Router {
         self.handle_and_encode(
             header,
             Box::new(|| create_topics::handle(header.api_version, body, &self.storage)),
+        )
+    }
+
+    fn handle_create_partitions(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| create_partitions::handle(header.api_version, body, &self.storage)),
         )
     }
 

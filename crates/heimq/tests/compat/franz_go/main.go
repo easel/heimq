@@ -113,6 +113,12 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("create-partitions", func() error {
+		return createPartitions(ctx, bootstrap, topic, 3)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("delete-records", func() error {
 		return deleteRecords(ctx, bootstrap, topic)
 	}); err != nil {
@@ -145,6 +151,24 @@ func check(name string, fn func() error) error {
 		return fmt.Errorf("%s: %w", name, err)
 	}
 	fmt.Printf("  ok  %s\n", name)
+	return nil
+}
+
+func createPartitions(ctx context.Context, bootstrap, topic string, totalCount int) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+	resp, err := adm.UpdatePartitions(ctx, totalCount, topic)
+	if err != nil {
+		return fmt.Errorf("create partitions rpc: %w", err)
+	}
+	if _, err := resp.On(topic, func(r *kadm.CreatePartitionsResponse) error { return r.Err }); err != nil {
+		return fmt.Errorf("create partitions response for %q: %w", topic, err)
+	}
 	return nil
 }
 

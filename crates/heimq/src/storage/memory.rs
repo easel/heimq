@@ -144,6 +144,27 @@ impl LogBackend for MemoryLog {
         self.config.auto_create_topics
     }
 
+    fn expand_topic_partitions(&self, name: &str, new_count: i32) -> Result<()> {
+        let existing = self
+            .get_memory_topic(name)
+            .ok_or_else(|| crate::error::HeimqError::TopicNotFound(name.to_string()))?;
+        let current = existing.num_partitions();
+        if new_count <= current {
+            return Err(crate::error::HeimqError::Protocol(format!(
+                "topic '{}' already has {} partitions; new count {} must be greater",
+                name, current, new_count
+            )));
+        }
+        let expanded = Arc::new(MemoryTopicLog::new_expanded(
+            name.to_string(),
+            existing.partitions(),
+            new_count,
+        ));
+        self.topics.insert(name.to_string(), expanded);
+        info!(topic = name, from = current, to = new_count, "Expanded topic partitions");
+        Ok(())
+    }
+
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)> {
         let topic = self.resolve_topic_for_append(topic_name)?;
         let partition_log = topic.get_memory_partition(partition)?;

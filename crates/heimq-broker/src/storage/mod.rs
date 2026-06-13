@@ -78,6 +78,18 @@ pub trait LogBackend: Send + Sync {
     /// when the topic does not already exist.
     fn auto_create_topics(&self) -> bool;
 
+    /// Expand an existing topic to `new_count` partitions.
+    ///
+    /// Returns an error if the topic does not exist, `new_count` is not greater
+    /// than the current partition count, or this backend does not support
+    /// partition expansion.
+    fn expand_topic_partitions(&self, name: &str, new_count: i32) -> Result<()> {
+        let _ = (name, new_count);
+        Err(crate::error::HeimqError::Protocol(
+            "expand_topic_partitions not supported by this backend".to_string(),
+        ))
+    }
+
     /// Append a raw record-batch to a (topic, partition) pair.
     ///
     /// Convenience that replicates the pre-trait `Storage::append` behaviour

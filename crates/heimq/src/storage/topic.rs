@@ -25,6 +25,23 @@ impl MemoryTopicLog {
         }
     }
 
+    /// Create an expanded topic preserving existing partition Arcs.
+    pub fn new_expanded(
+        name: String,
+        existing: &[Arc<MemoryPartitionLog>],
+        new_count: i32,
+    ) -> Self {
+        let mut partitions = existing.to_vec();
+        for i in existing.len() as i32..new_count {
+            partitions.push(Arc::new(MemoryPartitionLog::new(i)));
+        }
+        Self {
+            name,
+            config: TopicConfig { num_partitions: new_count },
+            partitions,
+        }
+    }
+
     /// Get a specific partition as the concrete in-memory type.
     pub(crate) fn get_memory_partition(
         &self,
