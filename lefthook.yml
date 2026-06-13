@@ -1,7 +1,7 @@
 pre-commit:
   commands:
     workspace-tests-on-bead-change:
-      glob: ".ddx/beads.jsonl"
+      glob: "**/.ddx/beads.jsonl"
       run: |
         set -euo pipefail
         echo "==> .ddx/beads.jsonl changing: running workspace tests (ADR-002 Layer 1)..."
