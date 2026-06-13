@@ -68,6 +68,7 @@ version matrix in `API-001-kafka-protocol.md` (cited per phase under
 | Integration | rdkafka, kafka crate | Modern + legacy protocol coverage |
 | Property | proptest | Systematic invariant testing |
 | Baseline Parity | docker + redpanda/kafka | Known-good behavior comparisons |
+| External Client Oracle | franz-go (pure Go, no librdkafka) | Independent implementation as "who watches the watcher" check |
 
 ## Test Organization
 
@@ -78,6 +79,9 @@ heimq/
 ├── tests/
 │   ├── contract.rs
 │   ├── integration.rs
+│   ├── compat.rs              (external client oracle — franz-go)
+│   ├── compat/
+│   │   └── franz_go/          (pure-Go Kafka client oracle program)
 │   └── fixtures/ (planned)
 └── src/
     └── ... (unit + property tests in modules)
@@ -302,12 +306,25 @@ AddOffsetsToTxn (25), EndTxn (26), WriteTxnMarkers (27), TxnOffsetCommit
 
 Spec traceability: FEAT-003, PRD P0 #5. Lives under `tests/parity/`.
 
-- [ ] Harness scaffolding: same client workload against heimq and Redpanda; structured diff output.
-- [ ] Normalization rules for broker ids, host timestamps, monotonic ids.
-- [ ] Workloads cover produce/fetch and consumer groups as gating workloads at FEAT-003 acceptance.
-- [ ] Workloads add idempotent producers and transactions once FEAT-002 is accepted (gated on FEAT-002 acceptance; see ../../02-design/solution-designs/SD-003-differential-parity-testing.md § Expansion path).
+- [x] Harness scaffolding: same client workload against heimq and Redpanda; structured diff output.
+- [x] Normalization rules for broker ids, host timestamps, monotonic ids.
+- [x] Workloads cover produce/fetch and consumer groups as gating workloads at FEAT-003 acceptance.
+- [x] Workloads add idempotent producers and transactions once FEAT-002 is accepted.
 - [ ] CI gating job: parity harness runs on protocol-touching changes; zero-diff is the success condition.
-- [ ] Known-divergence registry (e.g., loss-on-restart) with PRD references.
+- [x] Known-divergence registry (e.g., loss-on-restart) with PRD references.
+
+### Phase 8b: External Client Oracle (P0)
+
+A second independent client library (franz-go, pure Go, no librdkafka) runs the same
+produce/consume/consumer-group workload against heimq. This provides "who watches the
+watcher" coverage — a pass here means two unrelated implementations agree on the Kafka
+wire protocol. Lives in `tests/compat/`.
+
+- [x] franz-go oracle: CreateTopics → Produce → ConsumerGroup Fetch → OffsetCommit
+- [x] Exercises API versions independent of rdkafka: JoinGroup v9, SyncGroup v5, OffsetFetch v9, ListOffsets v8, Fetch v12
+- [x] FindCoordinator v4 bug fix: populate `coordinators` array (v4+ schema) not just legacy fields
+- [ ] Add multi-record-batch workload to franz-go oracle (headers, compression codecs)
+- [ ] Add Java kafka-clients oracle (reference implementation)
 
 ### Phase 9: Standard Kafka Benchmark Conformance (P0, FEAT-004)
 
@@ -330,6 +347,7 @@ Spec traceability: FEAT-005, PRD P0 #7. Lives under `tests/ecosystem/`.
 | ksqlDB | `tests/ecosystem/ksqldb/run.sh` | [ ] Pending |
 | Debezium (one connector) | `tests/ecosystem/debezium/run.sh` | [ ] Pending |
 | Schema Registry round-trip | `tests/ecosystem/schema-registry/run.sh` | [ ] Pending |
+| `franz-go` | `tests/compat/franz_go/` (oracle, `cargo test --test compat`) | [x] Done — Phase 8b |
 | `confluent-kafka-go` | `tests/ecosystem/clients/go/run.sh` | [ ] Pending |
 | `confluent-kafka` (Python) | `tests/ecosystem/clients/python/run.sh` | [ ] Pending |
 | `node-rdkafka` | `tests/ecosystem/clients/node/run.sh` | [ ] Pending |

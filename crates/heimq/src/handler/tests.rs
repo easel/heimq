@@ -636,6 +636,23 @@ fn find_coordinator_request_ignored() {
 }
 
 #[test]
+fn find_coordinator_v4_populates_coordinators_array() {
+    use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
+    let config = test_config(true);
+    let mut request = FindCoordinatorRequest::default();
+    request.coordinator_keys = vec![StrBytes::from_string("my-group".to_string())];
+    let body = encode_body(&request, 4);
+    let response = find_coordinator::handle(4, &body, &SingleNodeClusterView::new(&config)).unwrap();
+    // v4: coordinators array must be populated; legacy fields are absent.
+    assert_eq!(response.coordinators.len(), 1, "v4 must return one coordinator entry");
+    let coord = &response.coordinators[0];
+    assert_eq!(coord.error_code, 0);
+    assert_eq!(coord.node_id.0, config.broker_id);
+    assert!(!coord.host.is_empty(), "coordinator host must be non-empty");
+    assert!(coord.port > 0, "coordinator port must be positive");
+}
+
+#[test]
 fn create_topics_truncated_inputs() {
     let storage = test_storage(true);
     let mut bodies: Vec<BytesMut> = Vec::new();
