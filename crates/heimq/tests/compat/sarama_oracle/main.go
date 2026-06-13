@@ -171,6 +171,12 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	if err := check("elect-leaders", func() error {
+		return electLeaders(brokers, topic, cfg)
+	}); err != nil {
+		return err
+	}
+
 	resumeTopic := topic + "-resume"
 	resumeGroup := fmt.Sprintf("sarama-resume-%d", time.Now().UnixNano())
 	if err := check("offset-resume", func() error {
@@ -727,6 +733,27 @@ func consumeCompressedRoundtrip(brokers []string, topic string, cfg *sarama.Conf
 			return fmt.Errorf("key %s: got %q want %q", key, v, wantVal)
 		}
 	}
+	return nil
+}
+
+// electLeaders triggers a preferred-leader election for partition 0 of topic.
+// In a single-broker cluster this is always a no-op, but the request must
+// complete without error, exercising the ElectLeaders wire path.
+func electLeaders(brokers []string, topic string, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	partitions := map[string][]int32{topic: {0}}
+	_, err = admin.ElectLeaders(sarama.PreferredElection, partitions)
+	if err != nil {
+		return fmt.Errorf("elect leaders: %w", err)
+	}
+	// PartitionResult.ErrorCode may be ELECTION_NOT_NEEDED (code 79) which is
+	// expected in a single-broker cluster that already holds the preferred leader.
+	// The request completing without a transport error is sufficient.
 	return nil
 }
 
