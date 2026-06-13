@@ -66,12 +66,17 @@ impl TestServer {
         let port = next_port();
         let auto_value = if auto_create { "true" } else { "false" };
 
-        // Prefer CARGO_BIN_EXE_heimq (set by cargo test), fall back to target paths
+        // Prefer CARGO_BIN_EXE_heimq (set by cargo test), fall back to target paths.
+        // When the binary env var is not set (can happen in OrbStack environments where
+        // macOS/Linux path mappings differ), use CARGO_MANIFEST_DIR to find the workspace
+        // root (this crate lives at <workspace>/crates/heimq, so go up two levels).
         let binary = std::env::var("CARGO_BIN_EXE_heimq")
             .ok()
             .or_else(|| {
-                let debug = std::path::Path::new("./target/debug/heimq");
-                let release = std::path::Path::new("./target/release/heimq");
+                let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+                let workspace_root = std::path::Path::new(&manifest_dir).join("../..").canonicalize().ok()?;
+                let debug = workspace_root.join("target/debug/heimq");
+                let release = workspace_root.join("target/release/heimq");
                 if debug.exists() {
                     Some(debug.to_string_lossy().to_string())
                 } else if release.exists() {
