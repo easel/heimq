@@ -125,6 +125,12 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("offset-for-leader-epoch", func() error {
+		return offsetForLeaderEpoch(ctx, bootstrap, topic)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("delete-records", func() error {
 		return deleteRecords(ctx, bootstrap, topic)
 	}); err != nil {
@@ -636,6 +642,47 @@ func describeCluster(ctx context.Context, bootstrap string) error {
 	}
 	if len(dcr.Brokers) == 0 {
 		return fmt.Errorf("describe cluster returned no brokers")
+	}
+	return nil
+}
+
+// offsetForLeaderEpoch exercises OffsetForLeaderEpoch (API 23).
+// Sends a raw request for partition 0 at leader epoch 0 and verifies the
+// response contains a non-negative end offset.
+func offsetForLeaderEpoch(ctx context.Context, bootstrap, topic string) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	req := &kmsg.OffsetForLeaderEpochRequest{
+		Topics: []kmsg.OffsetForLeaderEpochRequestTopic{
+			{
+				Topic: topic,
+				Partitions: []kmsg.OffsetForLeaderEpochRequestTopicPartition{
+					{Partition: 0, LeaderEpoch: 0, CurrentLeaderEpoch: -1},
+				},
+			},
+		},
+	}
+	resp, err := cl.Request(ctx, req)
+	if err != nil {
+		return fmt.Errorf("rpc: %w", err)
+	}
+	epochResp, ok := resp.(*kmsg.OffsetForLeaderEpochResponse)
+	if !ok {
+		return fmt.Errorf("unexpected response type %T", resp)
+	}
+	for _, t := range epochResp.Topics {
+		for _, p := range t.Partitions {
+			if p.ErrorCode != 0 {
+				return fmt.Errorf("partition %d error_code=%d", p.Partition, p.ErrorCode)
+			}
+			if p.EndOffset < 0 {
+				return fmt.Errorf("partition %d: negative end offset %d", p.Partition, p.EndOffset)
+			}
+		}
 	}
 	return nil
 }

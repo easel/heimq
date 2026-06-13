@@ -101,6 +101,7 @@ impl Router {
             37 => self.handle_create_partitions(&header, &body),
             20 => self.handle_delete_topics(&header, &body),
             21 => self.handle_delete_records(&header, &body),
+            23 => self.handle_offset_for_leader_epoch(&header, &body),
             22 => self.handle_init_producer_id(&header, &body),
             24 => self.handle_add_partitions_to_txn(&header, &body),
             25 => self.handle_add_offsets_to_txn(&header, &body),
@@ -254,6 +255,13 @@ impl Router {
         self.handle_and_encode(
             header,
             Box::new(|| delete_records::handle(header.api_version, body, &self.storage)),
+        )
+    }
+
+    fn handle_offset_for_leader_epoch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        self.handle_and_encode(
+            header,
+            Box::new(|| offset_for_leader_epoch::handle(header.api_version, body, &self.storage)),
         )
     }
 

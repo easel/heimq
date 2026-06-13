@@ -23,6 +23,7 @@ pub mod join_group;
 pub mod leave_group;
 pub mod list_groups;
 pub mod list_offsets;
+pub mod offset_for_leader_epoch;
 pub mod metadata;
 pub mod offset_commit;
 pub mod offset_delete;
