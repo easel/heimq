@@ -55,15 +55,18 @@ impl MemoryPartitionLog {
             1
         };
 
-        self.next_offset.fetch_add(record_count, Ordering::SeqCst);
-
         let mut batch = record_batch_data.to_vec();
         if batch.len() >= 8 {
             batch[0..8].copy_from_slice(&base_offset.to_be_bytes());
         }
 
+        // Advance HW inside the write lock so that any concurrent reader that
+        // sees the new high_watermark is guaranteed to also see the data in the
+        // segment (RwLock ensures the read lock cannot be acquired until the
+        // write lock is released, at which point both segment and HW are current).
         let mut segment = self.active_segment.write();
         segment.append(base_offset, batch);
+        self.next_offset.fetch_add(record_count, Ordering::SeqCst);
 
         (base_offset, record_count)
     }
