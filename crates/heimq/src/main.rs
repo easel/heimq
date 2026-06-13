@@ -102,6 +102,7 @@ mod tests {
             storage_log: "memory://".to_string(),
             storage_offsets: "memory://".to_string(),
             storage_groups: "memory://".to_string(),
+            advertised_host: None,
         };
 
         let task = tokio::spawn(async move { run_with_config(config, Some(1)).await });
@@ -144,6 +145,7 @@ mod tests {
             storage_log: "memory://".to_string(),
             storage_offsets: "memory://".to_string(),
             storage_groups: "memory://".to_string(),
+            advertised_host: None,
         };
 
         let result = run_with_config(config, Some(1)).await;

@@ -72,6 +72,12 @@ pub struct Config {
     /// URL for the consumer-group coordinator backend. Currently only `memory://` is supported.
     #[arg(long = "storage-groups", default_value = "memory://", env = "HEIMQ_STORAGE_GROUPS")]
     pub storage_groups: String,
+
+    /// Advertised hostname returned to Kafka clients in Metadata responses.
+    /// Defaults to the listen host, or 127.0.0.1 when listening on 0.0.0.0.
+    /// Set this to the host's external IP when clients connect from inside Docker containers.
+    #[arg(long = "advertised-host", env = "HEIMQ_ADVERTISED_HOST")]
+    pub advertised_host: Option<String>,
 }
 
 /// Storage backend URLs grouped together for ergonomic access.

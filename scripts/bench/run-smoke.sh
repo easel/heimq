@@ -8,43 +8,82 @@
 set -euo pipefail
 
 BOOTSTRAP="${BOOTSTRAP:-localhost:9094}"
-TOPIC="bench-smoke-$$"
 RECORDS=10000
 RECORD_SIZE=128
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-cleanup() {
-    kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --delete --topic "$TOPIC" 2>/dev/null || true
+run_check() {
+    local out
+    out="$("$@" 2>&1)"
+    echo "$out"
+    if echo "$out" | grep -qiE "^.*\[ERROR\]|Exception|FATAL|^FAIL"; then
+        echo "FAIL: error lines detected in output of: $*" >&2
+        return 1
+    fi
 }
-trap cleanup EXIT
 
-echo "==> Creating topic $TOPIC"
+# ── 1. Non-idempotent smoke ───────────────────────────────────────────────────
+TOPIC="bench-smoke-$$"
+cleanup1() { kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --delete --topic "$TOPIC" 2>/dev/null || true; }
+trap cleanup1 EXIT
+
+echo "==> [1/3] Non-idempotent producer + consumer"
 kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --topic "$TOPIC" \
     --partitions 1 --replication-factor 1
 
-echo "==> Producer perf test"
-producer_out=$(kafka-producer-perf-test.sh \
+run_check kafka-producer-perf-test.sh \
     --producer-props bootstrap.servers="$BOOTSTRAP" acks=1 enable.idempotence=false \
     --topic "$TOPIC" \
     --num-records "$RECORDS" \
     --record-size "$RECORD_SIZE" \
-    --throughput -1 2>&1)
-echo "$producer_out"
-if echo "$producer_out" | grep -qiE "error|exception|failed"; then
-    echo "FAIL: producer error lines detected" >&2
-    exit 1
-fi
+    --throughput -1
 
-echo "==> Consumer perf test"
-consumer_out=$(kafka-consumer-perf-test.sh \
+run_check kafka-consumer-perf-test.sh \
     --bootstrap-server "$BOOTSTRAP" \
-    --consumer.config scripts/bench/profiles/consumer-smoke.properties \
+    --consumer.config "$SCRIPT_DIR/profiles/consumer-smoke.properties" \
     --topic "$TOPIC" \
     --messages "$RECORDS" \
-    --group "bench-consumer-$$" 2>&1)
-echo "$consumer_out"
-if echo "$consumer_out" | grep -qiE "error|exception|failed"; then
-    echo "FAIL: consumer error lines detected" >&2
-    exit 1
-fi
+    --group "bench-consumer-$$"
 
-echo "==> PASS: producer + consumer smoke bench completed"
+cleanup1; trap - EXIT
+
+# ── 2. Idempotent producer ────────────────────────────────────────────────────
+TOPIC_IDEM="bench-idempotent-$$"
+cleanup2() { kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --delete --topic "$TOPIC_IDEM" 2>/dev/null || true; }
+trap cleanup2 EXIT
+
+echo "==> [2/3] Idempotent producer (enable.idempotence=true)"
+kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --topic "$TOPIC_IDEM" \
+    --partitions 1 --replication-factor 1
+
+run_check kafka-producer-perf-test.sh \
+    --producer.config "$SCRIPT_DIR/profiles/producer-idempotent.properties" \
+    --topic "$TOPIC_IDEM" \
+    --num-records "$RECORDS" \
+    --record-size "$RECORD_SIZE" \
+    --throughput -1 \
+    --producer-props bootstrap.servers="$BOOTSTRAP"
+
+cleanup2; trap - EXIT
+
+# ── 3. Transactional producer ─────────────────────────────────────────────────
+TOPIC_TXN="bench-txn-$$"
+cleanup3() { kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --delete --topic "$TOPIC_TXN" 2>/dev/null || true; }
+trap cleanup3 EXIT
+
+echo "==> [3/3] Transactional producer (transactional.id)"
+kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --topic "$TOPIC_TXN" \
+    --partitions 1 --replication-factor 1
+
+run_check kafka-producer-perf-test.sh \
+    --producer.config "$SCRIPT_DIR/profiles/producer-transactional.properties" \
+    --topic "$TOPIC_TXN" \
+    --num-records "$RECORDS" \
+    --record-size "$RECORD_SIZE" \
+    --throughput -1 \
+    --transaction-duration-ms 1000 \
+    --producer-props bootstrap.servers="$BOOTSTRAP"
+
+cleanup3; trap - EXIT
+
+echo "==> PASS: all three bench profiles completed"

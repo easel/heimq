@@ -146,6 +146,7 @@ pub fn test_config(auto_create: bool) -> Arc<Config> {
         storage_log: "memory://".to_string(),
         storage_offsets: "memory://".to_string(),
         storage_groups: "memory://".to_string(),
+        advertised_host: None,
     })
 }
 

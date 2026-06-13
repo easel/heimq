@@ -421,6 +421,7 @@ mod tests {
             storage_log: "memory://".to_string(),
             storage_offsets: "memory://".to_string(),
             storage_groups: "memory://".to_string(),
+            advertised_host: None,
         };
 
         let server = Server::new(config);

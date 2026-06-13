@@ -12,7 +12,9 @@ pub struct SingleNodeClusterView {
 
 impl SingleNodeClusterView {
     pub fn new(config: &Config) -> Self {
-        let host = if config.host == "0.0.0.0" {
+        let host = if let Some(advertised) = &config.advertised_host {
+            advertised.clone()
+        } else if config.host == "0.0.0.0" {
             "127.0.0.1".to_string()
         } else {
             config.host.clone()

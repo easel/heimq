@@ -1,0 +1,53 @@
+name: bench-omb
+
+# FEAT-004 FR-03: OpenMessaging Benchmark conformance.
+# Builds OMB from source (cached), then runs a 1-minute smoke workload
+# against heimq. Not a required gate (slow Docker build), but must be
+# green before FEAT-004 close.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  omb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Clone OpenMessaging Benchmark
+        run: git clone --depth 1 https://github.com/openmessaging/benchmark /tmp/ombbench
+
+      - name: Build OMB Docker image (cached)
+        uses: docker/build-push-action@v5
+        with:
+          context: /tmp/ombbench
+          file: scripts/bench/openmessaging/Dockerfile.omb-heimq
+          tags: ombbuild-heimq:latest
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build heimq
+        run: cargo build -p heimq --bin heimq
+
+      - name: Start heimq with advertised host
+        run: |
+          ADVERTISED_HOST=$(hostname -I | awk '{print $1}')
+          ./target/debug/heimq --host 0.0.0.0 --port 9094 --memory-only --advertised-host "$ADVERTISED_HOST" &
+          echo "HEIMQ_PID=$!" >> $GITHUB_ENV
+          timeout 15 bash -c 'until nc -z localhost 9094; do sleep 0.2; done'
+
+      - name: Run OMB conformance
+        run: BOOTSTRAP=localhost:9094 bash scripts/bench/run-omb.sh
+
+      - name: Stop heimq
+        if: always()
+        run: kill $HEIMQ_PID 2>/dev/null || true
