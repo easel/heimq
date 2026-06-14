@@ -11,6 +11,9 @@ pub struct ExemptionEntry {
     /// Defaults to "all" for entries written before the multi-oracle split.
     #[serde(default = "default_oracle")]
     pub oracle: String,
+    /// Human-readable justification — part of the documented TOML schema; not read
+    /// by the diff engine (which keys off `field`/`scope`/`oracle`/`status`).
+    #[allow(dead_code)]
     pub reason: String,
     pub prd_ref: String,
     pub status: String,

@@ -13,15 +13,7 @@ const KAFKA_IMAGE: &str = "apache/kafka";
 const KAFKA_TAG: &str = "3.9.0";
 const KAFKA_PORT: u16 = 9092;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BrokerKind {
-    Heimq,
-    Redpanda,
-    Kafka,
-}
-
 pub struct BrokerTarget {
-    pub kind: BrokerKind,
     pub bootstrap_servers: String,
 }
 
@@ -121,15 +113,12 @@ pub async fn boot() -> Result<(
 
     let targets = Targets {
         heimq: BrokerTarget {
-            kind: BrokerKind::Heimq,
             bootstrap_servers: heimq_bootstrap,
         },
         redpanda: BrokerTarget {
-            kind: BrokerKind::Redpanda,
             bootstrap_servers: redpanda_bootstrap,
         },
         kafka: BrokerTarget {
-            kind: BrokerKind::Kafka,
             bootstrap_servers: kafka_bootstrap,
         },
     };

@@ -1030,7 +1030,7 @@ mod tests {
         let (accepted, _) = listener.accept().await.unwrap();
 
         // TCP_NODELAY should be set by handle_accept_result
-        let (mut tx, rx) = tokio::sync::mpsc::channel::<bool>(1);
+        let (tx, rx) = tokio::sync::mpsc::channel::<bool>(1);
         let nodelay_result = accepted.nodelay();
         // We test that our server code CAN set it (not that we intercepted the real call)
         // verify: set_nodelay(true) succeeds on a TcpStream
