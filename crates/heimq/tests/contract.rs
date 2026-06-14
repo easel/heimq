@@ -2193,3 +2193,68 @@ fn contract_list_offsets_timestamp_returns_offset() {
     // offset >= 0 is all we guarantee for in-memory storage without a timestamp index.
     assert!(resp3.topics[0].partitions[0].offset >= 0, "timestamp ListOffsets must return a non-negative offset");
 }
+
+#[test]
+fn contract_fetch_long_poll_wakes_on_produce() {
+    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+    use kafka_protocol::messages::fetch_response::FetchResponse;
+    use std::sync::{Arc, Barrier};
+
+    let server = Arc::new(TestServer::start());
+    let topic = unique_topic("contract-lp-wake");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // Start a Fetch long-poll (max_wait=2000ms) in a background thread before producing.
+    let server2 = server.clone();
+    let topic2 = topic.clone();
+    let barrier = Arc::new(Barrier::new(2));
+    let barrier2 = barrier.clone();
+
+    let fetch_handle = std::thread::spawn(move || {
+        let mut fetch_part = FetchPartition::default();
+        fetch_part.partition = 0;
+        fetch_part.fetch_offset = 0;
+        fetch_part.partition_max_bytes = 1024 * 1024;
+        let mut fetch_topic_req = FetchTopic::default();
+        fetch_topic_req.topic = TopicName(StrBytes::from_string(topic2));
+        fetch_topic_req.partitions = vec![fetch_part];
+        let mut fetch_req = FetchRequest::default();
+        fetch_req.replica_id = BrokerId(-1);
+        fetch_req.max_wait_ms = 2000;
+        fetch_req.min_bytes = 1;
+        fetch_req.max_bytes = 1024 * 1024;
+        fetch_req.topics = vec![fetch_topic_req];
+
+        // Signal that we're about to send the Fetch, then start timing.
+        barrier2.wait();
+        let start = std::time::Instant::now();
+        let resp: FetchResponse = send_request(&*server2, 1, 4, &fetch_req);
+        (resp, start.elapsed())
+    });
+
+    // Wait until the fetch thread is about to start, then produce ~50ms later.
+    barrier.wait();
+    std::thread::sleep(std::time::Duration::from_millis(50));
+    let batch = encode_record_batch(&[new_record(0)]);
+    let produce_resp = produce_batch(&server, &topic, batch);
+    assert_eq!(produce_resp.responses[0].partition_responses[0].error_code, 0);
+
+    let (fetch_resp, elapsed) = fetch_handle.join().expect("fetch thread panicked");
+    assert_eq!(fetch_resp.responses[0].partitions[0].error_code, 0);
+
+    // The long-poll should have returned with data, not waited the full 2000ms.
+    assert!(
+        elapsed < std::time::Duration::from_millis(500),
+        "long-poll should wake immediately on produce; elapsed = {:?}",
+        elapsed
+    );
+
+    // Verify data was received.
+    let has_records = fetch_resp.responses[0].partitions[0]
+        .records
+        .as_ref()
+        .map_or(false, |r| !r.is_empty());
+    assert!(has_records, "long-poll response must contain the produced records");
+}
