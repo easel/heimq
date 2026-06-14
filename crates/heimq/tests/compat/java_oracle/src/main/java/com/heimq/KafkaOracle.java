@@ -18,8 +18,8 @@ import org.apache.kafka.common.serialization.StringSerializer;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.Future;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Java kafka-clients oracle for heimq.
@@ -90,6 +90,7 @@ public class KafkaOracle {
         check("transactional-produce", () -> transactionalProduce(bootstrap, txnTopic));
         check("transactional-consume-committed", () -> transactionalConsumeCommitted(bootstrap, txnTopic));
         check("transactional-consume-uncommitted", () -> transactionalConsumeUncommitted(bootstrap, txnTopic));
+        check("multi-member-group", () -> multiMemberGroup(bootstrap));
         check("produce-with-headers", () -> produceWithHeaders(bootstrap, topic + "-hdrs"));
         check("consume-headers-roundtrip", () -> consumeHeadersRoundtrip(bootstrap, topic + "-hdrs"));
         check("delete-topic", () -> deleteTopic(bootstrap, topic));
@@ -616,6 +617,76 @@ public class KafkaOracle {
             String val = got.get(key);
             if (val == null) throw new RuntimeException("missing key " + key);
             if (!val.equals(want)) throw new RuntimeException(key + ": got " + val + " want " + want);
+        }
+    }
+
+    private static void multiMemberGroup(String bootstrap) throws Exception {
+        final int N = 60;
+        String mmgTopic = "java-mmg-" + System.nanoTime();
+        String mmgGroup = "java-mmg-grp-" + System.nanoTime();
+
+        // Create 3-partition topic.
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            NewTopic nt = new NewTopic(mmgTopic, 3, (short) 1);
+            admin.createTopics(Collections.singletonList(nt)).all().get();
+        }
+
+        // Produce N records; track each by partition:offset.
+        Set<String> produced = ConcurrentHashMap.newKeySet();
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps(bootstrap))) {
+            List<Future<RecordMetadata>> futures = new ArrayList<>();
+            for (int i = 0; i < N; i++) {
+                futures.add(producer.send(
+                        new ProducerRecord<>(mmgTopic, "mmg-key-" + i, "mmg-val-" + i)));
+            }
+            for (Future<RecordMetadata> f : futures) {
+                RecordMetadata meta = f.get();
+                produced.add(meta.partition() + ":" + meta.offset());
+            }
+        }
+        if (produced.size() != N) {
+            throw new RuntimeException("expected " + N + " unique (partition,offset) pairs, got " + produced.size());
+        }
+
+        // Two consumers in the same group each run in their own thread (KafkaConsumer is not thread-safe).
+        Set<String> consumed = ConcurrentHashMap.newKeySet();
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicBoolean stop = new AtomicBoolean(false);
+
+        Runnable memberTask = () -> {
+            try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps(bootstrap, mmgGroup))) {
+                consumer.subscribe(Collections.singletonList(mmgTopic));
+                while (!stop.get()) {
+                    ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(200));
+                    for (ConsumerRecord<String, String> r : records) {
+                        consumed.add(r.partition() + ":" + r.offset());
+                        if (consumed.size() >= N) {
+                            done.countDown();
+                            return;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                done.countDown();
+            }
+        };
+
+        ExecutorService exec = Executors.newFixedThreadPool(2);
+        exec.submit(memberTask);
+        exec.submit(memberTask);
+
+        boolean completed = done.await(30, TimeUnit.SECONDS);
+        stop.set(true);
+        exec.shutdownNow();
+        exec.awaitTermination(5, TimeUnit.SECONDS);
+
+        if (!completed || consumed.size() < N) {
+            throw new RuntimeException("timeout: consumed " + consumed.size() + "/" + N + " unique records");
+        }
+        for (String k : produced) {
+            if (!consumed.contains(k)) {
+                throw new RuntimeException("produced record " + k + " not consumed by any member");
+            }
         }
     }
 

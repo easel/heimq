@@ -567,6 +567,12 @@ func multiMemberGroup(brokers []string, cfg *sarama.Config) error {
 	}
 	defer cg1.Close()
 
+	// Brief stagger: let member 1 complete its initial JoinGroup+SyncGroup
+	// before member 2 joins. Without this, member 2 can bump the generation
+	// while member 1 is mid-SyncGroup, creating a race that, under load,
+	// can cause both members to spin and never consume within the window.
+	time.Sleep(300 * time.Millisecond)
+
 	cg2, err := startMember()
 	if err != nil {
 		return fmt.Errorf("member 2: %w", err)
