@@ -21,6 +21,8 @@ const topic = `kafkajs-compat-${ts}`;
 const groupId = `kafkajs-group-${ts}`;
 const headerTopic = `kafkajs-hdrs-${ts}`;
 const headerGroup = `kafkajs-hdrs-group-${ts}`;
+const resumeTopic = `kafkajs-resume-${ts}`;
+const resumeGroup = `kafkajs-resume-${ts}`;
 
 const kafka = new Kafka({
   clientId: 'kafkajs-oracle',
@@ -149,6 +151,19 @@ async function run() {
     if (high < 5) throw new Error(`high watermark ${high} < 5`);
   });
 
+  // --- list-groups --- (must run before delete-groups cleans up the group)
+  await check('list-groups', async () => {
+    const groups = await admin.listGroups();
+    if (!groups || !Array.isArray(groups.groups)) {
+      throw new Error('listGroups returned unexpected shape');
+    }
+    // After consume-via-group the group must appear.
+    const found = groups.groups.find(g => g.groupId === groupId);
+    if (!found) {
+      throw new Error(`group "${groupId}" not found in listGroups result`);
+    }
+  });
+
   // --- describe-groups ---
   await check('describe-groups', async () => {
     const descriptions = await admin.describeGroups([groupId]);
@@ -172,9 +187,93 @@ async function run() {
     }
   });
 
+  // --- describe-configs ---
+  await check('describe-configs', async () => {
+    const configs = await admin.describeConfigs({
+      resources: [{ type: admin.constructor.ResourceTypes?.TOPIC ?? 2, name: topic }],
+      includeSynonyms: false,
+    });
+    if (!configs || !Array.isArray(configs.resources) || configs.resources.length === 0) {
+      throw new Error('describeConfigs returned no resources');
+    }
+    if (configs.resources[0].errorCode !== 0) {
+      throw new Error(`describeConfigs error code ${configs.resources[0].errorCode}`);
+    }
+  });
+
+  // --- offset-resume ---
+  // Produce 4 more records, consume 2, commit, reconnect, verify only the
+  // remaining 2 arrive (group resumes from the committed offset).
+  await check('create-resume-topic', () => createTopic(admin, resumeTopic));
+  const resumeProducer = kafka.producer({ allowAutoTopicCreation: false });
+  await resumeProducer.connect();
+  await resumeProducer.send({
+    topic: resumeTopic,
+    messages: Array.from({ length: 4 }, (_, i) => ({
+      key: `rkey-${i}`,
+      value: `rval-${i}`,
+    })),
+  });
+  await resumeProducer.disconnect();
+
+  await check('offset-resume', async () => {
+    // Session A: consume first 2, commit.
+    const consumerA = kafka.consumer({ groupId: resumeGroup });
+    await consumerA.connect();
+    await consumerA.subscribe({ topic: resumeTopic, fromBeginning: true });
+
+    let countA = 0;
+    let resolveA;
+    const doneA = new Promise(r => { resolveA = r; });
+    await consumerA.run({
+      eachMessage: async ({ message, heartbeat }) => {
+        countA++;
+        if (countA === 2) {
+          await consumerA.commitOffsets([{
+            topic: resumeTopic,
+            partition: 0,
+            offset: String(parseInt(message.offset) + 1),
+          }]);
+          resolveA();
+        }
+      },
+    });
+    await doneA;
+    await consumerA.disconnect();
+
+    // Session B: should only see the remaining 2 records.
+    const received = [];
+    const consumerB = kafka.consumer({ groupId: resumeGroup });
+    await consumerB.connect();
+    await consumerB.subscribe({ topic: resumeTopic, fromBeginning: true });
+
+    let resolveB;
+    const doneB = new Promise(r => { resolveB = r; });
+    const timeoutB = setTimeout(() => resolveB(), 8_000);
+
+    await consumerB.run({
+      eachMessage: async ({ message }) => {
+        received.push(message.value.toString());
+        if (received.length >= 2) {
+          clearTimeout(timeoutB);
+          resolveB();
+        }
+      },
+    });
+    await doneB;
+    await consumerB.disconnect();
+
+    if (received.length !== 2) {
+      throw new Error(`expected 2 records after resume, got ${received.length}`);
+    }
+    if (received[0] !== 'rval-2' || received[1] !== 'rval-3') {
+      throw new Error(`unexpected values after resume: ${JSON.stringify(received)}`);
+    }
+  });
+
   // --- delete-topics ---
   await check('delete-topics', async () => {
-    await admin.deleteTopics({ topics: [topic, headerTopic] });
+    await admin.deleteTopics({ topics: [topic, headerTopic, resumeTopic] });
   });
 
   await producer.disconnect();

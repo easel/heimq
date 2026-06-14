@@ -12,6 +12,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
@@ -32,7 +33,7 @@ func main() {
 }
 
 func run(bootstrap string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
 	ts := time.Now().UnixNano()
@@ -50,6 +51,7 @@ func run(bootstrap string) error {
 	resumeGroup := fmt.Sprintf("franz-resume-group-%d", ts)
 	txnTopic := fmt.Sprintf("franz-txn-%d", ts)
 	txnGroup := fmt.Sprintf("franz-txn-group-%d", ts)
+	mmgTopic := fmt.Sprintf("franz-mmg-%d", ts)
 
 	if err := check("create-topic", func() error {
 		return createTopic(ctx, bootstrap, topic)
@@ -240,6 +242,12 @@ func run(bootstrap string) error {
 	txnUncommitGroup := fmt.Sprintf("franz-txn-uncommit-group-%d", ts)
 	if err := check("transactional-consume-uncommitted", func() error {
 		return transactionalConsumeUncommitted(ctx, bootstrap, txnTopic, txnUncommitGroup)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("multi-member-group", func() error {
+		return multiMemberGroup(ctx, bootstrap, mmgTopic)
 	}); err != nil {
 		return err
 	}
@@ -1278,6 +1286,124 @@ func transactionalConsumeUncommitted(ctx context.Context, bootstrap, topic, grou
 
 	if err := cl.CommitUncommittedOffsets(ctx); err != nil {
 		return fmt.Errorf("commit uncommitted: %w", err)
+	}
+	return nil
+}
+
+// multiMemberGroup creates a 3-partition topic, produces N keyed records, then
+// starts TWO concurrent consumers in the same consumer group and verifies that
+// every produced record is consumed exactly once (no gaps, map-deduplicated by
+// (partition, offset) so rebalance re-deliveries are tolerated but not counted
+// as new records).  This exercises partition assignment and group rebalancing
+// with the single-node heimq broker.
+func multiMemberGroup(ctx context.Context, bootstrap, topic string) error {
+	const N = 60
+	group := fmt.Sprintf("mmg-grp-%d", time.Now().UnixNano())
+
+	// Create 3-partition topic.
+	{
+		cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+		if err != nil {
+			return fmt.Errorf("admin client: %w", err)
+		}
+		adm := kadm.NewClient(cl)
+		resp, err := adm.CreateTopics(ctx, 3, 1, nil, topic)
+		cl.Close()
+		if err != nil {
+			return fmt.Errorf("create topics: %w", err)
+		}
+		if r, ok := resp[topic]; ok && r.Err != nil {
+			return fmt.Errorf("topic create: %w", r.Err)
+		}
+	}
+
+	// Produce N records; collect produced (partition:offset) set.
+	produced := make(map[string]bool, N)
+	{
+		cl, err := kgo.NewClient(
+			kgo.SeedBrokers(bootstrap),
+			kgo.DefaultProduceTopic(topic),
+		)
+		if err != nil {
+			return fmt.Errorf("producer: %w", err)
+		}
+		for i := 0; i < N; i++ {
+			res := cl.ProduceSync(ctx, &kgo.Record{
+				Key:   []byte(fmt.Sprintf("mmg-key-%d", i)),
+				Value: []byte(fmt.Sprintf("mmg-val-%d", i)),
+			})
+			if err := res.FirstErr(); err != nil {
+				cl.Close()
+				return fmt.Errorf("produce %d: %w", i, err)
+			}
+			for _, pr := range res {
+				produced[fmt.Sprintf("%d:%d", pr.Record.Partition, pr.Record.Offset)] = true
+			}
+		}
+		cl.Close()
+	}
+	if len(produced) != N {
+		return fmt.Errorf("produced %d unique (partition,offset) pairs, expected %d", len(produced), N)
+	}
+
+	// Two concurrent consumers in the same group.
+	cctx, ccancel := context.WithTimeout(ctx, 30*time.Second)
+	defer ccancel()
+
+	// Each consumer sends its consumed (partition:offset) strings to ch.
+	// Buffer is large enough that goroutines never block on send.
+	ch := make(chan string, N*3)
+	var wg sync.WaitGroup
+
+	startConsumer := func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			cl, err := kgo.NewClient(
+				kgo.SeedBrokers(bootstrap),
+				kgo.ConsumerGroup(group),
+				kgo.ConsumeTopics(topic),
+				kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
+			)
+			if err != nil {
+				return // main goroutine will time out
+			}
+			defer cl.Close()
+			for cctx.Err() == nil {
+				fetches := cl.PollFetches(cctx)
+				fetches.EachRecord(func(r *kgo.Record) {
+					select {
+					case ch <- fmt.Sprintf("%d:%d", r.Partition, r.Offset):
+					case <-cctx.Done():
+					}
+				})
+			}
+		}()
+	}
+
+	startConsumer()
+	startConsumer()
+
+	// Collect until we have N unique records or timeout.
+	consumed := make(map[string]bool, N)
+	for len(consumed) < N {
+		select {
+		case k := <-ch:
+			consumed[k] = true
+		case <-cctx.Done():
+			ccancel()
+			wg.Wait()
+			return fmt.Errorf("timeout: consumed %d/%d unique records", len(consumed), N)
+		}
+	}
+	ccancel()
+	wg.Wait()
+
+	// Every produced record must appear in the consumed set.
+	for k := range produced {
+		if !consumed[k] {
+			return fmt.Errorf("produced record %s not consumed by any group member", k)
+		}
 	}
 	return nil
 }
