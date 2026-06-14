@@ -60,6 +60,10 @@ use kafka_protocol::messages::offset_for_leader_epoch_request::{
     OffsetForLeaderEpochRequest, OffsetForLeaderPartition, OffsetForLeaderTopic,
 };
 use kafka_protocol::messages::offset_for_leader_epoch_response::OffsetForLeaderEpochResponse;
+use kafka_protocol::messages::elect_leaders_request::{
+    ElectLeadersRequest, TopicPartitions as ElectLeadersTopicPartitions,
+};
+use kafka_protocol::messages::elect_leaders_response::ElectLeadersResponse;
 use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
 use kafka_protocol::records::{
@@ -2768,4 +2772,51 @@ fn contract_describe_topic_partitions_returns_partition_leader() {
     req_unknown.topics = vec![t_unknown];
     let resp_unknown: DescribeTopicPartitionsResponse = send_request(&server, 75, 0, &req_unknown);
     assert_eq!(resp_unknown.topics[0].error_code, 3, "unknown topic must return UNKNOWN_TOPIC_OR_PARTITION");
+}
+
+/// ElectLeaders (API 43 v0) — single-node broker always succeeds.
+///
+/// In a single-broker cluster the leader is always the current node, so any
+/// preferred-replica election is a no-op and must return error_code=0 for
+/// every requested partition. Also verifies the null `topic_partitions` form
+/// (elect all) returns a top-level error_code=0 with no per-topic results.
+#[test]
+fn contract_elect_leaders_succeeds_on_single_node() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-elect-leaders");
+
+    let create_resp = create_topic(&server, &topic, 2);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // ElectLeaders v0 is non-flexible (header_version=1 for versions 0-1).
+    let mut tp = ElectLeadersTopicPartitions::default();
+    tp.topic = TopicName(StrBytes::from_string(topic.clone()));
+    tp.partitions = vec![0, 1];
+
+    let mut req = ElectLeadersRequest::default();
+    req.topic_partitions = Some(vec![tp]);
+    req.timeout_ms = 5000;
+
+    let resp: ElectLeadersResponse = send_request(&server, 43, 0, &req);
+    assert_eq!(resp.error_code, 0, "ElectLeaders must succeed on a single-node broker");
+    assert_eq!(
+        resp.replica_election_results.len(),
+        1,
+        "one topic in result"
+    );
+    let results = &resp.replica_election_results[0];
+    for pr in &results.partition_result {
+        assert_eq!(
+            pr.error_code, 0,
+            "partition {} must succeed",
+            pr.partition_id
+        );
+    }
+
+    // Elect all (null topic_partitions) must also return no error.
+    let mut req_all = ElectLeadersRequest::default();
+    req_all.topic_partitions = None;
+    req_all.timeout_ms = 5000;
+    let resp_all: ElectLeadersResponse = send_request(&server, 43, 0, &req_all);
+    assert_eq!(resp_all.error_code, 0, "ElectLeaders with null topics must succeed");
 }
