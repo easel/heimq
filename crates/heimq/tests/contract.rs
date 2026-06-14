@@ -2007,3 +2007,189 @@ fn contract_describe_configs_returns_topic_configs() {
     let has_cleanup = result.configs.iter().any(|c| c.name.as_str() == "cleanup.policy");
     assert!(has_cleanup, "cleanup.policy must be in the DescribeConfigs response");
 }
+
+#[test]
+fn contract_list_groups_returns_joined_group() {
+    use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
+    use kafka_protocol::messages::list_groups_response::ListGroupsResponse;
+
+    let server = TestServer::start();
+    let group = unique_group("contract-list-groups");
+
+    // Join a group first.
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    let mut join = JoinGroupRequest::default();
+    join.group_id = GroupId(StrBytes::from_string(group.clone()));
+    join.session_timeout_ms = 30000;
+    join.rebalance_timeout_ms = 30000;
+    join.member_id = StrBytes::from_string(String::new());
+    join.protocol_type = StrBytes::from_string("consumer".to_string());
+    join.protocols = vec![protocol.clone()];
+
+    let r1: JoinGroupResponse = send_request(&server, 11, 1, &join);
+    assert_eq!(r1.error_code, 79);
+    join.member_id = r1.member_id.clone();
+    let r2: JoinGroupResponse = send_request(&server, 11, 1, &join);
+    assert_eq!(r2.error_code, 0, "JoinGroup should succeed");
+
+    // ListGroups v0 (non-flexible).
+    let req = ListGroupsRequest::default();
+    let resp: ListGroupsResponse = send_request(&server, 16, 0, &req);
+    assert_eq!(resp.error_code, 0, "ListGroups error");
+    let found = resp.groups.iter().any(|g| g.group_id.0.as_str() == group.as_str());
+    assert!(found, "ListGroups must return the joined group '{group}'");
+}
+
+#[test]
+fn contract_describe_groups_active_member() {
+    use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
+    use kafka_protocol::messages::describe_groups_response::DescribeGroupsResponse;
+
+    let server = TestServer::start();
+    let group = unique_group("contract-describe-groups");
+
+    // Join and sync to get the group into Stable state.
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    let mut join = JoinGroupRequest::default();
+    join.group_id = GroupId(StrBytes::from_string(group.clone()));
+    join.session_timeout_ms = 30000;
+    join.rebalance_timeout_ms = 30000;
+    join.member_id = StrBytes::from_string(String::new());
+    join.protocol_type = StrBytes::from_string("consumer".to_string());
+    join.protocols = vec![protocol.clone()];
+
+    let r1: JoinGroupResponse = send_request(&server, 11, 1, &join);
+    assert_eq!(r1.error_code, 79);
+    join.member_id = r1.member_id.clone();
+    let r2: JoinGroupResponse = send_request(&server, 11, 1, &join);
+    assert_eq!(r2.error_code, 0);
+    let generation_id = r2.generation_id;
+    let member_id = r2.member_id.clone();
+
+    let mut assignment = SyncGroupRequestAssignment::default();
+    assignment.member_id = member_id.clone();
+    assignment.assignment = bytes::Bytes::from(vec![0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+    let mut sync = SyncGroupRequest::default();
+    sync.group_id = GroupId(StrBytes::from_string(group.clone()));
+    sync.generation_id = generation_id;
+    sync.member_id = member_id.clone();
+    sync.assignments = vec![assignment];
+    let sync_r: SyncGroupResponse = send_request(&server, 14, 1, &sync);
+    assert_eq!(sync_r.error_code, 0, "SyncGroup should succeed");
+
+    // DescribeGroups v0 (non-flexible).
+    let mut req = DescribeGroupsRequest::default();
+    req.groups = vec![GroupId(StrBytes::from_string(group.clone()))];
+    let resp: DescribeGroupsResponse = send_request(&server, 15, 0, &req);
+
+    assert_eq!(resp.groups.len(), 1, "should describe one group");
+    let g = &resp.groups[0];
+    assert_eq!(g.error_code, 0, "DescribeGroups error");
+    assert_eq!(g.group_id.0.as_str(), group.as_str());
+    assert_eq!(g.protocol_type.as_str(), "consumer");
+    assert_eq!(g.group_state.as_str(), "Stable", "group should be Stable after SyncGroup");
+    assert_eq!(g.members.len(), 1, "should have exactly one member");
+    assert_eq!(g.members[0].member_id, member_id);
+}
+
+#[test]
+fn contract_alter_configs_no_op_success() {
+    use kafka_protocol::messages::alter_configs_request::{
+        AlterableConfig, AlterConfigsRequest, AlterConfigsResource,
+    };
+    use kafka_protocol::messages::alter_configs_response::AlterConfigsResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-alter-cfg");
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0, "create failed");
+
+    // resource_type 2 = TOPIC; config key retention.ms.
+    let mut cfg = AlterableConfig::default();
+    cfg.name = StrBytes::from_string("retention.ms".to_string());
+    cfg.value = Some(StrBytes::from_string("86400000".to_string()));
+
+    let mut resource = AlterConfigsResource::default();
+    resource.resource_type = 2;
+    resource.resource_name = StrBytes::from_string(topic.clone());
+    resource.configs = vec![cfg];
+
+    let mut req = AlterConfigsRequest::default();
+    req.resources = vec![resource];
+    req.validate_only = false;
+
+    // Version 0 (non-flexible).
+    let resp: AlterConfigsResponse = send_request(&server, 33, 0, &req);
+    assert_eq!(resp.responses.len(), 1);
+    assert_eq!(resp.responses[0].error_code, 0, "AlterConfigs must return success");
+    assert_eq!(resp.responses[0].resource_name.as_str(), topic.as_str());
+}
+
+#[test]
+fn contract_list_offsets_timestamp_returns_offset() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-list-offsets-ts");
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0, "create failed");
+
+    // Produce 3 records.
+    let records = vec![new_record(0), new_record(1), new_record(2)];
+    let batch = encode_record_batch(&records);
+    let produce_resp = produce_batch(&server, &topic, batch);
+    assert_eq!(produce_resp.responses[0].partition_responses[0].error_code, 0);
+
+    // ListOffsets with timestamp -1 (latest).
+    let mut lp_latest = ListOffsetsPartition::default();
+    lp_latest.partition_index = 0;
+    lp_latest.timestamp = -1;
+
+    let mut lt = ListOffsetsTopic::default();
+    lt.name = TopicName(StrBytes::from_string(topic.clone()));
+    lt.partitions = vec![lp_latest];
+
+    let mut req = ListOffsetsRequest::default();
+    req.replica_id = BrokerId(-1);
+    req.topics = vec![lt];
+    let resp: ListOffsetsResponse = send_request(&server, 2, 1, &req);
+    assert_eq!(resp.topics[0].partitions[0].error_code, 0);
+    assert_eq!(resp.topics[0].partitions[0].offset, 3, "latest offset should be 3 after producing 3 records");
+
+    // ListOffsets with timestamp -2 (earliest).
+    let mut lp_earliest = ListOffsetsPartition::default();
+    lp_earliest.partition_index = 0;
+    lp_earliest.timestamp = -2;
+
+    let mut lt2 = ListOffsetsTopic::default();
+    lt2.name = TopicName(StrBytes::from_string(topic.clone()));
+    lt2.partitions = vec![lp_earliest];
+
+    let mut req2 = ListOffsetsRequest::default();
+    req2.replica_id = BrokerId(-1);
+    req2.topics = vec![lt2];
+    let resp2: ListOffsetsResponse = send_request(&server, 2, 1, &req2);
+    assert_eq!(resp2.topics[0].partitions[0].error_code, 0);
+    assert_eq!(resp2.topics[0].partitions[0].offset, 0, "earliest offset should be 0");
+
+    // ListOffsets with a specific timestamp (>0) — should return a valid offset.
+    let mut lp_ts = ListOffsetsPartition::default();
+    lp_ts.partition_index = 0;
+    lp_ts.timestamp = 1; // arbitrary positive timestamp
+
+    let mut lt3 = ListOffsetsTopic::default();
+    lt3.name = TopicName(StrBytes::from_string(topic));
+    lt3.partitions = vec![lp_ts];
+
+    let mut req3 = ListOffsetsRequest::default();
+    req3.replica_id = BrokerId(-1);
+    req3.topics = vec![lt3];
+    let resp3: ListOffsetsResponse = send_request(&server, 2, 1, &req3);
+    assert_eq!(resp3.topics[0].partitions[0].error_code, 0, "timestamp ListOffsets must not error");
+    // offset >= 0 is all we guarantee for in-memory storage without a timestamp index.
+    assert!(resp3.topics[0].partitions[0].offset >= 0, "timestamp ListOffsets must return a non-negative offset");
+}
