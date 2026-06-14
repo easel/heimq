@@ -543,7 +543,7 @@ fn sync_group_non_leader_before_leader_syncs_returns_rebalance_in_progress() {
     buf.put_i32(0);
 
     let response = sync_group::handle(0, &buf, consumer_groups.as_ref()).unwrap();
-    assert_eq!(response.error_code, 22); // REBALANCE_IN_PROGRESS — must retry
+    assert_eq!(response.error_code, 27); // REBALANCE_IN_PROGRESS (22 is ILLEGAL_GENERATION) — must retry without resetting member_id
     assert!(response.assignment.is_empty());
 }
 
