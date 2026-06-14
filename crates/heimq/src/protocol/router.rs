@@ -8,7 +8,7 @@ use crate::protocol::{decode_request, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend};
 use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
-use kafka_protocol::protocol::Encodable;
+use kafka_protocol::protocol::{Decodable, Encodable};
 use std::sync::Arc;
 use tracing::{debug, warn};
 
@@ -261,12 +261,29 @@ impl Router {
     }
 
     fn handle_produce(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        use kafka_protocol::messages::produce_request::ProduceRequest;
+
+        // Decode acks up front: acks=0 means fire-and-forget — the broker must
+        // NOT send a response. We still store the records; we just return empty
+        // bytes to signal "no reply" to run_writer.
+        let acks_zero = {
+            let mut buf = bytes::Bytes::copy_from_slice(body);
+            ProduceRequest::decode(&mut buf, header.api_version)
+                .map(|req| req.acks == 0)
+                .unwrap_or(false)
+        };
+
         let ps = self.producer_state.clone();
         let tm = self.transaction_manager.clone();
-        self.handle_and_encode(
-            header,
-            Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps, &tm)),
-        )
+        if acks_zero {
+            let _ = produce::handle(header.api_version, body, &self.storage, &ps, &tm);
+            Ok(bytes::Bytes::new())
+        } else {
+            self.handle_and_encode(
+                header,
+                Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps, &tm)),
+            )
+        }
     }
 
     fn handle_fetch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {

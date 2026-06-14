@@ -352,7 +352,11 @@ async fn run_writer(
     while let Some(frame) = rx.recv().await {
         match router.route_async(&frame).await {
             Ok(response) => {
-                stream.write_all(&response).await?;
+                // Empty response = acks=0 produce or other no-reply sentinel:
+                // no bytes written (Kafka protocol requirement).
+                if !response.is_empty() {
+                    stream.write_all(&response).await?;
+                }
                 consecutive_errors = 0;
             }
             Err(e) => {

@@ -1887,6 +1887,89 @@ fn contract_offset_delete_clears_committed_offset() {
     );
 }
 
+/// Verify that acks=0 produce (fire-and-forget) elicits NO response from the
+/// broker, and that a subsequent request on the same connection receives the
+/// CORRECT response — not a spurious produce reply that would corrupt the
+/// protocol stream.
+#[test]
+fn contract_produce_acks0_no_response_sent() {
+    use std::io::{Read as _, Write as _};
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-acks0");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0, "create failed");
+
+    let mut stream = std::net::TcpStream::connect(("127.0.0.1", server.port))
+        .expect("connect");
+    stream.set_read_timeout(Some(Duration::from_secs(3))).unwrap();
+    stream.set_write_timeout(Some(Duration::from_secs(3))).unwrap();
+
+    // Build a Produce request with acks=0.
+    let record = new_record(0);
+    let batch = encode_record_batch(&[record]);
+
+    let mut partition = PartitionProduceData::default();
+    partition.index = 0;
+    partition.records = Some(batch);
+
+    let mut topic_data = TopicProduceData::default();
+    topic_data.name = TopicName(StrBytes::from_string(topic.clone()));
+    topic_data.partition_data = vec![partition];
+
+    let mut produce_req = ProduceRequest::default();
+    produce_req.acks = 0; // fire-and-forget
+    produce_req.timeout_ms = 1000;
+    produce_req.topic_data = vec![topic_data];
+
+    let produce_frame = encode_request(0, 2, 100, None, &produce_req);
+    stream.write_all(&produce_frame).expect("write produce");
+
+    // Immediately send a ListOffsets request with a different correlation_id.
+    let mut lo_part = ListOffsetsPartition::default();
+    lo_part.partition_index = 0;
+    lo_part.timestamp = -1; // latest
+
+    let mut lo_topic = ListOffsetsTopic::default();
+    lo_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    lo_topic.partitions = vec![lo_part];
+
+    let mut lo_req = ListOffsetsRequest::default();
+    lo_req.replica_id = BrokerId(-1);
+    lo_req.topics = vec![lo_topic];
+
+    let lo_frame = encode_request(2, 1, 999, None, &lo_req);
+    stream.write_all(&lo_frame).expect("write list_offsets");
+
+    // Read the next response. It MUST be the ListOffsets response (correlation_id=999).
+    // If the server wrongly sent a produce response first, the correlation_id
+    // check here would catch the mismatch (we'd see 100 instead of 999).
+    let mut len_buf = [0u8; 4];
+    stream.read_exact(&mut len_buf).expect("read length");
+    let len = i32::from_be_bytes(len_buf) as usize;
+    let mut resp_buf = vec![0u8; len];
+    stream.read_exact(&mut resp_buf).expect("read response");
+
+    let mut cursor = std::io::Cursor::new(resp_buf);
+    let correlation_id = cursor.get_i32();
+    assert_eq!(
+        correlation_id, 999,
+        "first response must be the ListOffsets reply (correlation_id=999), \
+         not a spurious acks=0 produce response (would be 100)"
+    );
+
+    // Decode as ListOffsetsResponse to confirm it's valid.
+    let lo_resp = ListOffsetsResponse::decode(&mut cursor, 1).expect("decode list_offsets");
+    assert_eq!(lo_resp.topics[0].partitions[0].error_code, 0, "ListOffsets error");
+    // The produce with acks=0 MUST have been stored: HWM should be ≥ 1.
+    assert!(
+        lo_resp.topics[0].partitions[0].offset >= 1,
+        "acks=0 produce must be stored; HWM = {}",
+        lo_resp.topics[0].partitions[0].offset
+    );
+}
+
 /// Verify that DescribeConfigs returns at least one named config entry for a
 /// topic resource and that the response carries no error code.
 #[test]
