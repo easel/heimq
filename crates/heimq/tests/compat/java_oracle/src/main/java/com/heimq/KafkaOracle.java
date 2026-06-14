@@ -58,7 +58,8 @@ public class KafkaOracle {
 
         check("create-topic", () -> createTopic(bootstrap, topic));
         check("produce", () -> produce(bootstrap, topic));
-        check("consume-via-group", () -> consumeViaGroup(bootstrap, topic));
+        check("consume-via-group", () -> consumeViaGroup(bootstrap, topic, oracleGroup));
+        check("list-consumer-group-offsets", () -> listConsumerGroupOffsets(bootstrap, topic, oracleGroup, 5L));
         check("describe-configs", () -> describeConfigs(bootstrap, topic));
         check("alter-configs", () -> alterConfigs(bootstrap, topic));
         check("incremental-alter-configs", () -> incrementalAlterConfigs(bootstrap, topic));
@@ -206,8 +207,7 @@ public class KafkaOracle {
         }
     }
 
-    private static void consumeViaGroup(String bootstrap, String topic) throws Exception {
-        String group = "java-oracle-group-" + System.nanoTime();
+    private static void consumeViaGroup(String bootstrap, String topic, String group) throws Exception {
         Map<String, String> received = new LinkedHashMap<>();
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps(bootstrap, group))) {
@@ -279,6 +279,31 @@ public class KafkaOracle {
             Map<String, NewPartitions> newPartitions = Collections.singletonMap(
                     topic, NewPartitions.increaseTo(3));
             admin.createPartitions(newPartitions).all().get();
+        }
+    }
+
+    private static void listConsumerGroupOffsets(String bootstrap, String topic, String group, long wantOffset) throws Exception {
+        try (Admin admin = Admin.create(adminProps(bootstrap))) {
+            Map<TopicPartition, OffsetSpec> partitions = Collections.singletonMap(
+                    new TopicPartition(topic, 0), OffsetSpec.latest());
+            ListConsumerGroupOffsetsSpec spec = new ListConsumerGroupOffsetsSpec()
+                    .topicPartitions(Collections.singletonList(new TopicPartition(topic, 0)));
+            Map<String, ListConsumerGroupOffsetsSpec> groupSpecs =
+                    Collections.singletonMap(group, spec);
+            Map<String, Map<TopicPartition, org.apache.kafka.clients.consumer.OffsetAndMetadata>> result =
+                    admin.listConsumerGroupOffsets(groupSpecs).all().get();
+            Map<TopicPartition, org.apache.kafka.clients.consumer.OffsetAndMetadata> offsets = result.get(group);
+            if (offsets == null) {
+                throw new RuntimeException("no offset data for group " + group);
+            }
+            TopicPartition tp = new TopicPartition(topic, 0);
+            org.apache.kafka.clients.consumer.OffsetAndMetadata oam = offsets.get(tp);
+            if (oam == null) {
+                throw new RuntimeException("no committed offset for " + topic + " partition 0");
+            }
+            if (oam.offset() != wantOffset) {
+                throw new RuntimeException("committed offset: got " + oam.offset() + " want " + wantOffset);
+            }
         }
     }
 

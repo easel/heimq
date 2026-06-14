@@ -59,6 +59,12 @@ func run(bootstrap, topic string) error {
 		return err
 	}
 
+	if err := check("list-consumer-group-offsets", func() error {
+		return listConsumerGroupOffsets(brokers, group, topic, 5, cfg)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("offset-delete", func() error {
 		return deleteConsumerGroupOffset(brokers, group, topic, 0, cfg)
 	}); err != nil {
@@ -612,6 +618,34 @@ func listGroups(brokers []string, wantGroup string, cfg *sarama.Config) error {
 	}
 	if _, ok := groups[wantGroup]; !ok {
 		return fmt.Errorf("group %q not found in list; got %d groups", wantGroup, len(groups))
+	}
+	return nil
+}
+
+// listConsumerGroupOffsets uses sarama ClusterAdmin to exercise OffsetFetch (API 9).
+// After consume-via-group commits offsets, the committed offset for partition 0
+// must equal wantOffset.
+func listConsumerGroupOffsets(brokers []string, group, topic string, wantOffset int64, cfg *sarama.Config) error {
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("new admin: %w", err)
+	}
+	defer admin.Close()
+
+	resp, err := admin.ListConsumerGroupOffsets(group, map[string][]int32{topic: {0}})
+	if err != nil {
+		return fmt.Errorf("list consumer group offsets: %w", err)
+	}
+
+	block, ok := resp.Blocks[topic][0]
+	if !ok {
+		return fmt.Errorf("no offset block for topic %s partition 0", topic)
+	}
+	if block.Err != sarama.ErrNoError {
+		return fmt.Errorf("offset block error for partition 0: %v", block.Err)
+	}
+	if block.Offset != wantOffset {
+		return fmt.Errorf("committed offset: got %d want %d", block.Offset, wantOffset)
 	}
 	return nil
 }

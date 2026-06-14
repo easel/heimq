@@ -18,6 +18,34 @@
 use heimq::test_support::TestServer;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Mutex;
+
+// Serialise all `go build` invocations — the Go linker's `writeBlocks` is
+// memory-hungry and two concurrent linker processes trigger a SIGBUS on
+// memory-constrained hosts (observed under OrbStack/arm64 when franz-go and
+// sarama both compile simultaneously in parallel test threads).
+static GO_BUILD_LOCK: Mutex<()> = Mutex::new(());
+
+/// Build a Go module in `src_dir` and return the path to the compiled binary.
+/// The `go build` step is serialised via `GO_BUILD_LOCK`; the binary is
+/// written to a per-module temp path and can be run concurrently once built.
+fn build_go_oracle(src_dir: &PathBuf, bin_name: &str) -> PathBuf {
+    let out = std::env::temp_dir().join(format!("heimq-go-{bin_name}"));
+    let _guard = GO_BUILD_LOCK.lock().expect("go build lock poisoned");
+    let result = Command::new("go")
+        .args(["build", "-o", out.to_str().unwrap(), "."])
+        .current_dir(src_dir)
+        .output()
+        .expect("failed to spawn go build");
+    assert!(
+        result.status.success(),
+        "go build failed for {bin_name} in {}:\nstdout: {}\nstderr: {}",
+        src_dir.display(),
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr),
+    );
+    out
+}
 
 fn go_available() -> bool {
     Command::new("go")
@@ -79,15 +107,14 @@ fn test_franz_go_produce_consume_consumer_group() {
         return;
     }
 
-    let server = TestServer::start();
     let dir = franz_go_dir();
+    let bin = build_go_oracle(&dir, "franz-compat");
+    let server = TestServer::start();
 
-    let out = Command::new("go")
-        .args(["run", "."])
+    let out = Command::new(&bin)
         .arg(server.bootstrap_servers())
-        .current_dir(&dir)
         .output()
-        .expect("failed to spawn go run");
+        .expect("failed to spawn franz-go oracle");
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -117,16 +144,15 @@ fn test_sarama_produce_consume_consumer_group() {
     }
 
     let topic = "sarama-compat-topic";
-    let server = TestServer::start();
     let dir = sarama_oracle_dir();
+    let bin = build_go_oracle(&dir, "sarama-oracle");
+    let server = TestServer::start();
 
-    let out = Command::new("go")
-        .args(["run", "."])
+    let out = Command::new(&bin)
         .arg(server.bootstrap_servers())
         .arg(topic)
-        .current_dir(&dir)
         .output()
-        .expect("failed to spawn go run");
+        .expect("failed to spawn sarama oracle");
 
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);

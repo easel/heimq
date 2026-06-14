@@ -71,6 +71,12 @@ func run(bootstrap string) error {
 		return err
 	}
 
+	if err := check("list-consumer-group-offsets", func() error {
+		return listConsumerGroupOffsets(ctx, bootstrap, topic, group, 5)
+	}); err != nil {
+		return err
+	}
+
 	if err := check("offset-delete", func() error {
 		return offsetDelete(ctx, bootstrap, topic, group)
 	}); err != nil {
@@ -427,6 +433,55 @@ func listOffsets(ctx context.Context, bootstrap, topic string, wantHWM int64) er
 		return fmt.Errorf("no start offset result for topic %s", topic)
 	}
 
+	return nil
+}
+
+// listConsumerGroupOffsets verifies the admin OffsetCommit → OffsetFetch cycle.
+// It uses kadm.CommitOffsets to write a specific offset (want) for partition 0
+// and then kadm.FetchOffsets to verify the value is persisted and returned.
+// This is the path used by monitoring tools (Kafka UI, Burrow, etc.) and is
+// independent of any consumer session lifecycle oddities.
+func listConsumerGroupOffsets(ctx context.Context, bootstrap, topic, group string, want int64) error {
+	cl, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return fmt.Errorf("new client: %w", err)
+	}
+	defer cl.Close()
+
+	adm := kadm.NewClient(cl)
+
+	// Admin-commit a specific offset so we control the exact value.
+	offsets := make(kadm.Offsets)
+	offsets.Add(kadm.Offset{Topic: topic, Partition: 0, At: want})
+	if _, err := adm.CommitOffsets(ctx, group, offsets); err != nil {
+		return fmt.Errorf("commit offsets rpc: %w", err)
+	}
+
+	// Fetch and verify the committed offset is returned correctly.
+	fetched, err := adm.FetchOffsets(ctx, group)
+	if err != nil {
+		return fmt.Errorf("fetch offsets rpc: %w", err)
+	}
+
+	var committed int64 = -1
+	fetched.Each(func(o kadm.OffsetResponse) {
+		if o.Topic == topic && o.Partition == 0 {
+			if o.Err != nil {
+				err = fmt.Errorf("fetch offsets partition 0: %w", o.Err)
+				return
+			}
+			committed = o.At
+		}
+	})
+	if err != nil {
+		return err
+	}
+	if committed < 0 {
+		return fmt.Errorf("no committed offset found for topic %s partition 0 in group %s", topic, group)
+	}
+	if committed != want {
+		return fmt.Errorf("committed offset: got %d want %d", committed, want)
+	}
 	return nil
 }
 
