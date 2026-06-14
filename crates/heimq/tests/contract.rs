@@ -2623,3 +2623,106 @@ fn contract_offset_for_leader_epoch_returns_hwm() {
     assert_eq!(resp.topics[0].partitions[0].end_offset, 4, "end_offset must equal HWM (4)");
     assert_eq!(resp.topics[0].partitions[0].leader_epoch, 0, "single-node leader_epoch is always 0");
 }
+
+#[test]
+fn contract_produce_compressed_batch_roundtrip() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-compressed");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // Produce a snappy-compressed batch (Compression::Snappy is available in kafka-protocol).
+    let records = vec![new_record(0), new_record(1), new_record(2)];
+    let mut buf = BytesMut::new();
+    RecordBatchEncoder::encode(
+        &mut buf,
+        &records,
+        &RecordEncodeOptions { version: 2, compression: Compression::Gzip },
+    )
+    .expect("encode compressed batch");
+    let compressed_batch = buf.freeze();
+
+    let produce_resp = produce_batch(&server, &topic, compressed_batch);
+    assert_eq!(produce_resp.responses[0].partition_responses[0].error_code, 0);
+
+    // Fetch back — the broker returns the compressed bytes intact.
+    let mut fp = FetchPartition::default();
+    fp.partition = 0;
+    fp.fetch_offset = 0;
+    fp.partition_max_bytes = 1024 * 1024;
+
+    let mut ft = FetchTopic::default();
+    ft.topic = TopicName(StrBytes::from_string(topic));
+    ft.partitions = vec![fp];
+
+    let mut fetch_req = FetchRequest::default();
+    fetch_req.replica_id = BrokerId(-1);
+    fetch_req.max_wait_ms = 0;
+    fetch_req.min_bytes = 0;
+    fetch_req.max_bytes = 1024 * 1024;
+    fetch_req.topics = vec![ft];
+
+    let fetch_resp: FetchResponse = send_request(&server, 1, 3, &fetch_req);
+    let part = &fetch_resp.responses[0].partitions[0];
+    assert_eq!(part.error_code, 0, "fetch of compressed batch must succeed");
+    let raw = part.records.as_ref().expect("must have records");
+    // Decode: the kafka-protocol crate decompresses automatically.
+    let mut bytes = bytes::Bytes::copy_from_slice(raw);
+    let batch = RecordBatchDecoder::decode(&mut bytes).expect("decode compressed batch");
+    assert_eq!(batch.records.len(), 3, "all 3 compressed records must be decoded");
+}
+
+#[test]
+fn contract_fetch_from_multiple_topics() {
+    let server = TestServer::start();
+    let topic_a = unique_topic("contract-multi-topic-a");
+    let topic_b = unique_topic("contract-multi-topic-b");
+
+    // Create two topics.
+    assert_eq!(create_topic(&server, &topic_a, 1).topics[0].error_code, 0);
+    assert_eq!(create_topic(&server, &topic_b, 1).topics[0].error_code, 0);
+
+    // Produce to each.
+    let batch_a = encode_record_batch(&[new_record(0)]);
+    let batch_b = encode_record_batch(&[new_record(1)]);
+
+    let produce_a = produce_batch(&server, &topic_a, batch_a);
+    let produce_b = produce_batch(&server, &topic_b, batch_b);
+    assert_eq!(produce_a.responses[0].partition_responses[0].error_code, 0);
+    assert_eq!(produce_b.responses[0].partition_responses[0].error_code, 0);
+
+    // Fetch from both topics in one request.
+    let mut fp = FetchPartition::default();
+    fp.partition = 0;
+    fp.fetch_offset = 0;
+    fp.partition_max_bytes = 1024 * 1024;
+
+    let mut ft_a = FetchTopic::default();
+    ft_a.topic = TopicName(StrBytes::from_string(topic_a.clone()));
+    ft_a.partitions = vec![fp.clone()];
+
+    let mut ft_b = FetchTopic::default();
+    ft_b.topic = TopicName(StrBytes::from_string(topic_b.clone()));
+    ft_b.partitions = vec![fp];
+
+    let mut fetch_req = FetchRequest::default();
+    fetch_req.replica_id = BrokerId(-1);
+    fetch_req.max_wait_ms = 0;
+    fetch_req.min_bytes = 0;
+    fetch_req.max_bytes = 1024 * 1024;
+    fetch_req.topics = vec![ft_a, ft_b];
+
+    let fetch_resp: FetchResponse = send_request(&server, 1, 3, &fetch_req);
+    assert_eq!(fetch_resp.responses.len(), 2, "must get responses for both topics");
+
+    let resp_a = fetch_resp.responses.iter().find(|r| r.topic.0.as_str() == topic_a.as_str())
+        .expect("response for topic_a");
+    let resp_b = fetch_resp.responses.iter().find(|r| r.topic.0.as_str() == topic_b.as_str())
+        .expect("response for topic_b");
+
+    assert_eq!(resp_a.partitions[0].error_code, 0);
+    assert_eq!(resp_b.partitions[0].error_code, 0);
+    assert!(resp_a.partitions[0].records.is_some(), "topic_a must have records");
+    assert!(resp_b.partitions[0].records.is_some(), "topic_b must have records");
+}
