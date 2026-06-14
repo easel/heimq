@@ -1805,3 +1805,84 @@ fn contract_create_partitions_increases_count() {
         "topic should now have 3 partitions after CreatePartitions"
     );
 }
+
+/// Verify that OffsetDelete removes a committed consumer-group offset and that
+/// a subsequent OffsetFetch returns offset -1 (no committed offset).
+#[test]
+fn contract_offset_delete_clears_committed_offset() {
+    use kafka_protocol::messages::offset_delete_request::{
+        OffsetDeleteRequest, OffsetDeleteRequestPartition, OffsetDeleteRequestTopic,
+    };
+    use kafka_protocol::messages::offset_delete_response::OffsetDeleteResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-offset-del");
+    let group = unique_group("contract-offset-del-group");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0, "create failed");
+
+    // Commit offset 10 for the group.
+    let mut commit_part = OffsetCommitRequestPartition::default();
+    commit_part.partition_index = 0;
+    commit_part.committed_offset = 10;
+    commit_part.commit_timestamp = 0;
+
+    let mut commit_topic = OffsetCommitRequestTopic::default();
+    commit_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    commit_topic.partitions = vec![commit_part];
+
+    let mut commit_req = OffsetCommitRequest::default();
+    commit_req.group_id = GroupId(StrBytes::from_string(group.clone()));
+    commit_req.generation_id_or_member_epoch = 1;
+    commit_req.member_id = StrBytes::from_string("m1".to_string());
+    commit_req.topics = vec![commit_topic];
+
+    let commit_resp: OffsetCommitResponse = send_request(&server, 8, 1, &commit_req);
+    assert_eq!(commit_resp.topics[0].partitions[0].error_code, 0, "commit error");
+
+    // Verify it's committed (offset = 10).
+    let mut fetch_topic = OffsetFetchRequestTopic::default();
+    fetch_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    fetch_topic.partition_indexes = vec![0];
+
+    let mut fetch_req = OffsetFetchRequest::default();
+    fetch_req.group_id = GroupId(StrBytes::from_string(group.clone()));
+    fetch_req.topics = Some(vec![fetch_topic.clone()]);
+
+    let fetch_resp: OffsetFetchResponse = send_request(&server, 9, 1, &fetch_req);
+    assert_eq!(
+        fetch_resp.topics[0].partitions[0].committed_offset, 10,
+        "offset should be 10 before deletion"
+    );
+
+    // OffsetDelete: delete the committed offset.
+    let mut del_part = OffsetDeleteRequestPartition::default();
+    del_part.partition_index = 0;
+
+    let mut del_topic = OffsetDeleteRequestTopic::default();
+    del_topic.name = TopicName(StrBytes::from_string(topic.clone()));
+    del_topic.partitions = vec![del_part];
+
+    let mut del_req = OffsetDeleteRequest::default();
+    del_req.group_id = GroupId(StrBytes::from_string(group.clone()));
+    del_req.topics = vec![del_topic];
+
+    let del_resp: OffsetDeleteResponse = send_request(&server, 47, 0, &del_req);
+    assert_eq!(del_resp.error_code, 0, "OffsetDelete top-level error");
+    assert_eq!(
+        del_resp.topics[0].partitions[0].error_code, 0,
+        "OffsetDelete partition error"
+    );
+
+    // After deletion, OffsetFetch must return -1 (no committed offset).
+    let mut fetch_req2 = OffsetFetchRequest::default();
+    fetch_req2.group_id = GroupId(StrBytes::from_string(group.clone()));
+    fetch_req2.topics = Some(vec![fetch_topic]);
+
+    let fetch_resp2: OffsetFetchResponse = send_request(&server, 9, 1, &fetch_req2);
+    assert_eq!(
+        fetch_resp2.topics[0].partitions[0].committed_offset, -1,
+        "OffsetFetch after OffsetDelete must return -1 (no committed offset)"
+    );
+}
