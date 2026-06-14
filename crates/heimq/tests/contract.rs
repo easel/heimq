@@ -4,7 +4,7 @@
 //! for supported endpoints.
 
 use bytes::{Buf, BufMut, BytesMut};
-use heimq::protocol::SUPPORTED_APIS;
+use heimq::protocol::{is_flexible, SUPPORTED_APIS};
 use heimq::test_support::{unique_group, unique_topic, TestServer};
 use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
 use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
@@ -40,6 +40,22 @@ use kafka_protocol::messages::produce_request::{
 use kafka_protocol::messages::produce_response::ProduceResponse;
 use kafka_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
 use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
+use kafka_protocol::messages::delete_groups_request::DeleteGroupsRequest;
+use kafka_protocol::messages::delete_groups_response::DeleteGroupsResponse;
+use kafka_protocol::messages::describe_cluster_request::DescribeClusterRequest;
+use kafka_protocol::messages::describe_cluster_response::DescribeClusterResponse;
+use kafka_protocol::messages::incremental_alter_configs_request::{
+    AlterableConfig, AlterConfigsResource, IncrementalAlterConfigsRequest,
+};
+use kafka_protocol::messages::incremental_alter_configs_response::IncrementalAlterConfigsResponse;
+use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
+use kafka_protocol::messages::list_groups_response::ListGroupsResponse;
+use kafka_protocol::messages::list_transactions_request::ListTransactionsRequest;
+use kafka_protocol::messages::list_transactions_response::ListTransactionsResponse;
+use kafka_protocol::messages::offset_for_leader_epoch_request::{
+    OffsetForLeaderEpochRequest, OffsetForLeaderPartition, OffsetForLeaderTopic,
+};
+use kafka_protocol::messages::offset_for_leader_epoch_response::OffsetForLeaderEpochResponse;
 use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
 use kafka_protocol::records::{
@@ -68,6 +84,11 @@ fn encode_request<R: Encodable>(
             body.put_slice(id.as_bytes());
         }
         None => body.put_i16(-1),
+    }
+
+    // Flexible request headers (v2) require an empty tagged-fields block after client_id.
+    if is_flexible(api_key, api_version) {
+        body.put_u8(0x00);
     }
 
     request.encode(&mut body, api_version).expect("encode request");
@@ -107,6 +128,12 @@ fn send_request<R: Encodable, S: Decodable>(
     let mut cursor = std::io::Cursor::new(resp_buf);
     let response_correlation_id = cursor.get_i32();
     assert_eq!(response_correlation_id, correlation_id, "correlation id mismatch");
+
+    // Flexible response header v1 has an empty tagged-fields block after correlation_id.
+    // ApiVersions always uses header v0 (no tag buffer) even at flexible versions.
+    if api_key != 18 && is_flexible(api_key, api_version) {
+        cursor.advance(1); // skip the 0x00 empty tag buffer byte
+    }
 
     S::decode(&mut cursor, api_version).expect("decode response")
 }
@@ -2257,4 +2284,342 @@ fn contract_fetch_long_poll_wakes_on_produce() {
         .as_ref()
         .map_or(false, |r| !r.is_empty());
     assert!(has_records, "long-poll response must contain the produced records");
+}
+
+#[test]
+fn contract_fetch_beyond_hwm_returns_empty() {
+    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+    use kafka_protocol::messages::fetch_response::FetchResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-fetch-beyond-hwm");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // Produce 2 records, HWM = 2.
+    let batch = encode_record_batch(&[new_record(0), new_record(1)]);
+    let produce_resp = produce_batch(&server, &topic, batch);
+    assert_eq!(produce_resp.responses[0].partition_responses[0].error_code, 0);
+
+    // Fetch at offset 999 (well beyond HWM=2) — Kafka returns empty response, no error.
+    // This is the normal case for a consumer parked at the tail.
+    let mut fetch_part = FetchPartition::default();
+    fetch_part.partition = 0;
+    fetch_part.fetch_offset = 999;
+    fetch_part.partition_max_bytes = 1024 * 1024;
+    let mut fetch_topic_req = FetchTopic::default();
+    fetch_topic_req.topic = TopicName(StrBytes::from_string(topic));
+    fetch_topic_req.partitions = vec![fetch_part];
+    let mut fetch_req = FetchRequest::default();
+    fetch_req.replica_id = BrokerId(-1);
+    fetch_req.max_wait_ms = 0;
+    fetch_req.min_bytes = 0;
+    fetch_req.max_bytes = 1024 * 1024;
+    fetch_req.topics = vec![fetch_topic_req];
+
+    let fetch_resp: FetchResponse = send_request(&server, 1, 3, &fetch_req);
+    let partition = &fetch_resp.responses[0].partitions[0];
+    assert_eq!(partition.error_code, 0, "fetch beyond HWM should return no error");
+    let has_records = partition.records.as_ref().map_or(false, |r| !r.is_empty());
+    assert!(!has_records, "fetch beyond HWM must return empty records");
+    assert_eq!(partition.high_watermark, 2, "high_watermark should reflect current HWM");
+}
+
+#[test]
+fn contract_offset_fetch_unknown_group_returns_minus_one() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-offset-fetch-unknown");
+    let group = unique_group("contract-unk-group");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // OffsetFetch for a group that has never committed offsets.
+    let mut fetch_topic = OffsetFetchRequestTopic::default();
+    fetch_topic.name = TopicName(StrBytes::from_string(topic));
+    fetch_topic.partition_indexes = vec![0];
+
+    let mut req = OffsetFetchRequest::default();
+    req.group_id = GroupId(StrBytes::from_string(group));
+    req.topics = Some(vec![fetch_topic]);
+
+    let resp: OffsetFetchResponse = send_request(&server, 9, 1, &req);
+    assert_eq!(resp.topics[0].partitions[0].error_code, 0, "unknown group must not error");
+    assert_eq!(
+        resp.topics[0].partitions[0].committed_offset, -1,
+        "unknown group offset must be -1 (no committed offset)"
+    );
+}
+
+#[test]
+fn contract_delete_groups_removes_group() {
+    let server = TestServer::start();
+    let group = unique_group("contract-del-group");
+
+    // Join a group and reach Stable state.
+    let mut protocol = JoinGroupRequestProtocol::default();
+    protocol.name = StrBytes::from_string("range".to_string());
+    protocol.metadata = bytes::Bytes::from(vec![0, 1, 0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+
+    let mut join = JoinGroupRequest::default();
+    join.group_id = GroupId(StrBytes::from_string(group.clone()));
+    join.session_timeout_ms = 30000;
+    join.rebalance_timeout_ms = 30000;
+    join.member_id = StrBytes::from_string(String::new());
+    join.protocol_type = StrBytes::from_string("consumer".to_string());
+    join.protocols = vec![protocol.clone()];
+
+    let r1: JoinGroupResponse = send_request(&server, 11, 1, &join);
+    let member_id = r1.member_id.clone();
+    join.member_id = member_id.clone();
+    let r2: JoinGroupResponse = send_request(&server, 11, 1, &join);
+    assert_eq!(r2.error_code, 0);
+
+    // Sync to enter Stable state.
+    let mut assignment = SyncGroupRequestAssignment::default();
+    assignment.member_id = member_id.clone();
+    assignment.assignment = bytes::Bytes::from(vec![0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+    let mut sync = SyncGroupRequest::default();
+    sync.group_id = GroupId(StrBytes::from_string(group.clone()));
+    sync.generation_id = r2.generation_id;
+    sync.member_id = member_id.clone();
+    sync.assignments = vec![assignment];
+    let sync_resp: SyncGroupResponse = send_request(&server, 14, 1, &sync);
+    assert_eq!(sync_resp.error_code, 0);
+
+    // Leave the group — now the group is Empty.
+    let mut leave = LeaveGroupRequest::default();
+    leave.group_id = GroupId(StrBytes::from_string(group.clone()));
+    leave.member_id = member_id;
+    let leave_resp: LeaveGroupResponse = send_request(&server, 13, 0, &leave);
+    assert_eq!(leave_resp.error_code, 0);
+
+    // DeleteGroups v0 (non-flexible) — should return error_code=0.
+    let mut del_req = DeleteGroupsRequest::default();
+    del_req.groups_names = vec![kafka_protocol::messages::GroupId(StrBytes::from_string(group.clone()))];
+    let del_resp: DeleteGroupsResponse = send_request(&server, 42, 0, &del_req);
+    assert_eq!(del_resp.results[0].error_code, 0, "delete empty group must succeed");
+
+    // ListGroups — the deleted group must not appear.
+    let list_req = ListGroupsRequest::default();
+    let list_resp: ListGroupsResponse = send_request(&server, 16, 0, &list_req);
+    let found = list_resp.groups.iter().any(|g| g.group_id.0.as_str() == group.as_str());
+    assert!(!found, "deleted group must not appear in ListGroups");
+}
+
+#[test]
+fn contract_incremental_alter_configs_succeeds() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-incr-alter");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // IncrementalAlterConfigs v0 (non-flexible: header_version=1).
+    // Set retention.ms to 86400000 (1 day) for the topic.
+    let mut config = AlterableConfig::default();
+    config.name = StrBytes::from_string("retention.ms".to_string());
+    config.config_operation = 0; // SET
+    config.value = Some(StrBytes::from_string("86400000".to_string()));
+
+    let mut resource = AlterConfigsResource::default();
+    resource.resource_type = 2; // TOPIC
+    resource.resource_name = StrBytes::from_string(topic.clone());
+    resource.configs = vec![config];
+
+    let mut req = IncrementalAlterConfigsRequest::default();
+    req.resources = vec![resource];
+    req.validate_only = false;
+
+    let resp: IncrementalAlterConfigsResponse = send_request(&server, 44, 0, &req);
+    assert!(!resp.responses.is_empty(), "IncrementalAlterConfigs must return at least one response");
+    assert_eq!(resp.responses[0].error_code, 0, "IncrementalAlterConfigs must succeed");
+}
+
+#[test]
+fn contract_describe_cluster_returns_broker() {
+    let server = TestServer::start();
+
+    // DescribeCluster v0 (always flexible: header_version=2).
+    let req = DescribeClusterRequest::default();
+    let resp: DescribeClusterResponse = send_request(&server, 60, 0, &req);
+    assert_eq!(resp.error_code, 0, "DescribeCluster must return no error");
+    assert!(!resp.brokers.is_empty(), "DescribeCluster must return at least one broker");
+    let broker = &resp.brokers[0];
+    assert_eq!(broker.port as u16, server.port, "broker port must match server port");
+}
+
+#[test]
+fn contract_multi_partition_produce_fetch() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-multipart");
+
+    // Create a 2-partition topic.
+    let create_resp = create_topic(&server, &topic, 2);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // Produce to partition 0.
+    let batch0 = encode_record_batch(&[new_record(0)]);
+    let mut part0_data = PartitionProduceData::default();
+    part0_data.index = 0;
+    part0_data.records = Some(batch0);
+
+    // Produce to partition 1.
+    let batch1 = encode_record_batch(&[new_record(1)]);
+    let mut part1_data = PartitionProduceData::default();
+    part1_data.index = 1;
+    part1_data.records = Some(batch1);
+
+    let mut topic_data = TopicProduceData::default();
+    topic_data.name = TopicName(StrBytes::from_string(topic.clone()));
+    topic_data.partition_data = vec![part0_data, part1_data];
+
+    let mut produce_req = ProduceRequest::default();
+    produce_req.acks = 1;
+    produce_req.timeout_ms = 1000;
+    produce_req.topic_data = vec![topic_data];
+
+    let produce_resp: ProduceResponse = send_request(&server, 0, 2, &produce_req);
+    assert_eq!(produce_resp.responses[0].partition_responses[0].error_code, 0, "produce p0");
+    assert_eq!(produce_resp.responses[0].partition_responses[1].error_code, 0, "produce p1");
+
+    // Fetch from both partitions in a single request.
+    let mut fp0 = FetchPartition::default();
+    fp0.partition = 0;
+    fp0.fetch_offset = 0;
+    fp0.partition_max_bytes = 1024 * 1024;
+
+    let mut fp1 = FetchPartition::default();
+    fp1.partition = 1;
+    fp1.fetch_offset = 0;
+    fp1.partition_max_bytes = 1024 * 1024;
+
+    let mut ft = FetchTopic::default();
+    ft.topic = TopicName(StrBytes::from_string(topic.clone()));
+    ft.partitions = vec![fp0, fp1];
+
+    let mut fetch_req = FetchRequest::default();
+    fetch_req.replica_id = BrokerId(-1);
+    fetch_req.max_wait_ms = 0;
+    fetch_req.min_bytes = 0;
+    fetch_req.max_bytes = 1024 * 1024;
+    fetch_req.topics = vec![ft];
+
+    let fetch_resp: FetchResponse = send_request(&server, 1, 3, &fetch_req);
+    let topic_resp = &fetch_resp.responses[0];
+    let p0 = topic_resp.partitions.iter().find(|p| p.partition_index == 0)
+        .expect("partition 0 must be in fetch response");
+    let p1 = topic_resp.partitions.iter().find(|p| p.partition_index == 1)
+        .expect("partition 1 must be in fetch response");
+
+    assert_eq!(p0.error_code, 0, "fetch p0 must succeed");
+    assert_eq!(p1.error_code, 0, "fetch p1 must succeed");
+    assert_eq!(p0.high_watermark, 1, "partition 0 HWM must be 1");
+    assert_eq!(p1.high_watermark, 1, "partition 1 HWM must be 1");
+
+    // Decode and verify one record from each partition.
+    let p0_records = p0.records.as_ref().expect("partition 0 must have records");
+    let p1_records = p1.records.as_ref().expect("partition 1 must have records");
+    let mut p0_bytes = bytes::Bytes::copy_from_slice(p0_records);
+    let mut p1_bytes = bytes::Bytes::copy_from_slice(p1_records);
+    let p0_batches = RecordBatchDecoder::decode(&mut p0_bytes).expect("decode p0 batch");
+    let p1_batches = RecordBatchDecoder::decode(&mut p1_bytes).expect("decode p1 batch");
+    assert_eq!(p0_batches.records.len(), 1, "partition 0 must have 1 record");
+    assert_eq!(p1_batches.records.len(), 1, "partition 1 must have 1 record");
+}
+
+#[test]
+fn contract_list_transactions_returns_empty() {
+    let server = TestServer::start();
+
+    // ListTransactions v0 (always flexible: header_version=2).
+    let req = ListTransactionsRequest::default();
+    let resp: ListTransactionsResponse = send_request(&server, 66, 0, &req);
+    assert_eq!(resp.error_code, 0, "ListTransactions must return no error");
+    assert!(
+        resp.transaction_states.is_empty(),
+        "ListTransactions on idle broker must return empty list"
+    );
+}
+
+#[test]
+fn contract_produce_acks_minus_one_succeeds() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-acks-all");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    let batch = encode_record_batch(&[new_record(0), new_record(1)]);
+    let mut partition = PartitionProduceData::default();
+    partition.index = 0;
+    partition.records = Some(batch);
+    let mut topic_data = TopicProduceData::default();
+    topic_data.name = TopicName(StrBytes::from_string(topic.clone()));
+    topic_data.partition_data = vec![partition];
+
+    let mut produce_req = ProduceRequest::default();
+    produce_req.acks = -1; // all in-sync replicas
+    produce_req.timeout_ms = 5000;
+    produce_req.topic_data = vec![topic_data];
+
+    let produce_resp: ProduceResponse = send_request(&server, 0, 2, &produce_req);
+    let part = &produce_resp.responses[0].partition_responses[0];
+    assert_eq!(part.error_code, 0, "acks=-1 must succeed on single-node broker");
+    assert_eq!(part.base_offset, 0, "first produce base_offset must be 0");
+}
+
+#[test]
+fn contract_produce_sequential_base_offsets() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-base-offset");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // First produce: 3 records → offsets 0, 1, 2 → base_offset=0.
+    let batch0 = encode_record_batch(&[new_record(0), new_record(1), new_record(2)]);
+    let resp0 = produce_batch(&server, &topic, batch0);
+    assert_eq!(resp0.responses[0].partition_responses[0].error_code, 0);
+    assert_eq!(resp0.responses[0].partition_responses[0].base_offset, 0);
+
+    // Second produce: 2 records → offsets 3, 4 → base_offset=3.
+    let batch1 = encode_record_batch(&[new_record(3), new_record(4)]);
+    let resp1 = produce_batch(&server, &topic, batch1);
+    assert_eq!(resp1.responses[0].partition_responses[0].error_code, 0);
+    assert_eq!(resp1.responses[0].partition_responses[0].base_offset, 3, "second batch must start at offset 3");
+}
+
+#[test]
+fn contract_offset_for_leader_epoch_returns_hwm() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-ofle");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // Produce 4 records (HWM = 4).
+    let batch = encode_record_batch(&[new_record(0), new_record(1), new_record(2), new_record(3)]);
+    let produce_resp = produce_batch(&server, &topic, batch);
+    assert_eq!(produce_resp.responses[0].partition_responses[0].error_code, 0);
+
+    // OffsetForLeaderEpoch v0 (non-flexible: header_version=1).
+    let mut part_req = OffsetForLeaderPartition::default();
+    part_req.partition = 0;
+    part_req.leader_epoch = 0;
+    part_req.current_leader_epoch = -1;
+
+    let mut topic_req = OffsetForLeaderTopic::default();
+    topic_req.topic = TopicName(StrBytes::from_string(topic.clone()));
+    topic_req.partitions = vec![part_req];
+
+    let mut req = OffsetForLeaderEpochRequest::default();
+    req.topics = vec![topic_req];
+
+    // Use v1 (non-flexible; flexible starts at v4): response includes leader_epoch.
+    let resp: OffsetForLeaderEpochResponse = send_request(&server, 23, 1, &req);
+    assert_eq!(resp.topics[0].partitions[0].error_code, 0, "OffsetForLeaderEpoch must succeed");
+    assert_eq!(resp.topics[0].partitions[0].end_offset, 4, "end_offset must equal HWM (4)");
+    assert_eq!(resp.topics[0].partitions[0].leader_epoch, 0, "single-node leader_epoch is always 0");
 }
