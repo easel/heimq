@@ -32,6 +32,8 @@ pub struct Server {
     producer_state: Arc<ProducerStateManager>,
     /// Shared transaction manager; one instance per server for EOS semantics.
     transaction_manager: Arc<TransactionManager>,
+    /// Broadcast signal: every successful Produce wakes all waiting Fetch long-polls.
+    append_notify: Arc<tokio::sync::Notify>,
 }
 
 impl Server {
@@ -113,6 +115,7 @@ impl Server {
             advertised_apis,
             producer_state: ProducerStateManager::new(),
             transaction_manager: TransactionManager::new(),
+            append_notify: Arc::new(tokio::sync::Notify::new()),
         })
     }
 
@@ -162,6 +165,7 @@ impl Server {
             advertised_apis,
             producer_state: ProducerStateManager::new(),
             transaction_manager: TransactionManager::new(),
+            append_notify: Arc::new(tokio::sync::Notify::new()),
         })
     }
 
@@ -226,7 +230,8 @@ impl Server {
                     self.advertised_apis.clone(),
                 )
                 .with_producer_state(self.producer_state.clone())
-                .with_transaction_manager(self.transaction_manager.clone());
+                .with_transaction_manager(self.transaction_manager.clone())
+                .with_append_notify(self.append_notify.clone());
 
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(Box::new(socket), router).await {

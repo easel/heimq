@@ -22,6 +22,8 @@ pub struct Router {
     advertised_apis: Arc<Vec<(i16, i16, i16)>>,
     producer_state: Arc<ProducerStateManager>,
     transaction_manager: Arc<TransactionManager>,
+    /// Signalled after every successful Produce to wake Fetch long-polls.
+    append_notify: Option<Arc<tokio::sync::Notify>>,
 }
 
 impl Router {
@@ -51,6 +53,7 @@ impl Router {
             advertised_apis,
             producer_state: ProducerStateManager::new(),
             transaction_manager: TransactionManager::new(),
+            append_notify: None,
         }
     }
 
@@ -61,6 +64,11 @@ impl Router {
 
     pub fn with_transaction_manager(mut self, transaction_manager: Arc<TransactionManager>) -> Self {
         self.transaction_manager = transaction_manager;
+        self
+    }
+
+    pub fn with_append_notify(mut self, notify: Arc<tokio::sync::Notify>) -> Self {
+        self.append_notify = Some(notify);
         self
     }
 
@@ -112,16 +120,30 @@ impl Router {
             return self.route(data);
         }
 
-        // Poll every 10 ms up to max_wait_ms (capped at 30 s per Kafka spec).
-        const POLL_INTERVAL_MS: u64 = 10;
         let deadline = tokio::time::Instant::now()
             + std::time::Duration::from_millis(max_wait_ms.min(30_000) as u64);
 
-        loop {
-            tokio::time::sleep(std::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
-            let now = tokio::time::Instant::now();
-            if self.storage_has_data(&topics) || now >= deadline {
-                return self.route(data);
+        if let Some(ref notify) = self.append_notify {
+            // Notify path: register the waiter BEFORE the data check to avoid the
+            // race where a produce arrives between the check and the await.
+            loop {
+                let notified = notify.notified();
+                if self.storage_has_data(&topics) {
+                    return self.route(data);
+                }
+                tokio::select! {
+                    _ = notified => {}
+                    _ = tokio::time::sleep_until(deadline) => { return self.route(data); }
+                }
+            }
+        } else {
+            // Fallback: poll every 10 ms up to max_wait_ms.
+            const POLL_INTERVAL_MS: u64 = 10;
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
+                if self.storage_has_data(&topics) || tokio::time::Instant::now() >= deadline {
+                    return self.route(data);
+                }
             }
         }
     }
@@ -248,7 +270,7 @@ impl Router {
 
         let ps = self.producer_state.clone();
         let tm = self.transaction_manager.clone();
-        if acks_zero {
+        let result = if acks_zero {
             let _ = produce::handle(header.api_version, body, &self.storage, &ps, &tm);
             Ok(bytes::Bytes::new())
         } else {
@@ -256,7 +278,14 @@ impl Router {
                 header,
                 Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps, &tm)),
             )
+        };
+        // Wake any Fetch long-polls waiting for new data.
+        if result.is_ok() {
+            if let Some(ref notify) = self.append_notify {
+                notify.notify_waiters();
+            }
         }
+        result
     }
 
     fn handle_fetch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
