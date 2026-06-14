@@ -271,9 +271,72 @@ async function run() {
     }
   });
 
+  // --- multi-member-group ---
+  // Two concurrent KafkaJS consumers in the same group divide a 3-partition
+  // topic and collectively consume all 60 records exactly once.
+  const mmgTopic = `kafkajs-mmg-${ts}`;
+  const mmgGroup = `kafkajs-mmg-grp-${ts}`;
+  await check('create-mmg-topic', () =>
+    createTopic(admin, mmgTopic, 3)
+  );
+
+  await check('multi-member-group', async () => {
+    // Produce 60 records across the 3 partitions.
+    const N = 60;
+    const mmgMessages = Array.from({ length: N }, (_, i) => ({
+      key: `mmg-key-${i}`,
+      value: `mmg-val-${i}`,
+    }));
+    await producer.send({ topic: mmgTopic, messages: mmgMessages });
+
+    // Shared state for both consumers.
+    const consumed = new Set();
+    let resolve_, reject_;
+    const done = new Promise((res, rej) => { resolve_ = res; reject_ = rej; });
+    const timeoutId = setTimeout(
+      () => reject_(new Error(`timeout: consumed ${consumed.size}/${N}`)),
+      30_000,
+    );
+
+    const makeConsumer = () => {
+      const c = kafka.consumer({ groupId: mmgGroup });
+      return c;
+    };
+
+    const runMember = async (c) => {
+      await c.connect();
+      await c.subscribe({ topic: mmgTopic, fromBeginning: true });
+      await c.run({
+        eachMessage: async ({ partition, message }) => {
+          consumed.add(`${partition}:${message.offset}`);
+          if (consumed.size >= N) {
+            clearTimeout(timeoutId);
+            resolve_();
+          }
+        },
+      });
+    };
+
+    const c1 = makeConsumer();
+    const c2 = makeConsumer();
+
+    await runMember(c1);
+    // Stagger start so c1 completes its initial rebalance before c2 joins.
+    await new Promise(r => setTimeout(r, 300));
+    await runMember(c2);
+
+    await done;
+    await c1.disconnect();
+    await c2.disconnect();
+
+    if (consumed.size < N) {
+      throw new Error(`consumed ${consumed.size}/${N} unique records`);
+    }
+  });
+
   // --- delete-topics ---
   await check('delete-topics', async () => {
-    await admin.deleteTopics({ topics: [topic, headerTopic, resumeTopic] });
+    await admin.deleteTopics({ topics: [topic, headerTopic, resumeTopic, mmgTopic] });
   });
 
   await producer.disconnect();

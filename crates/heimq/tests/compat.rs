@@ -8,7 +8,7 @@
 //!   - franz-go (pure-Go Kafka client, no librdkafka dependency)
 //!   - sarama (IBM/sarama pure-Go Kafka client, independent of franz-go)
 //!   - java kafka-clients (Apache reference implementation)
-//!   - kcat (CLI tool; tests offset-based Fetch without a consumer group)
+//!   - kcat (CLI tool; tests offset-based Fetch and consumer group via librdkafka)
 //!   - KafkaJS (pure-JavaScript Kafka client, implements protocol from scratch)
 //!
 //! Tests are skipped when the required runtime (go, java, mvn, …) is absent
@@ -217,13 +217,13 @@ fn kcat_available() -> bool {
 
 /// Run kcat (CLI Kafka tool) against a live heimq instance.
 ///
-/// kcat uses librdkafka internally, but its offset-based consumer mode
-/// (`kcat -C -o beginning -c N`) drives the Fetch API without any consumer
-/// group machinery — a different code path from all other oracles. Tests:
+/// kcat uses librdkafka internally. Tests:
 ///   1. Produce via `kcat -P` (line-delimited stdin)
 ///   2. Consume via raw offset (`-o beginning -c N -e`) — no group protocol
 ///   3. Key-value round-trip (`-P -K:` / `-C -K:`)
 ///   4. Metadata listing (`kcat -L`) — verifies topic appears in metadata
+///   5. Consumer group consume (`kcat -G`) — drives JoinGroup/SyncGroup/Heartbeat
+///   6. Consumer group offset resume — OffsetCommit + OffsetFetch round-trip
 #[test]
 fn test_kcat_produce_consume_roundtrip() {
     if !kcat_available() {
@@ -352,6 +352,145 @@ fn test_kcat_produce_consume_roundtrip() {
         meta_str.contains(&topic),
         "kcat -L: produced topic {topic:?} not found in metadata output:\n{meta_str}"
     );
+
+    // --- 5. Consumer group consume: kcat -G drives JoinGroup/SyncGroup/Heartbeat ---
+    let cg_topic = format!("kcat-cg-{ts}");
+    let cg_group = format!("kcat-cg-grp-{ts}");
+    let cg_messages = ["msg-0", "msg-1", "msg-2", "msg-3", "msg-4"];
+    let cg_input = cg_messages.join("\n");
+
+    Command::new("kcat")
+        .args(["-b", &bootstrap, "-t", &cg_topic, "-P"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write as _;
+            child.stdin.take().unwrap().write_all(cg_input.as_bytes()).unwrap();
+            child.wait_with_output()
+        })
+        .expect("failed to spawn kcat -P for cg topic");
+
+    let cg_out = Command::new("kcat")
+        .args([
+            "-b", &bootstrap,
+            "-G", &cg_group,
+            &cg_topic,
+            "-c", &cg_messages.len().to_string(),
+            "-e",
+            "-q",
+            "-X", "auto.offset.reset=earliest",
+        ])
+        .output()
+        .expect("failed to spawn kcat -G");
+
+    assert!(
+        cg_out.status.success(),
+        "kcat -G failed: {}",
+        String::from_utf8_lossy(&cg_out.stderr)
+    );
+
+    let cg_consumed = String::from_utf8_lossy(&cg_out.stdout);
+    let mut cg_lines: Vec<&str> = cg_consumed
+        .trim_end_matches('\n')
+        .split('\n')
+        .filter(|l| !l.is_empty())
+        .collect();
+    cg_lines.sort_unstable();
+    let mut expected_sorted = cg_messages.to_vec();
+    expected_sorted.sort_unstable();
+    assert_eq!(
+        cg_lines, expected_sorted,
+        "kcat -G: consumed messages don't match produced\nconsumed: {cg_consumed:?}"
+    );
+
+    // --- 6. Consumer group offset resume via kcat -G ---
+    // Produce 6 messages, consume first 3 with group A (auto-commit), then
+    // start a fresh kcat -G with the same group and verify it resumes from
+    // offset 3 (gets the remaining 3 messages, not all 6).
+    let resume_topic = format!("kcat-resume-{ts}");
+    let resume_group = format!("kcat-resume-grp-{ts}");
+    let resume_messages = ["r0", "r1", "r2", "r3", "r4", "r5"];
+    let resume_input = resume_messages.join("\n");
+
+    Command::new("kcat")
+        .args(["-b", &bootstrap, "-t", &resume_topic, "-P"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write as _;
+            child.stdin.take().unwrap().write_all(resume_input.as_bytes()).unwrap();
+            child.wait_with_output()
+        })
+        .expect("failed to spawn kcat -P for resume topic");
+
+    // Session A: consume exactly 3, then exit (kcat auto-commits on clean exit).
+    let session_a = Command::new("kcat")
+        .args([
+            "-b", &bootstrap,
+            "-G", &resume_group,
+            &resume_topic,
+            "-c", "3",
+            "-e",
+            "-q",
+            "-X", "auto.offset.reset=earliest",
+        ])
+        .output()
+        .expect("failed to spawn kcat -G session A");
+
+    assert!(
+        session_a.status.success(),
+        "kcat -G session A failed: {}",
+        String::from_utf8_lossy(&session_a.stderr)
+    );
+    let session_a_out = String::from_utf8_lossy(&session_a.stdout);
+    let session_a_lines: Vec<&str> = session_a_out
+        .trim_end_matches('\n')
+        .split('\n')
+        .filter(|l| !l.is_empty())
+        .collect();
+    assert_eq!(session_a_lines.len(), 3, "kcat session A: expected 3 messages");
+
+    // Session B: same group — should resume from committed offset and get only the remaining 3.
+    let session_b = Command::new("kcat")
+        .args([
+            "-b", &bootstrap,
+            "-G", &resume_group,
+            &resume_topic,
+            "-c", "3",
+            "-e",
+            "-q",
+            "-X", "auto.offset.reset=earliest",
+        ])
+        .output()
+        .expect("failed to spawn kcat -G session B");
+
+    assert!(
+        session_b.status.success(),
+        "kcat -G session B failed: {}",
+        String::from_utf8_lossy(&session_b.stderr)
+    );
+    let session_b_out = String::from_utf8_lossy(&session_b.stdout);
+    let session_b_lines: Vec<&str> = session_b_out
+        .trim_end_matches('\n')
+        .split('\n')
+        .filter(|l| !l.is_empty())
+        .collect();
+    assert_eq!(
+        session_b_lines.len(), 3,
+        "kcat session B: expected 3 messages after offset resume, got: {session_b_out:?}"
+    );
+    // The resumed messages must be the SECOND half, not the first.
+    let session_b_set: std::collections::HashSet<&str> = session_b_lines.iter().copied().collect();
+    for first_half in ["r0", "r1", "r2"] {
+        assert!(
+            !session_b_set.contains(first_half),
+            "kcat session B: got already-consumed message {first_half:?}; offset resume not working"
+        );
+    }
 }
 
 fn node_available() -> bool {
