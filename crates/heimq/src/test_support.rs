@@ -110,17 +110,52 @@ impl TestServer {
     }
 
     fn wait_for_ready(&self) {
+        // Probe with a real ApiVersions request so we know the server is
+        // accepting AND handling Kafka protocol traffic, not just accepting
+        // TCP connections during early startup.
         let deadline = std::time::Instant::now() + Duration::from_secs(10);
         while std::time::Instant::now() < deadline {
-            if TcpStream::connect(("127.0.0.1", self.port)).is_ok() {
+            if self.probe_api_versions() {
                 return;
             }
-            std::thread::sleep(Duration::from_millis(50));
+            std::thread::sleep(Duration::from_millis(25));
         }
         panic!(
             "heimq server failed to start within 10 seconds on port {}",
             self.port
         );
+    }
+
+    /// Send a minimal ApiVersions request and return true if the server replies.
+    fn probe_api_versions(&self) -> bool {
+        use std::io::{Read as _, Write as _};
+
+        let mut stream = match TcpStream::connect(("127.0.0.1", self.port)) {
+            Ok(s) => s,
+            Err(_) => return false,
+        };
+        let _ = stream.set_read_timeout(Some(Duration::from_millis(200)));
+        let _ = stream.set_write_timeout(Some(Duration::from_millis(200)));
+
+        // ApiVersions v0: header only (body is empty for v0).
+        // Frame: [length(4)] [api_key=18(2)] [api_version=0(2)] [correlation_id=1(4)] [client_id=null(-1 as i16)(2)]
+        let body: [u8; 10] = [
+            0, 18,       // api_key = 18
+            0, 0,        // api_version = 0
+            0, 0, 0, 1,  // correlation_id = 1
+            0xFF, 0xFF,  // client_id = null
+        ];
+        let len_prefix = (body.len() as i32).to_be_bytes();
+        if stream.write_all(&len_prefix).is_err() {
+            return false;
+        }
+        if stream.write_all(&body).is_err() {
+            return false;
+        }
+
+        // A valid response starts with a 4-byte length — that's enough to confirm readiness.
+        let mut len_buf = [0u8; 4];
+        stream.read_exact(&mut len_buf).is_ok()
     }
 
     /// Get the bootstrap servers string for Kafka clients
