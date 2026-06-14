@@ -7,9 +7,17 @@ pub struct ExemptionEntry {
     pub id: String,
     pub field: String,
     pub scope: String,
+    /// Reference broker this exemption applies to: "all", "redpanda", or "kafka".
+    /// Defaults to "all" for entries written before the multi-oracle split.
+    #[serde(default = "default_oracle")]
+    pub oracle: String,
     pub reason: String,
     pub prd_ref: String,
     pub status: String,
+}
+
+fn default_oracle() -> String {
+    "all".to_string()
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -23,14 +31,16 @@ pub struct Exemptions {
 }
 
 impl Exemptions {
-    /// Find an active exemption by field and workload. Scope "all" matches any workload.
-    pub fn find(&self, field: &str, workload: &str) -> Option<&str> {
+    /// Find an active exemption by field, workload, and oracle. Scope "all" matches
+    /// any workload; oracle "all" matches any reference broker.
+    pub fn find(&self, field: &str, workload: &str, oracle: &str) -> Option<&str> {
         self.entries
             .iter()
             .find(|e| {
                 e.field == field
                     && e.status == "active"
                     && (e.scope == "all" || e.scope == workload)
+                    && (e.oracle == "all" || e.oracle == oracle)
             })
             .map(|e| e.id.as_str())
     }

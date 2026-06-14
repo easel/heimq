@@ -2,44 +2,48 @@ use crate::driver::{Observation, ObservationEvent};
 use crate::exemptions::Exemptions;
 pub use heimq::test_support::DiffRecord;
 
-/// Diff two normalized observation lists from the same workload.
+/// Diff two normalized observation lists from the same workload: heimq against a
+/// single reference broker (`oracle`, e.g. "redpanda" or "kafka").
 /// Returns one DiffRecord per diverging field.
 pub fn diff(
     workload: &str,
+    oracle: &str,
     heimq: &[Observation],
-    redpanda: &[Observation],
+    oracle_obs: &[Observation],
     exemptions: &Exemptions,
 ) -> Vec<DiffRecord> {
     let mut diffs = Vec::new();
 
     // Length mismatch: report missing/extra at each step beyond the shared prefix.
-    let shared = heimq.len().min(redpanda.len());
+    let shared = heimq.len().min(oracle_obs.len());
     for i in shared..heimq.len() {
         diffs.push(DiffRecord {
             workload: workload.to_string(),
+            oracle: oracle.to_string(),
             step: heimq[i].step,
             field: "observation".to_string(),
             heimq_value: serde_json::json!(format!("{:?}", event_kind(&heimq[i].event))),
-            redpanda_value: serde_json::Value::Null,
+            oracle_value: serde_json::Value::Null,
             divergence: "extra_in_heimq".to_string(),
             exemption: None,
         });
     }
-    for i in shared..redpanda.len() {
+    for i in shared..oracle_obs.len() {
         diffs.push(DiffRecord {
             workload: workload.to_string(),
-            step: redpanda[i].step,
+            oracle: oracle.to_string(),
+            step: oracle_obs[i].step,
             field: "observation".to_string(),
             heimq_value: serde_json::Value::Null,
-            redpanda_value: serde_json::json!(format!("{:?}", event_kind(&redpanda[i].event))),
+            oracle_value: serde_json::json!(format!("{:?}", event_kind(&oracle_obs[i].event))),
             divergence: "missing_in_heimq".to_string(),
             exemption: None,
         });
     }
 
     // Per-step field comparison.
-    for (h, r) in heimq.iter().zip(redpanda.iter()) {
-        diff_events(workload, h.step, &h.event, &r.event, exemptions, &mut diffs);
+    for (h, r) in heimq.iter().zip(oracle_obs.iter()) {
+        diff_events(workload, oracle, h.step, &h.event, &r.event, exemptions, &mut diffs);
     }
 
     diffs
@@ -56,6 +60,7 @@ fn event_kind(e: &ObservationEvent) -> &'static str {
 
 fn diff_events(
     workload: &str,
+    oracle: &str,
     step: u32,
     h: &ObservationEvent,
     r: &ObservationEvent,
@@ -79,10 +84,10 @@ fn diff_events(
                 ..
             },
         ) => {
-            maybe_diff_bytes(workload, step, "record.key", hk.as_deref(), rk.as_deref(), exemptions, out);
-            maybe_diff_bytes(workload, step, "record.value", hv.as_deref(), rv.as_deref(), exemptions, out);
-            maybe_diff(workload, step, "record.partition", hp, rp, exemptions, out);
-            maybe_diff(workload, step, "record.offset", ho, ro, exemptions, out);
+            maybe_diff_bytes(workload, oracle, step, "record.key", hk.as_deref(), rk.as_deref(), exemptions, out);
+            maybe_diff_bytes(workload, oracle, step, "record.value", hv.as_deref(), rv.as_deref(), exemptions, out);
+            maybe_diff(workload, oracle, step, "record.partition", hp, rp, exemptions, out);
+            maybe_diff(workload, oracle, step, "record.offset", ho, ro, exemptions, out);
         }
         (
             ObservationEvent::GroupState {
@@ -96,24 +101,25 @@ fn diff_events(
                 ..
             },
         ) => {
-            maybe_diff(workload, step, "group_state.state", hs, rs, exemptions, out);
-            maybe_diff(workload, step, "group_state.member_count", hm, rm, exemptions, out);
+            maybe_diff(workload, oracle, step, "group_state.state", hs, rs, exemptions, out);
+            maybe_diff(workload, oracle, step, "group_state.member_count", hm, rm, exemptions, out);
         }
         (
             ObservationEvent::ErrorCode { api: ha, code: hc },
             ObservationEvent::ErrorCode { api: ra, code: rc },
         ) => {
-            maybe_diff(workload, step, "error_code.api", ha, ra, exemptions, out);
-            maybe_diff(workload, step, "error_code.code", hc, rc, exemptions, out);
+            maybe_diff(workload, oracle, step, "error_code.api", ha, ra, exemptions, out);
+            maybe_diff(workload, oracle, step, "error_code.code", hc, rc, exemptions, out);
         }
         _ => {
             // Event type mismatch.
             out.push(DiffRecord {
                 workload: workload.to_string(),
+                oracle: oracle.to_string(),
                 step,
                 field: "event_type".to_string(),
                 heimq_value: serde_json::json!(event_kind(h)),
-                redpanda_value: serde_json::json!(event_kind(r)),
+                oracle_value: serde_json::json!(event_kind(r)),
                 divergence: "value_mismatch".to_string(),
                 exemption: None,
             });
@@ -121,8 +127,10 @@ fn diff_events(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn maybe_diff<T>(
     workload: &str,
+    oracle: &str,
     step: u32,
     field: &str,
     h: &T,
@@ -135,20 +143,23 @@ fn maybe_diff<T>(
     if h == r {
         return;
     }
-    let exemption = exemptions.find(field, workload).map(str::to_string);
+    let exemption = exemptions.find(field, workload, oracle).map(str::to_string);
     out.push(DiffRecord {
         workload: workload.to_string(),
+        oracle: oracle.to_string(),
         step,
         field: field.to_string(),
         heimq_value: serde_json::to_value(h).unwrap_or(serde_json::Value::Null),
-        redpanda_value: serde_json::to_value(r).unwrap_or(serde_json::Value::Null),
+        oracle_value: serde_json::to_value(r).unwrap_or(serde_json::Value::Null),
         divergence: "value_mismatch".to_string(),
         exemption,
     });
 }
 
+#[allow(clippy::too_many_arguments)]
 fn maybe_diff_bytes(
     workload: &str,
+    oracle: &str,
     step: u32,
     field: &str,
     h: Option<&[u8]>,
@@ -159,17 +170,18 @@ fn maybe_diff_bytes(
     if h == r {
         return;
     }
-    let exemption = exemptions.find(field, workload).map(str::to_string);
+    let exemption = exemptions.find(field, workload, oracle).map(str::to_string);
     let to_val = |b: Option<&[u8]>| match b {
         None => serde_json::Value::Null,
         Some(b) => serde_json::Value::String(String::from_utf8_lossy(b).into_owned()),
     };
     out.push(DiffRecord {
         workload: workload.to_string(),
+        oracle: oracle.to_string(),
         step,
         field: field.to_string(),
         heimq_value: to_val(h),
-        redpanda_value: to_val(r),
+        oracle_value: to_val(r),
         divergence: "value_mismatch".to_string(),
         exemption,
     });

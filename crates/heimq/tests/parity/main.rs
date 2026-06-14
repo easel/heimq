@@ -23,41 +23,53 @@ fn main() -> Result<()> {
 
 async fn run() -> Result<()> {
     eprintln!("booting containers...");
-    let (_redpanda_container, _heimq_server, targets) = broker::boot().await?;
+    let (_redpanda_container, _kafka_container, _heimq_server, targets) = broker::boot().await?;
     eprintln!("containers ready");
 
     let workloads = workloads::all();
     let exemptions = exemptions::load()?;
     let mut any_fail = false;
 
+    // heimq is diffed against each reference broker independently. Apache Kafka is the
+    // canonical oracle; Redpanda is retained as a second, independent implementation.
+    let oracles: [(&str, &broker::BrokerTarget); 2] =
+        [("kafka", &targets.kafka), ("redpanda", &targets.redpanda)];
+
     let out_dir = std::path::Path::new("target/parity");
     std::fs::create_dir_all(out_dir)?;
 
     for w in &workloads {
         let heimq_obs = w.run(&targets.heimq).await?;
-        let redpanda_obs = w.run(&targets.redpanda).await?;
-
         let heimq_n = normalize::normalize(heimq_obs);
-        let redpanda_n = normalize::normalize(redpanda_obs);
 
-        let diffs = diff::diff(w.name(), &heimq_n, &redpanda_n, &exemptions);
-        let unmatched = diffs.iter().filter(|d| d.exemption.is_none()).count();
+        for (oracle_name, oracle_target) in oracles {
+            let oracle_obs = w.run(oracle_target).await?;
+            let oracle_n = normalize::normalize(oracle_obs);
 
-        let ts = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
-        let path = out_dir.join(format!("{}-{}.jsonl", ts, w.name()));
-        let mut f = std::fs::File::create(&path)?;
-        for d in &diffs {
-            writeln!(f, "{}", serde_json::to_string(d)?)?;
-        }
+            let diffs = diff::diff(w.name(), oracle_name, &heimq_n, &oracle_n, &exemptions);
+            let unmatched = diffs.iter().filter(|d| d.exemption.is_none()).count();
 
-        if unmatched == 0 {
-            println!("[PASS] {}: 0 diffs", w.name());
-        } else {
-            println!("[FAIL] {}: {} unmatched diffs", w.name(), unmatched);
-            for d in diffs.iter().filter(|d| d.exemption.is_none()) {
-                println!("  {}", serde_json::to_string(d)?);
+            let ts = chrono::Utc::now().format("%Y%m%dT%H%M%SZ");
+            let path = out_dir.join(format!("{}-{}-{}.jsonl", ts, oracle_name, w.name()));
+            let mut f = std::fs::File::create(&path)?;
+            for d in &diffs {
+                writeln!(f, "{}", serde_json::to_string(d)?)?;
             }
-            any_fail = true;
+
+            if unmatched == 0 {
+                println!("[PASS] {} vs {}: 0 diffs", w.name(), oracle_name);
+            } else {
+                println!(
+                    "[FAIL] {} vs {}: {} unmatched diffs",
+                    w.name(),
+                    oracle_name,
+                    unmatched
+                );
+                for d in diffs.iter().filter(|d| d.exemption.is_none()) {
+                    println!("  {}", serde_json::to_string(d)?);
+                }
+                any_fail = true;
+            }
         }
     }
 

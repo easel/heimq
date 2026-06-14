@@ -236,15 +236,18 @@ pub fn init_tracing() {
     });
 }
 
-/// One diverging field between heimq and Redpanda for a given workload step.
-/// Serializes to JSONL; written to target/parity/<timestamp>-<workload>.jsonl.
+/// One diverging field between heimq and a reference broker for a given workload step.
+/// Serializes to JSONL; written to target/parity/<timestamp>-<oracle>-<workload>.jsonl.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct DiffRecord {
     pub workload: String,
+    /// Reference broker this diff was computed against ("redpanda" | "kafka").
+    pub oracle: String,
     pub step: u32,
     pub field: String,
     pub heimq_value: serde_json::Value,
-    pub redpanda_value: serde_json::Value,
+    /// The reference broker's value for this field (the `oracle` named above).
+    pub oracle_value: serde_json::Value,
     /// "value_mismatch" | "missing_in_heimq" | "extra_in_heimq"
     pub divergence: String,
     /// exemption id string, or null
@@ -255,10 +258,11 @@ pub struct DiffRecord {
 fn diff_record_round_trips_through_json() {
     let d = DiffRecord {
         workload: "test".to_string(),
+        oracle: "kafka".to_string(),
         step: 0,
         field: "record.value".to_string(),
         heimq_value: serde_json::json!(null),
-        redpanda_value: serde_json::json!(null),
+        oracle_value: serde_json::json!(null),
         divergence: "value_mismatch".to_string(),
         exemption: None,
     };

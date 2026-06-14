@@ -1,8 +1,9 @@
 # Parity Harness (`tests/parity/`)
 
 Differential parity harness per SD-003. Runs identical client workloads
-against heimq and a Redpanda container, normalizes non-determinism, and asserts
-zero behavioral diffs for in-scope APIs. Implements FEAT-003.
+against heimq and two reference brokers — Apache Kafka (the canonical oracle)
+and Redpanda — normalizes non-determinism, and asserts zero behavioral diffs
+against each oracle for in-scope APIs. Implements FEAT-003.
 
 ## Prerequisites
 
