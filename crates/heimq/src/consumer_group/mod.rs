@@ -216,14 +216,27 @@ impl GroupCoordinatorBackend for ConsumerGroupManager {
             None => return HeartbeatResult { error_code: 16 },
         };
 
+        // An unrecognised member is rejected regardless of group state.
+        if group.get_member(member_id).is_none() {
+            return HeartbeatResult { error_code: 25 };
+        }
+
+        // While a rebalance is in progress, tell a KNOWN member to rejoin via
+        // REBALANCE_IN_PROGRESS (27) rather than ILLEGAL_GENERATION (22). Clients
+        // like KafkaJS reset their member_id on ILLEGAL_GENERATION, which orphans
+        // the old member (potentially the leader) into a ghost that never syncs —
+        // stalling the rebalance forever (members grow, SyncGroup loops on 27).
+        // REBALANCE_IN_PROGRESS makes the client rejoin with the SAME member_id (a
+        // soft re-join), so the leader stays live and completes the round.
+        if group.state() == GroupState::PreparingRebalance {
+            return HeartbeatResult { error_code: 27 };
+        }
+
         if group.generation_id() != generation_id {
             return HeartbeatResult { error_code: 22 };
         }
 
-        if !group.heartbeat(member_id) {
-            return HeartbeatResult { error_code: 25 };
-        }
-
+        group.heartbeat(member_id);
         HeartbeatResult { error_code: 0 }
     }
 

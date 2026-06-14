@@ -614,6 +614,20 @@ fn contract_heartbeat_active_member() {
     assert_eq!(join_response.error_code, 0);
     let generation_id = join_response.generation_id;
 
+    // Complete the rebalance as leader so the member becomes active (group Stable).
+    // A heartbeat *before* SyncGroup correctly returns REBALANCE_IN_PROGRESS (27),
+    // so an "active member" must have finished syncing.
+    let mut assignment = SyncGroupRequestAssignment::default();
+    assignment.member_id = member_id.clone();
+    assignment.assignment = bytes::Bytes::from(vec![0, 0, 0, 1, 0, 4, 116, 101, 115, 116]);
+    let mut sync_request = SyncGroupRequest::default();
+    sync_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    sync_request.generation_id = generation_id;
+    sync_request.member_id = member_id.clone();
+    sync_request.assignments = vec![assignment];
+    let sync_response: SyncGroupResponse = send_request(&server, 14, 1, &sync_request);
+    assert_eq!(sync_response.error_code, 0, "leader sync should complete rebalance");
+
     // Send heartbeat
     let mut heartbeat_request = HeartbeatRequest::default();
     heartbeat_request.group_id = GroupId(StrBytes::from_string(group));
@@ -1582,6 +1596,19 @@ fn contract_session_timeout_evicts_member() {
     let join_resp: JoinGroupResponse = send_request(&server, 11, 1, &join_request);
     assert_eq!(join_resp.error_code, 0, "JoinGroup should succeed");
     let generation_id = join_resp.generation_id;
+
+    // Complete the rebalance as leader so the member is active (Stable); only then
+    // does a heartbeat return 0 (before SyncGroup it is REBALANCE_IN_PROGRESS).
+    let mut sg_assignment = SyncGroupRequestAssignment::default();
+    sg_assignment.member_id = member_id.clone();
+    sg_assignment.assignment = bytes::Bytes::from(vec![0, 0, 0, 0, 0, 0]);
+    let mut sync_request = SyncGroupRequest::default();
+    sync_request.group_id = GroupId(StrBytes::from_string(group.clone()));
+    sync_request.generation_id = generation_id;
+    sync_request.member_id = member_id.clone();
+    sync_request.assignments = vec![sg_assignment];
+    let sync_resp: SyncGroupResponse = send_request(&server, 14, 1, &sync_request);
+    assert_eq!(sync_resp.error_code, 0, "leader sync should complete rebalance");
 
     // Immediately heartbeat — should succeed
     let mut hb = HeartbeatRequest::default();

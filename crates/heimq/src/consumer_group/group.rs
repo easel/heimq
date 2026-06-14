@@ -96,6 +96,10 @@ pub struct ConsumerGroup {
     protocol_type: RwLock<Option<String>>,
     protocol: RwLock<Option<String>>,
     leader_id: RwLock<Option<String>>,
+    /// Generation for which `leader_id` was elected. The leader is the first
+    /// member to join each generation; this lets a new generation re-elect a live
+    /// leader instead of inheriting a stale one that completed an earlier round.
+    leader_generation: AtomicI32,
     members: RwLock<HashMap<String, Member>>,
     next_member_id: AtomicI32,
 }
@@ -109,6 +113,7 @@ impl ConsumerGroup {
             protocol_type: RwLock::new(None),
             protocol: RwLock::new(None),
             leader_id: RwLock::new(None),
+            leader_generation: AtomicI32::new(-1),
             members: RwLock::new(HashMap::new()),
             next_member_id: AtomicI32::new(0),
         }
@@ -148,6 +153,25 @@ impl ConsumerGroup {
         format!("{}-{}", client_id, uuid_simple())
     }
 
+    /// Transition the group into a rebalance, returning the rebalance's generation.
+    ///
+    /// The generation is bumped ONLY on the Stable/Empty -> PreparingRebalance
+    /// transition. A member that joins or leaves while a rebalance is ALREADY in
+    /// progress joins the current pending generation without bumping: bumping again
+    /// mid-rebalance invalidates the other members' in-flight join/sync at the
+    /// previous generation, so the leader can never complete the rebalance and the
+    /// group spins in a perpetual rebalance loop (gen climbing, SyncGroup forever
+    /// returning REBALANCE_IN_PROGRESS).
+    fn begin_rebalance(&self) -> i32 {
+        let mut state = self.state.write();
+        if *state == GroupState::PreparingRebalance {
+            self.generation_id.load(Ordering::SeqCst)
+        } else {
+            *state = GroupState::PreparingRebalance;
+            self.generation_id.fetch_add(1, Ordering::SeqCst) + 1
+        }
+    }
+
     /// Add a member to the group.
     ///
     /// If the member_id is already known (the member is re-joining), this is a
@@ -163,9 +187,8 @@ impl ConsumerGroup {
         // Soft re-join: member is already in the group; don't bump gen or state.
         let soft_rejoin = members.contains_key(&member_id);
 
-        // First (genuinely new) member becomes the leader.
+        // Record the protocol type from the first member to join the group.
         if members.is_empty() {
-            *self.leader_id.write() = Some(member_id.clone());
             *self.protocol_type.write() = Some(member.protocol_type.clone());
         }
 
@@ -181,10 +204,20 @@ impl ConsumerGroup {
             // State and generation stay unchanged.
             self.generation_id.load(Ordering::SeqCst)
         } else {
-            members.insert(member_id, member);
-            *self.state.write() = GroupState::PreparingRebalance;
-            let new_gen = self.generation_id.fetch_add(1, Ordering::SeqCst) + 1;
-            new_gen
+            members.insert(member_id.clone(), member);
+            // New member joins the (possibly already in-progress) rebalance; only
+            // a Stable/Empty -> rebalance transition bumps the generation.
+            let gen = self.begin_rebalance();
+            // The first member to join each generation leads that rebalance. A
+            // leader that completed an earlier generation and then went away
+            // (disconnected, or re-handshook for a new member_id) is therefore not
+            // inherited as a dead leader that never SyncGroups — which would stall
+            // the new round with REBALANCE_IN_PROGRESS forever.
+            if self.leader_generation.load(Ordering::SeqCst) < gen {
+                *self.leader_id.write() = Some(member_id);
+                self.leader_generation.store(gen, Ordering::SeqCst);
+            }
+            gen
         }
     }
 
@@ -194,15 +227,21 @@ impl ConsumerGroup {
         let removed = members.remove(member_id).is_some();
 
         if removed {
-            // If leader left, elect new leader
-            if self.leader_id.read().as_ref() == Some(&member_id.to_string()) {
-                *self.leader_id.write() = members.keys().next().cloned();
-            }
-
-            // Trigger rebalance if members remain
+            // Trigger a rebalance if members remain; the group empties otherwise.
             if !members.is_empty() {
-                *self.state.write() = GroupState::PreparingRebalance;
-                self.generation_id.fetch_add(1, Ordering::SeqCst);
+                let gen = self.begin_rebalance();
+                // Keep the existing leader if it is still a member; otherwise elect
+                // a remaining member. Stamp it as the leader for the new generation
+                // so a subsequent joiner does not steal a still-valid leadership.
+                let leader_valid = self
+                    .leader_id
+                    .read()
+                    .as_ref()
+                    .map_or(false, |l| members.contains_key(l));
+                if !leader_valid {
+                    *self.leader_id.write() = members.keys().next().cloned();
+                }
+                self.leader_generation.store(gen, Ordering::SeqCst);
             } else {
                 *self.state.write() = GroupState::Empty;
             }
@@ -302,8 +341,19 @@ impl ConsumerGroup {
         });
 
         if !expired.is_empty() && !members.is_empty() {
-            *self.state.write() = GroupState::PreparingRebalance;
-            self.generation_id.fetch_add(1, Ordering::SeqCst);
+            let gen = self.begin_rebalance();
+            // Re-elect the leader if it expired; otherwise the group keeps a
+            // dangling leader that can never complete the rebalance. Stamp the
+            // leader for the new generation either way.
+            let leader_valid = self
+                .leader_id
+                .read()
+                .as_ref()
+                .map_or(false, |lid| members.contains_key(lid));
+            if !leader_valid {
+                *self.leader_id.write() = members.keys().next().cloned();
+            }
+            self.leader_generation.store(gen, Ordering::SeqCst);
         }
 
         expired
