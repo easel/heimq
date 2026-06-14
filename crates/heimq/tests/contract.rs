@@ -50,6 +50,10 @@ use kafka_protocol::messages::incremental_alter_configs_request::{
 use kafka_protocol::messages::incremental_alter_configs_response::IncrementalAlterConfigsResponse;
 use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
 use kafka_protocol::messages::list_groups_response::ListGroupsResponse;
+use kafka_protocol::messages::describe_topic_partitions_request::{
+    DescribeTopicPartitionsRequest, TopicRequest,
+};
+use kafka_protocol::messages::describe_topic_partitions_response::DescribeTopicPartitionsResponse;
 use kafka_protocol::messages::list_transactions_request::ListTransactionsRequest;
 use kafka_protocol::messages::list_transactions_response::ListTransactionsResponse;
 use kafka_protocol::messages::offset_for_leader_epoch_request::{
@@ -2725,4 +2729,43 @@ fn contract_fetch_from_multiple_topics() {
     assert_eq!(resp_b.partitions[0].error_code, 0);
     assert!(resp_a.partitions[0].records.is_some(), "topic_a must have records");
     assert!(resp_b.partitions[0].records.is_some(), "topic_b must have records");
+}
+
+#[test]
+fn contract_describe_topic_partitions_returns_partition_leader() {
+    let server = TestServer::start();
+    let topic = unique_topic("contract-dtp");
+
+    // Create a 3-partition topic.
+    let create_resp = create_topic(&server, &topic, 3);
+    assert_eq!(create_resp.topics[0].error_code, 0);
+
+    // DescribeTopicPartitions v0 (always flexible: header_version=2).
+    let mut topic_req = TopicRequest::default();
+    topic_req.name = TopicName(StrBytes::from_string(topic.clone()));
+
+    let mut req = DescribeTopicPartitionsRequest::default();
+    req.topics = vec![topic_req];
+
+    let resp: DescribeTopicPartitionsResponse = send_request(&server, 75, 0, &req);
+    let topic_resp = resp.topics.iter().find(|t| {
+        t.name.as_ref().map(|n| n.0.as_str()) == Some(topic.as_str())
+    }).expect("topic must be in response");
+
+    assert_eq!(topic_resp.error_code, 0, "DescribeTopicPartitions must succeed");
+    assert_eq!(topic_resp.partitions.len(), 3, "3-partition topic must return 3 partitions");
+
+    // All partitions should have the self broker as leader.
+    for part in &topic_resp.partitions {
+        assert_eq!(part.error_code, 0, "partition {} must have no error", part.partition_index);
+        assert!(part.leader_id.0 >= 0, "partition {} must have a valid leader", part.partition_index);
+    }
+
+    // Test unknown topic returns UNKNOWN_TOPIC_OR_PARTITION (error 3).
+    let mut req_unknown = DescribeTopicPartitionsRequest::default();
+    let mut t_unknown = TopicRequest::default();
+    t_unknown.name = TopicName(StrBytes::from_string("no-such-topic".to_string()));
+    req_unknown.topics = vec![t_unknown];
+    let resp_unknown: DescribeTopicPartitionsResponse = send_request(&server, 75, 0, &req_unknown);
+    assert_eq!(resp_unknown.topics[0].error_code, 3, "unknown topic must return UNKNOWN_TOPIC_OR_PARTITION");
 }
