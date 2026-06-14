@@ -3,6 +3,7 @@
 //! Focused on transport, simplicity, and speed at the expense of durability.
 
 pub mod config;
+pub mod config_store;
 pub mod consumer_group;
 pub mod error;
 pub mod handler;

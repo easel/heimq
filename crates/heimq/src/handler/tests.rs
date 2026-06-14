@@ -1743,50 +1743,106 @@ fn describe_configs_returns_entries() {
     resource.resource_name = StrBytes::from_static_str("my-topic");
     req.resources = vec![resource];
     let body = encode_body(&req, 1);
-    let response = describe_configs::handle(1, &body).unwrap();
+    let store = crate::config_store::ConfigStore::new();
+    let response = describe_configs::handle(1, &body, &store).unwrap();
     assert_eq!(response.results.len(), 1);
     let result = &response.results[0];
     assert_eq!(result.error_code, 0);
     assert!(!result.configs.is_empty(), "must return at least one config entry");
 }
 
-#[test]
-fn alter_configs_returns_success() {
+/// Helper: DescribeConfigs a topic and return the value reported for `key`.
+#[cfg(test)]
+fn describe_config_value(store: &crate::config_store::ConfigStore, topic: &str, key: &str) -> Option<String> {
+    use kafka_protocol::messages::describe_configs_request::{DescribeConfigsRequest, DescribeConfigsResource};
+    let mut req = DescribeConfigsRequest::default();
+    let mut resource = DescribeConfigsResource::default();
+    resource.resource_type = 2;
+    resource.resource_name = StrBytes::from_string(topic.to_string());
+    req.resources = vec![resource];
+    let body = encode_body(&req, 1);
+    let resp = describe_configs::handle(1, &body, store).unwrap();
+    resp.results[0]
+        .configs
+        .iter()
+        .find(|c| c.name.as_str() == key)
+        .and_then(|c| c.value.as_ref().map(|v| v.to_string()))
+}
+
+fn alter_configs_body(topic: &str, key: &str, value: &str) -> Vec<u8> {
     use kafka_protocol::messages::alter_configs_request::{AlterConfigsRequest, AlterConfigsResource, AlterableConfig};
     let mut req = AlterConfigsRequest::default();
     let mut resource = AlterConfigsResource::default();
     resource.resource_type = 2; // TOPIC
-    resource.resource_name = StrBytes::from_static_str("my-topic");
+    resource.resource_name = StrBytes::from_string(topic.to_string());
     let mut entry = AlterableConfig::default();
-    entry.name = StrBytes::from_static_str("retention.ms");
-    entry.value = Some(StrBytes::from_static_str("86400000"));
+    entry.name = StrBytes::from_string(key.to_string());
+    entry.value = Some(StrBytes::from_string(value.to_string()));
     resource.configs = vec![entry];
     req.resources = vec![resource];
-    let body = encode_body(&req, 0);
-    let response = alter_configs::handle(0, &body).unwrap();
-    assert_eq!(response.responses.len(), 1);
-    assert_eq!(response.responses[0].error_code, 0);
+    encode_body(&req, 0)
 }
 
 #[test]
-fn incremental_alter_configs_returns_success() {
+fn alter_configs_round_trips_and_rejects_unknown() {
+    let store = crate::config_store::ConfigStore::new();
+
+    // Supported key: stored and reflected by DescribeConfigs (round-trip).
+    let body = alter_configs_body("my-topic", "retention.ms", "86400000");
+    let response = alter_configs::handle(0, &body, &store).unwrap();
+    assert_eq!(response.responses.len(), 1);
+    assert_eq!(response.responses[0].error_code, 0);
+    assert_eq!(
+        describe_config_value(&store, "my-topic", "retention.ms").as_deref(),
+        Some("86400000"),
+        "AlterConfigs value must round-trip through DescribeConfigs"
+    );
+
+    // Unsupported key: rejected with INVALID_CONFIG (40), not silent success.
+    let body = alter_configs_body("my-topic", "bogus.unknown.key", "1");
+    let response = alter_configs::handle(0, &body, &store).unwrap();
+    assert_eq!(response.responses[0].error_code, 40, "unknown key must be INVALID_CONFIG");
+}
+
+fn incremental_alter_body(topic: &str, key: &str, op: i8, value: Option<&str>) -> Vec<u8> {
     use kafka_protocol::messages::incremental_alter_configs_request::{
         IncrementalAlterConfigsRequest, AlterConfigsResource, AlterableConfig,
     };
     let mut req = IncrementalAlterConfigsRequest::default();
     let mut resource = AlterConfigsResource::default();
     resource.resource_type = 2; // TOPIC
-    resource.resource_name = StrBytes::from_static_str("my-topic");
+    resource.resource_name = StrBytes::from_string(topic.to_string());
     let mut entry = AlterableConfig::default();
-    entry.name = StrBytes::from_static_str("retention.ms");
-    entry.value = Some(StrBytes::from_static_str("86400000"));
-    entry.config_operation = 0; // SET
+    entry.name = StrBytes::from_string(key.to_string());
+    entry.value = value.map(|v| StrBytes::from_string(v.to_string()));
+    entry.config_operation = op;
     resource.configs = vec![entry];
     req.resources = vec![resource];
-    let body = encode_body(&req, 0);
-    let response = incremental_alter_configs::handle(0, &body).unwrap();
-    assert_eq!(response.responses.len(), 1);
+    encode_body(&req, 0)
+}
+
+#[test]
+fn incremental_alter_configs_set_then_delete_round_trips() {
+    let store = crate::config_store::ConfigStore::new();
+
+    // SET retention.ms -> reflected by DescribeConfigs.
+    let body = incremental_alter_body("my-topic", "retention.ms", 0, Some("3600000"));
+    let response = incremental_alter_configs::handle(0, &body, &store).unwrap();
     assert_eq!(response.responses[0].error_code, 0);
+    assert_eq!(
+        describe_config_value(&store, "my-topic", "retention.ms").as_deref(),
+        Some("3600000")
+    );
+
+    // DELETE retention.ms -> reverts to default.
+    let body = incremental_alter_body("my-topic", "retention.ms", 1, None);
+    let response = incremental_alter_configs::handle(0, &body, &store).unwrap();
+    assert_eq!(response.responses[0].error_code, 0);
+    assert_eq!(
+        describe_config_value(&store, "my-topic", "retention.ms").as_deref(),
+        Some("604800000"),
+        "DELETE must revert to the default value"
+    );
 }
 
 #[test]

@@ -3,6 +3,7 @@
 use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::handler::*;
+use crate::config_store::ConfigStore;
 use crate::producer_state::ProducerStateManager;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend};
@@ -22,6 +23,8 @@ pub struct Router {
     advertised_apis: Arc<Vec<(i16, i16, i16)>>,
     producer_state: Arc<ProducerStateManager>,
     transaction_manager: Arc<TransactionManager>,
+    /// Per-topic dynamic config overrides (AlterConfigs / DescribeConfigs).
+    config_store: Arc<ConfigStore>,
     /// Signalled after every successful Produce to wake Fetch long-polls.
     append_notify: Option<Arc<tokio::sync::Notify>>,
 }
@@ -53,6 +56,7 @@ impl Router {
             advertised_apis,
             producer_state: ProducerStateManager::new(),
             transaction_manager: TransactionManager::new(),
+            config_store: Arc::new(ConfigStore::new()),
             append_notify: None,
         }
     }
@@ -483,21 +487,23 @@ impl Router {
     fn handle_describe_configs(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| describe_configs::handle(header.api_version, body)),
+            Box::new(|| describe_configs::handle(header.api_version, body, &self.config_store)),
         )
     }
 
     fn handle_alter_configs(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| alter_configs::handle(header.api_version, body)),
+            Box::new(|| alter_configs::handle(header.api_version, body, &self.config_store)),
         )
     }
 
     fn handle_incremental_alter_configs(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| incremental_alter_configs::handle(header.api_version, body)),
+            Box::new(|| {
+                incremental_alter_configs::handle(header.api_version, body, &self.config_store)
+            }),
         )
     }
 
