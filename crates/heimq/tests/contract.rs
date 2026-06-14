@@ -1886,3 +1886,41 @@ fn contract_offset_delete_clears_committed_offset() {
         "OffsetFetch after OffsetDelete must return -1 (no committed offset)"
     );
 }
+
+/// Verify that DescribeConfigs returns at least one named config entry for a
+/// topic resource and that the response carries no error code.
+#[test]
+fn contract_describe_configs_returns_topic_configs() {
+    use kafka_protocol::messages::describe_configs_request::{
+        DescribeConfigsRequest, DescribeConfigsResource,
+    };
+    use kafka_protocol::messages::describe_configs_response::DescribeConfigsResponse;
+
+    let server = TestServer::start();
+    let topic = unique_topic("contract-describe-cfg");
+
+    let create_resp = create_topic(&server, &topic, 1);
+    assert_eq!(create_resp.topics[0].error_code, 0, "create failed");
+
+    // Resource type 2 = TOPIC.
+    let mut resource = DescribeConfigsResource::default();
+    resource.resource_type = 2;
+    resource.resource_name = StrBytes::from_string(topic.clone());
+
+    let mut req = DescribeConfigsRequest::default();
+    req.resources = vec![resource];
+    req.include_synonyms = false;
+
+    // Version 1: non-flexible, supports config_source (v1+).
+    let resp: DescribeConfigsResponse = send_request(&server, 32, 1, &req);
+    assert_eq!(resp.results.len(), 1, "should have one result");
+    let result = &resp.results[0];
+    assert_eq!(result.error_code, 0, "DescribeConfigs error");
+    assert!(
+        !result.configs.is_empty(),
+        "DescribeConfigs must return at least one config entry for the topic"
+    );
+    // Verify at least cleanup.policy is present.
+    let has_cleanup = result.configs.iter().any(|c| c.name.as_str() == "cleanup.policy");
+    assert!(has_cleanup, "cleanup.policy must be in the DescribeConfigs response");
+}
