@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -214,6 +215,12 @@ func run(bootstrap, topic string) error {
 
 	if err := check("transactional-consume-uncommitted", func() error {
 		return transactionalConsumeUncommitted(brokers, txnTopic)
+	}); err != nil {
+		return err
+	}
+
+	if err := check("multi-member-group", func() error {
+		return multiMemberGroup(brokers, cfg)
 	}); err != nil {
 		return err
 	}
@@ -458,6 +465,130 @@ func consumeViaGroup(brokers []string, topic, group string, cfg *sarama.Config) 
 	}
 
 	cancel()
+	return nil
+}
+
+type multiMemberHandler struct {
+	mu       sync.Mutex
+	consumed map[string]bool
+	want     int
+	done     chan struct{}
+}
+
+func (h *multiMemberHandler) Setup(_ sarama.ConsumerGroupSession) error   { return nil }
+func (h *multiMemberHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
+func (h *multiMemberHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	for msg := range claim.Messages() {
+		key := fmt.Sprintf("%d:%d", msg.Partition, msg.Offset)
+		h.mu.Lock()
+		h.consumed[key] = true
+		n := len(h.consumed)
+		h.mu.Unlock()
+		session.MarkMessage(msg, "")
+		if n >= h.want {
+			select {
+			case h.done <- struct{}{}:
+			default:
+			}
+		}
+	}
+	return nil
+}
+
+func multiMemberGroup(brokers []string, cfg *sarama.Config) error {
+	const N = 60
+	mmgTopic := fmt.Sprintf("sarama-mmg-%d", time.Now().UnixNano())
+	mmgGroup := fmt.Sprintf("sarama-mmg-grp-%d", time.Now().UnixNano())
+
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("admin: %w", err)
+	}
+	if err := admin.CreateTopic(mmgTopic, &sarama.TopicDetail{
+		NumPartitions:     3,
+		ReplicationFactor: 1,
+	}, false); err != nil {
+		admin.Close()
+		return fmt.Errorf("create topic: %w", err)
+	}
+	admin.Close()
+
+	producer, err := sarama.NewSyncProducer(brokers, cfg)
+	if err != nil {
+		return fmt.Errorf("producer: %w", err)
+	}
+	produced := make(map[string]bool, N)
+	for i := 0; i < N; i++ {
+		partition, offset, err := producer.SendMessage(&sarama.ProducerMessage{
+			Topic: mmgTopic,
+			Key:   sarama.StringEncoder(fmt.Sprintf("mmg-key-%d", i)),
+			Value: sarama.StringEncoder(fmt.Sprintf("mmg-val-%d", i)),
+		})
+		if err != nil {
+			producer.Close()
+			return fmt.Errorf("produce %d: %w", i, err)
+		}
+		produced[fmt.Sprintf("%d:%d", partition, offset)] = true
+	}
+	producer.Close()
+	if len(produced) != N {
+		return fmt.Errorf("expected %d unique (partition,offset) pairs, got %d", N, len(produced))
+	}
+
+	handler := &multiMemberHandler{
+		consumed: make(map[string]bool, N),
+		want:     N,
+		done:     make(chan struct{}, 2),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	startMember := func() (sarama.ConsumerGroup, error) {
+		cg, err := sarama.NewConsumerGroup(brokers, mmgGroup, cfg)
+		if err != nil {
+			return nil, err
+		}
+		go func() {
+			for ctx.Err() == nil {
+				// Consume() may return an error during rebalancing (e.g.,
+				// ILLEGAL_GENERATION when the second member bumps the generation
+				// before the first member's SyncGroup completes). Keep looping
+				// so the member re-joins rather than dying permanently.
+				_ = cg.Consume(ctx, []string{mmgTopic}, handler)
+			}
+		}()
+		return cg, nil
+	}
+
+	cg1, err := startMember()
+	if err != nil {
+		return fmt.Errorf("member 1: %w", err)
+	}
+	defer cg1.Close()
+
+	cg2, err := startMember()
+	if err != nil {
+		return fmt.Errorf("member 2: %w", err)
+	}
+	defer cg2.Close()
+
+	select {
+	case <-handler.done:
+	case <-ctx.Done():
+		handler.mu.Lock()
+		n := len(handler.consumed)
+		handler.mu.Unlock()
+		return fmt.Errorf("timeout: consumed %d/%d unique records", n, N)
+	}
+
+	handler.mu.Lock()
+	defer handler.mu.Unlock()
+	for k := range produced {
+		if !handler.consumed[k] {
+			return fmt.Errorf("produced record %s not consumed by any member", k)
+		}
+	}
 	return nil
 }
 

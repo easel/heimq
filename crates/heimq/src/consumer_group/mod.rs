@@ -192,12 +192,13 @@ impl GroupCoordinatorBackend for ConsumerGroupManager {
             let protocol = group.select_protocol().unwrap_or_default();
             group.complete_rebalance(protocol);
         } else if group.state() == GroupState::PreparingRebalance {
-            // Non-leader, leader hasn't assigned yet. Return REBALANCE_IN_PROGRESS
-            // so the client re-joins. add_member treats re-joins as "soft" and
-            // does not bump the generation, so the client will converge to the
-            // same gen where the leader eventually SyncGroups.
+            // Non-leader, leader hasn't assigned yet — return REBALANCE_IN_PROGRESS
+            // (27) so the client re-enters JoinGroup WITHOUT resetting its member_id.
+            // Returning ILLEGAL_GENERATION (22) would cause clients like sarama to
+            // reset member_id, creating a new member entry on every retry and causing
+            // a perpetual rebalance loop of ghost members.
             return SyncResult {
-                error_code: 22,
+                error_code: 27,
                 assignment: Vec::new(),
             };
         }
