@@ -12,6 +12,10 @@ use kafka_protocol::messages::CreatePartitionsResponse;
 use kafka_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
+/// Upper bound on partitions per topic (see create_topics): prevents an
+/// attacker-supplied count from forcing a multi-GB per-partition allocation.
+const MAX_PARTITIONS: i32 = 100_000;
+
 pub fn handle(
     api_version: i16,
     body: &[u8],
@@ -29,6 +33,14 @@ pub fn handle(
         let topic_name = topic.name.0.as_str();
         let mut result = CreatePartitionsTopicResult::default();
         result.name = kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
+
+        // Reject an absurd target count before allocating per-partition state.
+        if topic.count > MAX_PARTITIONS {
+            result.error_code = 37; // INVALID_PARTITIONS
+            result.error_message = Some(StrBytes::from_static_str("partition count exceeds limit"));
+            response.results.push(result);
+            continue;
+        }
 
         match storage.expand_topic_partitions(topic_name, topic.count) {
             Ok(()) => {
