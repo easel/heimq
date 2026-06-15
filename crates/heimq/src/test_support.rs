@@ -64,7 +64,21 @@ impl TestServer {
         Self::start_with_options(auto_create, default_partitions)
     }
 
+    /// Start a test server with bounded in-memory retention settings.
+    pub fn start_with_memory_bounds(retention_ms: u64, max_memory_bytes: u64) -> Self {
+        Self::start_with_runtime_options(true, 1, retention_ms, max_memory_bytes)
+    }
+
     fn start_with_options(auto_create: bool, default_partitions: i32) -> Self {
+        Self::start_with_runtime_options(auto_create, default_partitions, 60_000, 0)
+    }
+
+    fn start_with_runtime_options(
+        auto_create: bool,
+        default_partitions: i32,
+        retention_ms: u64,
+        max_memory_bytes: u64,
+    ) -> Self {
         let port = next_port();
         let auto_value = if auto_create { "true" } else { "false" };
 
@@ -98,6 +112,8 @@ impl TestServer {
             .args(["--port", &port.to_string(), "--memory-only"])
             .env("HEIMQ_AUTO_CREATE_TOPICS", auto_value)
             .env("HEIMQ_DEFAULT_PARTITIONS", default_partitions.to_string())
+            .env("HEIMQ_RETENTION_MS", retention_ms.to_string())
+            .env("HEIMQ_MAX_MEMORY_BYTES", max_memory_bytes.to_string())
             .env("RUST_LOG", "heimq=debug")
             .stdout(Stdio::null())
             .stderr(log_output)

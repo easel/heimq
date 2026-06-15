@@ -208,6 +208,95 @@ fn produce_batch(server: &TestServer, topic: &str, batch: bytes::Bytes) -> Produ
     send_request(server, 0, 2, &produce_request)
 }
 
+fn new_record_with_payload(offset: i64, timestamp_ms: i64, payload: &str) -> Record {
+    Record {
+        transactional: false,
+        control: false,
+        partition_leader_epoch: 0,
+        producer_id: -1,
+        producer_epoch: -1,
+        timestamp_type: TimestampType::Creation,
+        timestamp: timestamp_ms,
+        sequence: offset as i32,
+        offset,
+        key: Some(format!("key-{offset}").into()),
+        value: Some(payload.to_string().into()),
+        headers: Default::default(),
+    }
+}
+
+fn produce_records(server: &TestServer, topic: &str, records: &[Record]) -> ProduceResponse {
+    produce_batch(server, topic, encode_record_batch(records))
+}
+
+fn fetch_records_from(server: &TestServer, topic: &str, offset: i64) -> (i16, Vec<Record>, i64) {
+    let mut fetch_partition = FetchPartition::default();
+    fetch_partition.partition = 0;
+    fetch_partition.fetch_offset = offset;
+    fetch_partition.partition_max_bytes = 1024 * 1024;
+
+    let mut fetch_topic = FetchTopic::default();
+    fetch_topic.topic = TopicName(StrBytes::from_string(topic.to_string()));
+    fetch_topic.partitions = vec![fetch_partition];
+
+    let mut fetch_request = FetchRequest::default();
+    fetch_request.replica_id = BrokerId(-1);
+    fetch_request.max_wait_ms = 1000;
+    fetch_request.min_bytes = 1;
+    fetch_request.max_bytes = 1024 * 1024;
+    fetch_request.topics = vec![fetch_topic];
+
+    let fetch_response: FetchResponse = send_request(server, 1, 3, &fetch_request);
+    let partition_response = &fetch_response.responses[0].partitions[0];
+    let mut records = Vec::new();
+    if let Some(mut raw) = partition_response.records.clone() {
+        if !raw.is_empty() {
+            let batches = RecordBatchDecoder::decode_all(&mut raw).expect("decode fetched");
+            records = batches.into_iter().flat_map(|b| b.records).collect();
+        }
+    }
+    (partition_response.error_code, records, partition_response.high_watermark)
+}
+
+fn list_offset(server: &TestServer, topic: &str, timestamp: i64) -> i64 {
+    let mut partition = ListOffsetsPartition::default();
+    partition.partition_index = 0;
+    partition.timestamp = timestamp;
+    partition.max_num_offsets = 1;
+
+    let mut topic_req = ListOffsetsTopic::default();
+    topic_req.name = TopicName(StrBytes::from_string(topic.to_string()));
+    topic_req.partitions = vec![partition];
+
+    let mut request = ListOffsetsRequest::default();
+    request.replica_id = BrokerId(-1);
+    request.topics = vec![topic_req];
+
+    let response: ListOffsetsResponse = send_request(server, 2, 1, &request);
+    let partition_response = &response.topics[0].partitions[0];
+    assert_eq!(partition_response.error_code, 0);
+    partition_response.offset
+}
+
+fn set_topic_config(server: &TestServer, topic: &str, key: &str, value: &str) -> i16 {
+    let mut config = AlterableConfig::default();
+    config.name = StrBytes::from_string(key.to_string());
+    config.config_operation = 0; // SET
+    config.value = Some(StrBytes::from_string(value.to_string()));
+
+    let mut resource = AlterConfigsResource::default();
+    resource.resource_type = 2; // TOPIC
+    resource.resource_name = StrBytes::from_string(topic.to_string());
+    resource.configs = vec![config];
+
+    let mut request = IncrementalAlterConfigsRequest::default();
+    request.resources = vec![resource];
+    request.validate_only = false;
+
+    let response: IncrementalAlterConfigsResponse = send_request(server, 44, 0, &request);
+    response.responses[0].error_code
+}
+
 // @covers US-001-AC1 US-013-AC2
 #[test]
 fn contract_api_versions_matches_supported_range() {
@@ -385,6 +474,98 @@ fn contract_fetch_respects_max_bytes() {
     let decoded = RecordBatchDecoder::decode_all(&mut fetched).expect("decode fetched");
     let decoded_records: Vec<Record> = decoded.into_iter().flat_map(|r| r.records).collect();
     assert_eq!(decoded_records, records_first);
+}
+
+#[test]
+fn memory_bound_unexpired_data_backpressures_produce() {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let first_records = vec![new_record_with_payload(0, now_ms, &"a".repeat(4096))];
+    let first_batch = encode_record_batch(&first_records);
+    let cap = first_batch.len() as u64 + 64;
+
+    let server = TestServer::start_with_memory_bounds(60_000, cap);
+    let topic = unique_topic("memory-bound-full");
+    assert_eq!(create_topic(&server, &topic, 1).topics[0].error_code, 0);
+
+    let first_response = produce_batch(&server, &topic, first_batch);
+    assert_eq!(first_response.responses[0].partition_responses[0].error_code, 0);
+
+    let second_records = vec![new_record_with_payload(1, now_ms + 1, &"b".repeat(4096))];
+    let second_response = produce_records(&server, &topic, &second_records);
+    assert_eq!(
+        second_response.responses[0].partition_responses[0].error_code,
+        56,
+        "unexpired data must not be evicted to satisfy the memory cap"
+    );
+
+    let (error_code, fetched, high_watermark) = fetch_records_from(&server, &topic, 0);
+    assert_eq!(error_code, 0);
+    assert_eq!(high_watermark, 1);
+    assert_eq!(fetched, first_records);
+}
+
+#[test]
+fn memory_bound_expired_data_is_reclaimed_for_later_produce_fetch_flow() {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let first_records = vec![new_record_with_payload(0, now_ms, &"expired".repeat(512))];
+    let first_batch = encode_record_batch(&first_records);
+    let cap = first_batch.len() as u64 + 64;
+
+    let server = TestServer::start_with_memory_bounds(100, cap);
+    let topic = unique_topic("memory-bound-expire");
+    assert_eq!(create_topic(&server, &topic, 1).topics[0].error_code, 0);
+
+    let first_response = produce_batch(&server, &topic, first_batch);
+    assert_eq!(first_response.responses[0].partition_responses[0].error_code, 0);
+
+    std::thread::sleep(std::time::Duration::from_millis(800));
+
+    let second_records = vec![new_record_with_payload(
+        1,
+        chrono::Utc::now().timestamp_millis(),
+        &"current".repeat(512),
+    )];
+    let second_response = produce_records(&server, &topic, &second_records);
+    assert_eq!(second_response.responses[0].partition_responses[0].error_code, 0);
+
+    let earliest = list_offset(&server, &topic, -2);
+    assert_eq!(earliest, 1, "retention should advance the earliest readable offset");
+    let (error_code, fetched, high_watermark) = fetch_records_from(&server, &topic, earliest);
+    assert_eq!(error_code, 0);
+    assert_eq!(high_watermark, 2);
+    assert_eq!(fetched, second_records);
+}
+
+#[test]
+fn memory_bound_per_topic_retention_bytes_trims_consumer_visible_log() {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let first_records = vec![new_record_with_payload(0, now_ms, &"topic-a".repeat(512))];
+    let second_records = vec![new_record_with_payload(1, now_ms + 1, &"topic-b".repeat(512))];
+    let first_batch = encode_record_batch(&first_records);
+    let second_batch = encode_record_batch(&second_records);
+    let cap = (first_batch.len() + second_batch.len()) as u64 + 1024;
+
+    let server = TestServer::start_with_memory_bounds(60_000, cap);
+    let topic = unique_topic("memory-bound-topic-bytes");
+    assert_eq!(create_topic(&server, &topic, 1).topics[0].error_code, 0);
+    assert_eq!(
+        set_topic_config(&server, &topic, "retention.bytes", &(first_batch.len() + 16).to_string()),
+        0
+    );
+
+    assert_eq!(produce_batch(&server, &topic, first_batch).responses[0].partition_responses[0].error_code, 0);
+    assert_eq!(produce_batch(&server, &topic, second_batch).responses[0].partition_responses[0].error_code, 0);
+
+    std::thread::sleep(std::time::Duration::from_millis(800));
+
+    let earliest = list_offset(&server, &topic, -2);
+    assert_eq!(earliest, 1, "retention.bytes should trim the oldest batch");
+    assert_eq!(list_offset(&server, &topic, -1), 2);
+
+    let (error_code, fetched, high_watermark) = fetch_records_from(&server, &topic, earliest);
+    assert_eq!(error_code, 0);
+    assert_eq!(high_watermark, 2);
+    assert_eq!(fetched, second_records);
 }
 
 #[test]

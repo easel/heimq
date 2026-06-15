@@ -26,6 +26,12 @@ use std::sync::Mutex;
 // sarama both compile simultaneously in parallel test threads).
 static GO_BUILD_LOCK: Mutex<()> = Mutex::new(());
 
+// External client oracles each spawn a heimq broker and a real client runtime.
+// Running them concurrently creates noisy timing failures in group rebalance
+// checks, so serialize the oracle executions while leaving unit/contract tests
+// free to run normally.
+static COMPAT_ORACLE_LOCK: Mutex<()> = Mutex::new(());
+
 /// Build a Go module in `src_dir` and return the path to the compiled binary.
 /// The `go build` step is serialised via `GO_BUILD_LOCK`; the binary is
 /// written to a per-module temp path and can be run concurrently once built.
@@ -107,6 +113,7 @@ fn test_franz_go_produce_consume_consumer_group() {
         return;
     }
 
+    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
     let dir = franz_go_dir();
     let bin = build_go_oracle(&dir, "franz-compat");
     let server = TestServer::start();
@@ -143,6 +150,7 @@ fn test_sarama_produce_consume_consumer_group() {
         return;
     }
 
+    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
     let topic = "sarama-compat-topic";
     let dir = sarama_oracle_dir();
     let bin = build_go_oracle(&dir, "sarama-oracle");
@@ -183,6 +191,7 @@ fn test_java_kafka_clients_produce_consume() {
         return;
     }
 
+    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
     let jar = java_oracle_jar();
 
     // Build (or rebuild) the JAR. We always invoke mvn so that source changes
@@ -257,6 +266,7 @@ fn test_kcat_produce_consume_roundtrip() {
         return;
     }
 
+    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
     let server = TestServer::start();
     let bootstrap = server.bootstrap_servers();
     let ts = std::time::SystemTime::now()
@@ -560,6 +570,7 @@ fn test_kafkajs_produce_consume_consumer_group() {
         return;
     }
 
+    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
     let server = TestServer::start();
     let dir = kafkajs_oracle_dir();
 

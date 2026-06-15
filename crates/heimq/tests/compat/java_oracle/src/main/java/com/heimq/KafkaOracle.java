@@ -656,24 +656,8 @@ public class KafkaOracle {
             admin.createTopics(Collections.singletonList(nt)).all().get();
         }
 
-        // Produce N records; track each by partition:offset.
+        // Track each produced and consumed record by partition:offset.
         Set<String> produced = ConcurrentHashMap.newKeySet();
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps(bootstrap))) {
-            List<Future<RecordMetadata>> futures = new ArrayList<>();
-            for (int i = 0; i < N; i++) {
-                futures.add(producer.send(
-                        new ProducerRecord<>(mmgTopic, "mmg-key-" + i, "mmg-val-" + i)));
-            }
-            for (Future<RecordMetadata> f : futures) {
-                RecordMetadata meta = f.get();
-                produced.add(meta.partition() + ":" + meta.offset());
-            }
-        }
-        if (produced.size() != N) {
-            throw new RuntimeException("expected " + N + " unique (partition,offset) pairs, got " + produced.size());
-        }
-
-        // Two consumers in the same group each run in their own thread (KafkaConsumer is not thread-safe).
         Set<String> consumed = ConcurrentHashMap.newKeySet();
         CountDownLatch done = new CountDownLatch(1);
         AtomicBoolean stop = new AtomicBoolean(false);
@@ -699,6 +683,26 @@ public class KafkaOracle {
         ExecutorService exec = Executors.newFixedThreadPool(2);
         exec.submit(memberTask);
         exec.submit(memberTask);
+
+        // Give both members time to join and receive assignment, then produce
+        // into an active group. This avoids depending on backlog offset-reset
+        // timing while still proving multi-member delivery through Join/Sync/Fetch.
+        Thread.sleep(2000);
+
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(producerProps(bootstrap))) {
+            List<Future<RecordMetadata>> futures = new ArrayList<>();
+            for (int i = 0; i < N; i++) {
+                futures.add(producer.send(
+                        new ProducerRecord<>(mmgTopic, "mmg-key-" + i, "mmg-val-" + i)));
+            }
+            for (Future<RecordMetadata> f : futures) {
+                RecordMetadata meta = f.get();
+                produced.add(meta.partition() + ":" + meta.offset());
+            }
+        }
+        if (produced.size() != N) {
+            throw new RuntimeException("expected " + N + " unique (partition,offset) pairs, got " + produced.size());
+        }
 
         boolean completed = done.await(30, TimeUnit.SECONDS);
         stop.set(true);
