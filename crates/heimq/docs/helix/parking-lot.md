@@ -83,6 +83,32 @@ specs, and contracts; it contains nothing not already decided elsewhere.
 - **Owner**: heimq maintainers
 - **Last Reviewed**: 2026-06-11
 
+### TRAIT-002: sequencing/commit seam for leaderless multi-partition writers
+- **Type**: Deferred
+- **Artifact Type**: Contract (engine trait)
+- **Source**: fjord ADR-005 / fjord TD-005 §Heimq seam (2026-06-14)
+- **Rationale**: fjord's diskless re-baseline assigns Kafka offsets at a
+  metadata-plane commit that atomically sequences **many partitions** carried in
+  one multiplexed object — a shape that does not fit
+  `PartitionLog::append` (per-partition, returns offsets synchronously from a
+  local counter, assumes a single writer owns the partition). fjord's chosen
+  path (S1) is to **own sequencing above the heimq log traits** and use them
+  only for raw object IO, so heimq needs **no** immediate change and its lossy
+  single-node distribution stays free of object-storage/multi-partition-commit
+  machinery (charter intact). A heimq-side seam (S2: a `LogBackend`-level atomic
+  multi-partition commit + offset-assignment hook, feature/trait-gated off the
+  distribution) is recorded as TRAIT-002 for if/when a second consumer needs it.
+- **Impact if Omitted**: fjord proceeds via S1 with no heimq change; only the
+  shared-seam reuse across consumers is deferred.
+- **Dependencies**: A second engine consumer (niflheim/pqueue) needing
+  commit-time multi-partition sequencing; fjord SPIKE-001 Workload 0 confirming
+  the sequencing path is viable at all.
+- **Revisit Trigger**: niflheim or pqueue requires the same sequence-at-commit
+  seam, OR fjord finds S1 forces it to fork heimq log internals.
+- **Target Activity/Milestone**: Unscheduled (revisit post fjord Phase 3)
+- **Owner**: heimq maintainers + fjord
+- **Last Reviewed**: 2026-06-14
+
 ## Parked Artifacts (Links)
 
 None.
