@@ -781,7 +781,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -805,7 +804,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -833,7 +831,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -862,7 +859,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let request = framed_request(18, 0, 1, &[]);
@@ -885,7 +881,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let stream = ScriptedStream::with_read_error();
@@ -900,7 +895,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let request = framed_request(18, 0, 1, &[]);
@@ -917,7 +911,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         // Send a frame claiming to be larger than MAX_FRAME_BYTES
@@ -964,7 +957,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         // Build a request with a valid 8-byte header (so peek_correlation_id works)
@@ -1005,7 +997,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1085,7 +1076,6 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
-        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

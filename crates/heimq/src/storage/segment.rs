@@ -3,9 +3,11 @@
 use std::collections::BTreeMap;
 
 /// Read the `max_timestamp` field from a Kafka v2 record batch header
-/// (constant offset 35..43), if the slice is long enough.
+/// (constant offset 35..43). Returns `None` for anything that isn't a v2 batch
+/// (magic byte at offset 16 must be 2) so legacy v0/v1 message sets — which have
+/// a different layout — are never time-expired by a misread timestamp.
 fn batch_max_timestamp(batch: &[u8]) -> Option<i64> {
-    if batch.len() < 43 {
+    if batch.len() < 43 || batch.get(16) != Some(&2) {
         return None;
     }
     batch[35..43].try_into().ok().map(i64::from_be_bytes)

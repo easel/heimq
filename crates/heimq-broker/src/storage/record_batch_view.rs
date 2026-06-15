@@ -43,7 +43,9 @@ impl RecordBatchHeader {
         // magic(16) crc(17..21) attributes(21..23) last_offset_delta(23..27)
         // base_ts(27..35) max_ts(35..43) producer_id(43..51) producer_epoch(51..53)
         // base_sequence(53..57) record_count(57..61) records...
-        if raw.len() < 61 {
+        // Only valid for v2 batches (magic == 2); legacy v0/v1 message sets have a
+        // different layout, so return None rather than reading garbage fields.
+        if raw.len() < 61 || raw.get(16) != Some(&2) {
             return None;
         }
         let attributes = i16::from_be_bytes([raw[21], raw[22]]);
