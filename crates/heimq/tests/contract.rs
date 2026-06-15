@@ -1417,9 +1417,9 @@ fn contract_transactional_produce_commit_fetch() {
     assert_eq!(records[0].value, Some(bytes::Bytes::from("txn-val")));
 }
 
-// @covers US-003-AC4 (duplicate sequence)
+// @covers US-003-AC3 (duplicate retry is de-duplicated)
 #[test]
-fn contract_duplicate_sequence_returns_error() {
+fn contract_duplicate_sequence_is_deduplicated() {
     use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
     use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
 
@@ -1446,13 +1446,19 @@ fn contract_duplicate_sequence_returns_error() {
     let resp0 = produce_batch(&server, &topic, encode_batch(0));
     assert_eq!(resp0.responses[0].partition_responses[0].error_code, 0, "first batch should succeed");
 
-    // Retry with same sequence 0: should return DUPLICATE_SEQUENCE_NUMBER.
+    // Retry with same sequence 0: Kafka/Redpanda return success while
+    // de-duplicating the batch, so consumers must still see only one record.
     let resp_dup = produce_batch(&server, &topic, encode_batch(0));
     assert_eq!(
         resp_dup.responses[0].partition_responses[0].error_code,
-        46, // DUPLICATE_SEQUENCE_NUMBER
-        "duplicate sequence must return error 46"
+        0,
+        "duplicate retry should return success"
     );
+
+    let (fetch_error, records, high_watermark) = fetch_records_from(&server, &topic, 0);
+    assert_eq!(fetch_error, 0, "fetch should succeed");
+    assert_eq!(high_watermark, 1, "duplicate retry must not advance high watermark");
+    assert_eq!(records.len(), 1, "duplicate retry must not append a second record");
 }
 
 // @covers US-004 (stale producer epoch fencing)

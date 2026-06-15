@@ -238,7 +238,7 @@ support.
   deployments.
 - **FR-6** — Idempotent producer: `InitProducerId` returns a producer id; the broker
   tracks `(producerId, epoch, partition)` sequence numbers; duplicate
-  sequence numbers return `DUPLICATE_SEQUENCE_NUMBER`; out-of-order returns
+  sequence retries are de-duplicated; out-of-order returns
   `OUT_OF_ORDER_SEQUENCE_NUMBER`.
 - **FR-7** — Transactions: `AddPartitionsToTxn` / `AddOffsetsToTxn` / `EndTxn` /
   `WriteTxnMarkers` / `TxnOffsetCommit` operate on a single-coordinator

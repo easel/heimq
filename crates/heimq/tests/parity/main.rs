@@ -4,6 +4,7 @@ mod diff;
 mod driver;
 mod exemptions;
 mod normalize;
+mod raw_protocol;
 mod workloads;
 
 use anyhow::Result;

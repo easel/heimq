@@ -105,10 +105,16 @@ pub fn handle(
                                         topic = %topic_name, partition,
                                         producer_id = hdr.producer_id,
                                         base_seq = hdr.base_sequence,
-                                        "Duplicate sequence"
+                                        "Duplicate sequence; returning successful de-duplication"
                                     );
-                                    partition_response.error_code = 46; // DUPLICATE_SEQUENCE_NUMBER
-                                    partition_response.base_offset = -1;
+                                    partition_response.error_code = 0;
+                                    let high_watermark = storage
+                                        .high_watermark(&topic_name, partition)
+                                        .unwrap_or(0);
+                                    partition_response.base_offset =
+                                        high_watermark.saturating_sub(i64::from(hdr.record_count));
+                                    partition_response.log_append_time_ms =
+                                        chrono::Utc::now().timestamp_millis();
                                     topic_response.partition_responses.push(partition_response);
                                     continue;
                                 }

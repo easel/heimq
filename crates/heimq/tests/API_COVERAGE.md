@@ -57,7 +57,7 @@ contract-tested (and being extended to differential parity under `heimq-2c7afefc
 
 | Behavior | Error / effect | Test |
 |----------|----------------|------|
-| Duplicate producer sequence | `DUPLICATE_SEQUENCE_NUMBER` (46) | `contract_duplicate_sequence_returns_error` |
+| Duplicate producer sequence | successful de-duplication; no duplicate visible | `contract_duplicate_sequence_is_deduplicated`; parity `duplicate_sequence` |
 | Out-of-order producer sequence | `OUT_OF_ORDER_SEQUENCE_NUMBER` (45) | `contract_out_of_order_sequence_returns_error` |
 | Zombie producer epoch | `INVALID_PRODUCER_EPOCH` (47) | `contract_stale_epoch_returns_invalid_producer_epoch` |
 | Aborted txn under read_committed | records invisible | `contract_aborted_transaction_invisible_to_read_committed` |

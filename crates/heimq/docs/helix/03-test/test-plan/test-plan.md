@@ -289,9 +289,9 @@ AddOffsetsToTxn (25), EndTxn (26), WriteTxnMarkers (27), TxnOffsetCommit
 (66).
 
 #### P0 — Idempotent producer
-- [ ] `enable.idempotence=true` retried batch is de-duped (no duplicate visible to consumer).
+- [x] `enable.idempotence=true` retried batch is de-duped (no duplicate visible to consumer). (`contract_duplicate_sequence_is_deduplicated`; parity `duplicate_sequence`)
 - [x] Out-of-order sequence returns `OUT_OF_ORDER_SEQUENCE_NUMBER`. (`contract_out_of_order_sequence_returns_error`)
-- [x] Duplicate sequence returns `DUPLICATE_SEQUENCE_NUMBER` (or is silently de-duped per Kafka semantics). (`contract_duplicate_sequence_returns_error`)
+- [x] Duplicate sequence is de-duped per Kafka semantics. (`contract_duplicate_sequence_is_deduplicated`; parity `duplicate_sequence`)
 - [x] `InitProducerId` returns producerId/epoch; epoch bumps on re-init. (`contract_init_producer_id_with_transactional_id`)
 
 #### P0 — Transactions
