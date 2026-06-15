@@ -78,8 +78,24 @@ The following are explicit non-goals — heimq does not aim to do these:
    process restart. Persistent backends (e.g., Postgres for offsets) may
    exist as opt-in slices but are not the default and are not required for
    correctness of in-scope features.
-2. **Long retention.** Retention is bounded by available memory and any
-   configured caps. Multi-day or multi-TB retention is out of scope.
+2. **Long retention.** Retention is bounded by time, size, and a hard memory
+   cap; multi-day or multi-TB retention is out of scope. The in-memory log
+   enforces, using the **standard Kafka topic tunables** (byte- and time-based,
+   **never record-count-based** — records have unknown size, so a count limit
+   cannot bound memory):
+   - **`retention.ms`** (time, default 7 days): a background sweeper drops record
+     batches older than the TTL. Always on.
+   - **`retention.bytes`** (per-partition size) and a global **`max_memory_bytes`**
+     cap (0 = unlimited): bound total in-memory bytes.
+   - **Backpressure**: at the memory cap, heimq first drops expired data, then
+     rejects produce with the retriable `KAFKA_STORAGE_ERROR` (56) rather than
+     evicting un-expired data or growing without bound — preserving the
+     `retention.ms` contract under memory pressure.
+
+   Per-topic `retention.ms` / `retention.bytes` are tunable via AlterConfigs
+   (API 33) and IncrementalAlterConfigs (API 44); `max_memory_bytes` is a
+   broker-level cap. A consumer that falls behind reclaimed data receives
+   `OFFSET_OUT_OF_RANGE`, exactly as in Kafka.
 3. **Multi-broker / replication / KRaft / controller responsibilities.**
    heimq is single-node by design.
 4. **SASL / ACLs / delegation tokens.** SASL PLAIN/TLS exist as a gated
@@ -88,8 +104,13 @@ The following are explicit non-goals — heimq does not aim to do these:
    they are OFF in the heimq distribution and not a distribution feature.
    ACLs and delegation tokens remain fully out of scope.
 5. **Share groups, telemetry APIs, admin reassignment APIs.** Out of scope.
-6. **Performance at production-Kafka scale.** heimq must *complete* standard
-   benchmarks correctly; it does not aim to match Kafka/Redpanda throughput.
+6. **Production-Kafka durability/scale.** heimq must *complete* standard
+   benchmarks correctly; durability, replication, and multi-broker scale are out
+   of scope. Note: on the in-memory produce/fetch hot path heimq is CPU-bound and
+   *exceeds* both Apache Kafka and Redpanda on a like-for-like single-node
+   librdkafka benchmark (2.8–4.8× produce, 3.6–5.2× consume; see
+   `crates/heimq/benches/BASELINE.md`) — throughput parity is not a non-goal, it
+   is a demonstrated property of the in-memory design.
 
 Deferred items tracked in `docs/helix/parking-lot.md`.
 
