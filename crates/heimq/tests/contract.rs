@@ -2020,7 +2020,7 @@ fn contract_fetch_long_poll_waits_on_empty_partition() {
     let has_records = fetch_resp.responses[0].partitions[0]
         .records
         .as_ref()
-        .map_or(false, |r| !r.is_empty());
+        .is_some_and(|r| !r.is_empty());
     assert!(!has_records, "expected no records on empty partition");
 
     // Server should have waited at least 150 ms (half of max_wait_ms).
@@ -2697,7 +2697,7 @@ fn contract_fetch_long_poll_wakes_on_produce() {
         // Signal that we're about to send the Fetch, then start timing.
         barrier2.wait();
         let start = std::time::Instant::now();
-        let resp: FetchResponse = send_request(&*server2, 1, 4, &fetch_req);
+        let resp: FetchResponse = send_request(&server2, 1, 4, &fetch_req);
         (resp, start.elapsed())
     });
 
@@ -2725,7 +2725,7 @@ fn contract_fetch_long_poll_wakes_on_produce() {
     let has_records = fetch_resp.responses[0].partitions[0]
         .records
         .as_ref()
-        .map_or(false, |r| !r.is_empty());
+        .is_some_and(|r| !r.is_empty());
     assert!(
         has_records,
         "long-poll response must contain the produced records"
@@ -2773,7 +2773,7 @@ fn contract_fetch_beyond_hwm_returns_empty() {
         partition.error_code, 0,
         "fetch beyond HWM should return no error"
     );
-    let has_records = partition.records.as_ref().map_or(false, |r| !r.is_empty());
+    let has_records = partition.records.as_ref().is_some_and(|r| !r.is_empty());
     assert!(!has_records, "fetch beyond HWM must return empty records");
     assert_eq!(
         partition.high_watermark, 2,

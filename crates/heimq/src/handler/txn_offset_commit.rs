@@ -1,7 +1,7 @@
 //! TxnOffsetCommit handler (API Key 28) — US-004
 
 use crate::error::Result;
-use crate::transaction_state::TransactionManager;
+use crate::transaction_state::{CommitOffsetArgs, TransactionManager};
 use bytes::Bytes;
 use kafka_protocol::messages::txn_offset_commit_request::TxnOffsetCommitRequest;
 use kafka_protocol::messages::txn_offset_commit_response::{
@@ -49,16 +49,16 @@ pub fn handle(
         for partition in &topic.partitions {
             let metadata = partition.committed_metadata.as_ref().map(|m| m.to_string());
 
-            let error_code = transaction_manager.commit_offset(
-                &txn_id,
+            let error_code = transaction_manager.commit_offset(CommitOffsetArgs {
+                txn_id: &txn_id,
                 producer_id,
                 epoch,
-                &group_id,
-                &topic_name,
-                partition.partition_index,
-                partition.committed_offset,
+                group_id: &group_id,
+                topic: &topic_name,
+                partition: partition.partition_index,
+                offset: partition.committed_offset,
                 metadata,
-            );
+            });
 
             let mut part_result = TxnOffsetCommitResponsePartition::default();
             part_result.partition_index = partition.partition_index;

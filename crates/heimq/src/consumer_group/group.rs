@@ -237,7 +237,7 @@ impl ConsumerGroup {
                     .leader_id
                     .read()
                     .as_ref()
-                    .map_or(false, |l| members.contains_key(l));
+                    .is_some_and(|l| members.contains_key(l));
                 if !leader_valid {
                     *self.leader_id.write() = members.keys().next().cloned();
                 }
@@ -352,7 +352,7 @@ impl ConsumerGroup {
                 .leader_id
                 .read()
                 .as_ref()
-                .map_or(false, |lid| members.contains_key(lid));
+                .is_some_and(|lid| members.contains_key(lid));
             if !leader_valid {
                 *self.leader_id.write() = members.keys().next().cloned();
             }

@@ -356,9 +356,11 @@ mod tests {
 
     #[test]
     fn produce_append_core_rejects_batches_over_backend_limits() {
-        let mut caps = BackendCapabilities::default();
-        caps.max_message_bytes = 16;
-        caps.max_batch_bytes = 16;
+        let caps = BackendCapabilities {
+            max_message_bytes: 16,
+            max_batch_bytes: 16,
+            ..BackendCapabilities::default()
+        };
         let storage = TestStorage::new().with_caps(caps);
         let records = record_batch_header_bytes(1, -1, 0);
 

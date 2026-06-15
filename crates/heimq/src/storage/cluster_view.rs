@@ -23,7 +23,7 @@ impl SingleNodeClusterView {
             broker: BrokerInfo {
                 node_id: config.broker_id,
                 host,
-                port: config.port as u16,
+                port: config.port,
             },
             cluster_id: config.cluster_id.clone(),
         }

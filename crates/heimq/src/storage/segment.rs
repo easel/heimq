@@ -88,9 +88,7 @@ impl Segment {
         let expired: Vec<i64> = self
             .batches
             .iter()
-            .take_while(|(_, b)| {
-                batch_max_timestamp(b).map_or(false, |ts| ts > 0 && ts < cutoff_ms)
-            })
+            .take_while(|(_, b)| batch_max_timestamp(b).is_some_and(|ts| ts > 0 && ts < cutoff_ms))
             .map(|(&k, _)| k)
             .collect();
         let mut freed = 0;

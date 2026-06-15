@@ -33,6 +33,20 @@ pub struct AbortedRange {
     pub first_offset: i64,
 }
 
+pub type AffectedPartitions = Vec<(String, i32, i64, i64)>;
+pub type PendingOffsets = HashMap<(String, i32, String), (i64, Option<String>)>;
+
+pub struct CommitOffsetArgs<'a> {
+    pub txn_id: &'a str,
+    pub producer_id: i64,
+    pub epoch: i16,
+    pub group_id: &'a str,
+    pub topic: &'a str,
+    pub partition: i32,
+    pub offset: i64,
+    pub metadata: Option<String>,
+}
+
 pub struct TransactionManager {
     state: Mutex<TxnManagerState>,
 }
@@ -189,30 +203,24 @@ impl TransactionManager {
 
     /// TxnOffsetCommit: store pending transactional offsets.
     /// Returns error_code.
-    pub fn commit_offset(
-        &self,
-        txn_id: &str,
-        producer_id: i64,
-        epoch: i16,
-        group_id: &str,
-        topic: &str,
-        partition: i32,
-        offset: i64,
-        metadata: Option<String>,
-    ) -> i16 {
+    pub fn commit_offset(&self, args: CommitOffsetArgs<'_>) -> i16 {
         let mut state = self.state.lock();
-        match state.transactions.get_mut(txn_id) {
+        match state.transactions.get_mut(args.txn_id) {
             None => 47,
             Some(entry) => {
-                if entry.producer_id != producer_id || entry.epoch != epoch {
+                if entry.producer_id != args.producer_id || entry.epoch != args.epoch {
                     return 47;
                 }
                 if entry.status != TxnStatus::Ongoing {
                     return 49; // INVALID_TXN_STATE
                 }
                 entry.pending_offsets.insert(
-                    (topic.to_string(), partition, group_id.to_string()),
-                    (offset, metadata),
+                    (
+                        args.topic.to_string(),
+                        args.partition,
+                        args.group_id.to_string(),
+                    ),
+                    (args.offset, args.metadata),
                 );
                 0
             }
@@ -228,7 +236,7 @@ impl TransactionManager {
         producer_id: i64,
         epoch: i16,
         committed: bool,
-    ) -> (i16, Vec<(String, i32, i64, i64)>) {
+    ) -> (i16, AffectedPartitions) {
         let mut state = self.state.lock();
         match state.transactions.get_mut(txn_id) {
             None => (47, vec![]),
@@ -297,11 +305,7 @@ impl TransactionManager {
         producer_id: i64,
         epoch: i16,
         committed: bool,
-    ) -> (
-        i16,
-        Vec<(String, i32, i64, i64)>,
-        HashMap<(String, i32, String), (i64, Option<String>)>,
-    ) {
+    ) -> (i16, AffectedPartitions, PendingOffsets) {
         let mut state = self.state.lock();
         match state.transactions.get_mut(txn_id) {
             None => (47, vec![], HashMap::new()),

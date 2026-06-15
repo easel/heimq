@@ -18,10 +18,8 @@ pub fn handle(
     transaction_manager: &Arc<TransactionManager>,
 ) -> Result<InitProducerIdResponse> {
     let mut buf = Bytes::copy_from_slice(body);
-    let request = match InitProducerIdRequest::decode(&mut buf, api_version) {
-        Ok(r) => r,
-        Err(_) => InitProducerIdRequest::default(),
-    };
+    let request: InitProducerIdRequest =
+        InitProducerIdRequest::decode(&mut buf, api_version).unwrap_or_default();
 
     // If transactional_id is non-empty, delegate to TransactionManager (US-004).
     // Treat empty string same as null (non-transactional).

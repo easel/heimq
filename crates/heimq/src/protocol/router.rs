@@ -1001,11 +1001,12 @@ mod tests {
     fn test_niflheim_shape_wal_adapter() {
         use crate::storage::{BackendCapabilities, TopicLog};
         use std::sync::Mutex;
+        type WalEntry = (String, i32, Vec<u8>);
 
         struct WalShapeBackend {
             inner: Arc<dyn crate::storage::LogBackend>,
             caps: BackendCapabilities,
-            wal: Arc<Mutex<Vec<(String, i32, Vec<u8>)>>>,
+            wal: Arc<Mutex<Vec<WalEntry>>>,
         }
         impl crate::storage::LogBackend for WalShapeBackend {
             fn create_topic(&self, n: &str, p: i32) -> crate::error::Result<Arc<dyn TopicLog>> {
@@ -1131,7 +1132,9 @@ mod tests {
         }
         impl crate::storage::LogBackend for QueueSinkBackend {
             fn create_topic(&self, _n: &str, _p: i32) -> crate::error::Result<Arc<dyn TopicLog>> {
-                Err(crate::error::HeimqError::Protocol("pqueue-sink: no topics".into()).into())
+                Err(crate::error::HeimqError::Protocol(
+                    "pqueue-sink: no topics".into(),
+                ))
             }
             fn delete_topic(&self, _n: &str) -> crate::error::Result<()> {
                 Ok(())

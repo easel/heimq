@@ -18,14 +18,11 @@ pub fn handle(
     cluster_view: &dyn ClusterView,
 ) -> Result<MetadataResponse> {
     // Empty body is treated as "all topics" request (Kafka spec: null topics array).
-    let request = if body.is_empty() {
+    let request: MetadataRequest = if body.is_empty() {
         MetadataRequest::default()
     } else {
         let mut buf = Bytes::copy_from_slice(body);
-        match MetadataRequest::decode(&mut buf, api_version) {
-            Ok(r) => r,
-            Err(_) => MetadataRequest::default(),
-        }
+        MetadataRequest::decode(&mut buf, api_version).unwrap_or_default()
     };
 
     let self_broker = cluster_view.self_broker();

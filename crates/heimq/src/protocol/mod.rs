@@ -104,7 +104,8 @@ fn capability_gate(api_key: i16) -> CapabilityGate {
         // Group-coordinator APIs.
         10 | 11 | 12 | 13 | 14 | 15 | 16 | 42 => CapabilityGate::GroupCoordinator,
         // Transaction APIs, InitProducerId, ApiVersions, config APIs, admin stubs are always available.
-        22 | 24 | 25 | 26 | 27 | 28 | 32 | 33 | 43 | 44 | 60 | 66 | _ => CapabilityGate::Always,
+        22 | 24 | 25 | 26 | 27 | 28 | 32 | 33 | 43 | 44 | 60 | 66 => CapabilityGate::Always,
+        _ => CapabilityGate::Always,
     }
 }
 

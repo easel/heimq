@@ -1,9 +1,9 @@
 name: test
 
-# Hard test gate per ADR-002 (Layer 2 — required CI status check):
-# runs the full workspace test suite on every push and pull request.
-# Marked required in branch protection on main. The stress-matrix job
-# remains continue-on-error and is not a gate.
+# Hard CI gate per ADR-002 (Layer 2 — required CI status check):
+# runs formatting, clippy, and the full workspace test suite on every
+# push and pull request. Marked required in branch protection on main.
+# The stress-matrix job remains continue-on-error and is not a gate.
 
 on:
   push:
@@ -19,6 +19,8 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -28,5 +30,11 @@ jobs:
         # which needs the libcurl/libsasl dev headers on the runner.
         run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev
 
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
       - name: Run workspace tests
-        run: cargo test --workspace --all-features
+        run: cargo test --workspace --all-targets

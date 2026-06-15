@@ -58,7 +58,7 @@ fn config_from_env() -> Config {
             argv.extend(args.split_whitespace().map(|arg| arg.to_string()));
             return Config::parse_from(argv);
         }
-        return Config::parse_from(["heimq"]);
+        Config::parse_from(["heimq"])
     }
     #[cfg(not(any(test, coverage)))]
     Config::parse()
@@ -125,7 +125,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_with_config_bind_error() {
-        let _guard = ENV_LOCK.lock().unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
 

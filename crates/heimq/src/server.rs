@@ -432,6 +432,7 @@ async fn run_writer(
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use crate::consumer_group::MemoryOffsetStore;
@@ -549,10 +550,7 @@ mod tests {
         ) -> Poll<std::io::Result<()>> {
             let this = self.get_mut();
             if this.fail_read {
-                return Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "read failed",
-                )));
+                return Poll::Ready(Err(std::io::Error::other("read failed")));
             }
 
             if this.pos >= this.data.len() {
@@ -575,10 +573,7 @@ mod tests {
         ) -> Poll<std::io::Result<usize>> {
             let this = self.get_mut();
             if this.fail_write {
-                return Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "write failed",
-                )));
+                return Poll::Ready(Err(std::io::Error::other("write failed")));
             }
             Poll::Ready(Ok(buf.len()))
         }
@@ -810,7 +805,7 @@ mod tests {
         let config = Config::parse_from(["heimq"]);
         let server = Server::new(config).unwrap();
         let mut served = 0usize;
-        let error = std::io::Error::new(std::io::ErrorKind::Other, "accept failed");
+        let error = std::io::Error::other("accept failed");
         let should_continue = server.handle_accept_result(Err(error), Some(1), &mut served);
         assert!(should_continue);
         assert_eq!(served, 0);
@@ -992,7 +987,7 @@ mod tests {
     // WIRE-001 §1: frame-size cap enforced — connection close, no response
     #[tokio::test]
     async fn test_frame_size_cap_enforced() {
-        let _ = init_tracing();
+        init_tracing();
         let config = Arc::new(Config::parse_from(["heimq"]));
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
@@ -1042,7 +1037,7 @@ mod tests {
     // WIRE-001 §3: error frame sent before close when routing fails with identifiable correlation_id
     #[tokio::test]
     async fn test_malformed_request_typed_error_frame() {
-        let _ = init_tracing();
+        init_tracing();
         let config = Arc::new(Config::parse_from(["heimq"]));
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());

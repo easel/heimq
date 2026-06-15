@@ -4,6 +4,11 @@
 //! Uses kafka crate for legacy protocol compatibility verification.
 //!
 //! Note: rdkafka is a dev-dependency only - it does not affect the server binary.
+#![allow(
+    clippy::collapsible_match,
+    clippy::needless_borrows_for_generic_args,
+    clippy::type_complexity
+)]
 
 use heimq::test_support::TestServer;
 use kafka::client::KafkaClient;

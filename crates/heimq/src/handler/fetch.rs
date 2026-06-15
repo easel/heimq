@@ -90,7 +90,7 @@ pub fn handle(
                     }
 
                     if !records.is_empty() {
-                        partition_data.records = Some(Bytes::from(records).into());
+                        partition_data.records = Some(Bytes::from(records));
                     }
                 }
                 Err(e) => {
