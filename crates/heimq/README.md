@@ -109,6 +109,12 @@ cargo build --release
 ./target/release/heimq --memory-only
 ```
 
+### Docker
+
+```bash
+docker run --rm -p 9092:9092 ghcr.io/easel/heimq:latest --memory-only
+```
+
 ## Configuration
 
 | Flag | Default | Description |
