@@ -1,3 +1,4 @@
+mod bench;
 mod broker;
 mod diff;
 mod driver;
@@ -25,6 +26,15 @@ async fn run() -> Result<()> {
     eprintln!("booting containers...");
     let (_redpanda_container, _kafka_container, _heimq_server, targets) = broker::boot().await?;
     eprintln!("containers ready");
+
+    // Comparative throughput benchmark instead of the diff suite.
+    if std::env::var("BENCH_COMPARE").is_ok() {
+        let h = targets.heimq.bootstrap_servers.clone();
+        let k = targets.kafka.bootstrap_servers.clone();
+        let r = targets.redpanda.bootstrap_servers.clone();
+        tokio::task::spawn_blocking(move || bench::run_compare(&h, &k, &r)).await??;
+        return Ok(());
+    }
 
     let workloads = workloads::all();
     let exemptions = exemptions::load()?;

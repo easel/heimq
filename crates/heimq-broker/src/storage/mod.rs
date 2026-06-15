@@ -13,7 +13,7 @@ pub use capabilities::{
 };
 pub use cluster_view::{BrokerInfo, ClusterView, ClusterViewError};
 pub use offset_store::{CommittedOffset, OffsetStore, OffsetStoreCapabilities};
-pub use record_batch_view::{RecordBatchView, RecordView};
+pub use record_batch_view::{RecordBatchHeader, RecordBatchView, RecordView};
 
 use crate::error::Result;
 use bytes::Bytes;

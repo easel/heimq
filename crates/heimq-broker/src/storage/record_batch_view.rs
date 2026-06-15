@@ -20,6 +20,44 @@ use kafka_protocol::records::{
     Compression, Record, RecordBatchDecoder, RecordCompression, RecordSet,
 };
 
+/// Cheap, O(1) read of the fixed fields of a Kafka v2 RecordBatch header — the
+/// producer/transaction metadata that lives at constant offsets before the
+/// (variable-length, possibly compressed) records. Use this on the produce hot
+/// path to avoid fully decoding every record just to inspect the header; reserve
+/// [`RecordBatchView`] for paths that actually need the decoded records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecordBatchHeader {
+    pub producer_id: i64,
+    pub producer_epoch: i16,
+    pub base_sequence: i32,
+    pub record_count: i32,
+    pub is_transactional: bool,
+    pub is_control: bool,
+}
+
+impl RecordBatchHeader {
+    /// Read the fixed v2 header fields. Returns `None` if `raw` is too short to
+    /// hold a v2 batch header (61 bytes through `record_count`).
+    pub fn peek(raw: &[u8]) -> Option<Self> {
+        // v2 layout: base_offset(0..8) batch_length(8..12) leader_epoch(12..16)
+        // magic(16) crc(17..21) attributes(21..23) last_offset_delta(23..27)
+        // base_ts(27..35) max_ts(35..43) producer_id(43..51) producer_epoch(51..53)
+        // base_sequence(53..57) record_count(57..61) records...
+        if raw.len() < 61 {
+            return None;
+        }
+        let attributes = i16::from_be_bytes([raw[21], raw[22]]);
+        Some(Self {
+            producer_id: i64::from_be_bytes(raw[43..51].try_into().ok()?),
+            producer_epoch: i16::from_be_bytes([raw[51], raw[52]]),
+            base_sequence: i32::from_be_bytes(raw[53..57].try_into().ok()?),
+            record_count: i32::from_be_bytes(raw[57..61].try_into().ok()?),
+            is_transactional: attributes & 0x10 != 0,
+            is_control: attributes & 0x20 != 0,
+        })
+    }
+}
+
 /// Structured view of a single Kafka record batch.
 ///
 /// Carries parsed batch-level metadata plus the decoded records and a
