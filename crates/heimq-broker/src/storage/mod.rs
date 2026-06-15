@@ -102,6 +102,14 @@ pub trait LogBackend: Send + Sync {
         0
     }
 
+    /// Reclaim one topic by both policies: drop batches with `max_timestamp <
+    /// cutoff_ms` (per-topic `retention.ms`) and, when `retention_bytes >= 0`, drop
+    /// oldest batches until each partition is within `retention_bytes`. Returns
+    /// bytes freed. No-op default for backends without retention.
+    fn reclaim_topic(&self, _topic: &str, _cutoff_ms: i64, _retention_bytes: i64) -> usize {
+        0
+    }
+
     /// Fetch records starting at `offset`, up to `max_bytes`.
     fn fetch(
         &self,

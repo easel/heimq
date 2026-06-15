@@ -58,6 +58,25 @@ impl Segment {
         self.batches.keys().next().copied()
     }
 
+    /// Drop the oldest batches until the stored size is within `max_bytes`,
+    /// returning bytes freed. Always retains at least the newest batch so a
+    /// freshly produced record isn't immediately and fully evicted (mirrors
+    /// Kafka never deleting the active segment).
+    pub fn reclaim_to_size(&mut self, max_bytes: usize) -> usize {
+        let mut freed = 0;
+        while self.size > max_bytes && self.batches.len() > 1 {
+            let oldest = match self.batches.keys().next().copied() {
+                Some(k) => k,
+                None => break,
+            };
+            if let Some(b) = self.batches.remove(&oldest) {
+                freed += b.len();
+                self.size -= b.len();
+            }
+        }
+        freed
+    }
+
     /// Drop the leading (oldest) batches whose `max_timestamp` is older than
     /// `cutoff_ms`, returning the number of bytes freed. Batches are stored in
     /// ascending offset order, which is also produce-time order, so dropping from

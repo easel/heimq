@@ -87,6 +87,20 @@ impl MemoryPartitionLog {
         freed
     }
 
+    /// Drop oldest batches until the partition is within `max_bytes`
+    /// (`retention.bytes`), advancing `log_start_offset`. Returns bytes freed.
+    pub fn reclaim_to_size(&self, max_bytes: usize) -> usize {
+        let mut segment = self.active_segment.write();
+        let freed = segment.reclaim_to_size(max_bytes);
+        if freed > 0 {
+            let new_start = segment
+                .first_offset()
+                .unwrap_or_else(|| self.next_offset.load(Ordering::SeqCst));
+            self.log_start_offset.store(new_start, Ordering::SeqCst);
+        }
+        freed
+    }
+
     /// Fetch records starting from the given offset.
     ///
     /// Returns `(record_batch_data, high_watermark)`.

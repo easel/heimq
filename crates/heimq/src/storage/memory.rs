@@ -224,6 +224,26 @@ impl LogBackend for MemoryLog {
         freed
     }
 
+    fn reclaim_topic(&self, topic: &str, cutoff_ms: i64, retention_bytes: i64) -> usize {
+        let t = match self.get_memory_topic(topic) {
+            Some(t) => t,
+            None => return 0,
+        };
+        let mut freed = 0usize;
+        for p in 0..t.num_partitions() {
+            if let Ok(part) = t.get_memory_partition(p) {
+                freed += part.reclaim_expired(cutoff_ms);
+                if retention_bytes >= 0 {
+                    freed += part.reclaim_to_size(retention_bytes as usize);
+                }
+            }
+        }
+        if freed > 0 {
+            self.total_bytes.fetch_sub(freed as i64, Ordering::Relaxed);
+        }
+        freed
+    }
+
     fn fetch(
         &self,
         topic_name: &str,

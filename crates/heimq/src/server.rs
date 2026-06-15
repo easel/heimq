@@ -1,6 +1,7 @@
 //! TCP server implementation
 
 use crate::config::Config;
+use crate::config_store::ConfigStore;
 use crate::consumer_group::{ConsumerGroupManager, GroupCoordinatorBackend};
 use crate::error::Result;
 use crate::producer_state::ProducerStateManager;
@@ -34,6 +35,8 @@ pub struct Server {
     transaction_manager: Arc<TransactionManager>,
     /// Broadcast signal: every successful Produce wakes all waiting Fetch long-polls.
     append_notify: Arc<tokio::sync::Notify>,
+    /// Shared per-topic config store (AlterConfigs/DescribeConfigs + retention).
+    config_store: Arc<ConfigStore>,
 }
 
 impl Server {
@@ -88,6 +91,7 @@ impl Server {
             coordinator.capabilities(),
         ));
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
 
         for spec in &config.create_topics {
             match spec.split_once(':') {
@@ -116,6 +120,7 @@ impl Server {
             producer_state: ProducerStateManager::new(),
             transaction_manager: TransactionManager::new(),
             append_notify: Arc::new(tokio::sync::Notify::new()),
+            config_store: Arc::new(ConfigStore::with_max_memory_bytes(max_memory_bytes)),
         })
     }
 
@@ -138,6 +143,7 @@ impl Server {
             coordinator.capabilities(),
         ));
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
 
         for spec in &config.create_topics {
             match spec.split_once(':') {
@@ -166,6 +172,7 @@ impl Server {
             producer_state: ProducerStateManager::new(),
             transaction_manager: TransactionManager::new(),
             append_notify: Arc::new(tokio::sync::Notify::new()),
+            config_store: Arc::new(ConfigStore::with_max_memory_bytes(max_memory_bytes)),
         })
     }
 
@@ -194,17 +201,30 @@ impl Server {
     ) -> Result<()> {
         let groups = self.consumer_groups.clone();
         let storage = self.storage.clone();
-        let retention_ms = self.config.retention_ms;
+        let config_store = self.config_store.clone();
+        let default_retention_ms = self.config.retention_ms;
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 groups.evict_expired_members();
-                // Drop record batches past their retention.ms TTL (always on),
-                // keeping in-memory usage bounded in steady state.
+                // Per-topic retention (always on): drop batches past retention.ms
+                // and trim each partition to retention.bytes, using per-topic
+                // AlterConfigs overrides where set and the broker default otherwise.
                 let now_ms = chrono::Utc::now().timestamp_millis();
-                storage.reclaim_expired(now_ms, retention_ms);
+                for (topic, _partitions) in storage.get_all_topic_metadata() {
+                    let retention_ms = config_store
+                        .get_override(&topic, "retention.ms")
+                        .and_then(|s| s.parse::<u64>().ok())
+                        .unwrap_or(default_retention_ms);
+                    let retention_bytes = config_store
+                        .get_override(&topic, "retention.bytes")
+                        .and_then(|s| s.parse::<i64>().ok())
+                        .unwrap_or(-1);
+                    let cutoff = now_ms.saturating_sub(retention_ms as i64);
+                    storage.reclaim_topic(&topic, cutoff, retention_bytes);
+                }
             }
         });
 
@@ -237,7 +257,8 @@ impl Server {
                 )
                 .with_producer_state(self.producer_state.clone())
                 .with_transaction_manager(self.transaction_manager.clone())
-                .with_append_notify(self.append_notify.clone());
+                .with_append_notify(self.append_notify.clone())
+                .with_config_store(self.config_store.clone());
 
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(Box::new(socket), router).await {
@@ -760,6 +781,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -783,6 +805,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -810,6 +833,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -838,6 +862,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let request = framed_request(18, 0, 1, &[]);
@@ -860,6 +885,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let stream = ScriptedStream::with_read_error();
@@ -874,6 +900,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let request = framed_request(18, 0, 1, &[]);
@@ -890,6 +917,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         // Send a frame claiming to be larger than MAX_FRAME_BYTES
@@ -936,6 +964,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         // Build a request with a valid 8-byte header (so peek_correlation_id works)
@@ -976,6 +1005,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1055,6 +1085,7 @@ mod tests {
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let max_memory_bytes = config.max_memory_bytes;
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();

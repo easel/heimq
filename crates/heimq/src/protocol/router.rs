@@ -76,6 +76,13 @@ impl Router {
         self
     }
 
+    /// Use a shared per-topic config store (so AlterConfigs/DescribeConfigs and the
+    /// retention sweeper all see the same state across connections).
+    pub fn with_config_store(mut self, config_store: Arc<ConfigStore>) -> Self {
+        self.config_store = config_store;
+        self
+    }
+
     /// Route a request and return the response
     /// Async variant of [`route`] that honours `max_wait_ms` on Fetch (API 1).
     ///

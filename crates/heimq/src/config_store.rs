@@ -25,6 +25,7 @@ pub const OP_DELETE: i8 = 1;
 pub const SUPPORTED_TOPIC_CONFIGS: &[(&str, &str)] = &[
     ("cleanup.policy", "delete"),
     ("retention.ms", "604800000"),
+    ("retention.bytes", "-1"),
     ("segment.ms", "604800000"),
     ("compression.type", "producer"),
     ("min.insync.replicas", "1"),
@@ -35,11 +36,25 @@ pub fn is_supported(key: &str) -> bool {
     SUPPORTED_TOPIC_CONFIGS.iter().any(|(k, _)| *k == key)
 }
 
+/// Default value for a supported key.
+fn default_value(key: &str) -> Option<&'static str> {
+    SUPPORTED_TOPIC_CONFIGS
+        .iter()
+        .find(|(k, _)| *k == key)
+        .map(|(_, v)| *v)
+}
+
 /// One config op for IncrementalAlterConfigs: (key, op, value).
 pub struct IncrementalOp<'a> {
     pub key: &'a str,
     pub op: i8,
     pub value: Option<&'a str>,
+}
+
+/// Parse a positive `retention.bytes` value; `-1`/`0`/invalid => `None`
+/// (unlimited — contributes nothing to the committed total).
+fn parse_pos_bytes(s: &str) -> Option<u64> {
+    s.parse::<i64>().ok().filter(|&v| v > 0).map(|v| v as u64)
 }
 
 /// Per-topic dynamic config overrides. Only explicitly-set values are stored;
@@ -48,6 +63,9 @@ pub struct IncrementalOp<'a> {
 pub struct ConfigStore {
     // topic -> (key -> value)
     overrides: Mutex<HashMap<String, HashMap<String, String>>>,
+    /// Broker-wide in-memory cap (0 = unlimited). Used to refuse `retention.bytes`
+    /// allocations that would over-commit total memory.
+    max_memory_bytes: u64,
 }
 
 impl ConfigStore {
@@ -55,10 +73,50 @@ impl ConfigStore {
         Self::default()
     }
 
+    /// Construct with the broker memory cap for `retention.bytes` admission control.
+    pub fn with_max_memory_bytes(max_memory_bytes: u64) -> Self {
+        Self {
+            overrides: Mutex::new(HashMap::new()),
+            max_memory_bytes,
+        }
+    }
+
+    /// Sum of explicit positive `retention.bytes` across all topics, substituting
+    /// `new_for` for `topic`. Holds the lock via the passed guard.
+    fn committed_retention_bytes(
+        map: &HashMap<String, HashMap<String, String>>,
+        topic: &str,
+        new_for: Option<u64>,
+    ) -> u64 {
+        let others: u64 = map
+            .iter()
+            .filter(|(t, _)| t.as_str() != topic)
+            .filter_map(|(_, kv)| kv.get("retention.bytes").and_then(|s| parse_pos_bytes(s)))
+            .fold(0u64, u64::saturating_add);
+        others.saturating_add(new_for.unwrap_or(0))
+    }
+
+    /// Reject if the proposed `retention.bytes` for `topic` would push the
+    /// committed total over the broker memory cap. No-op when the cap is unset.
+    fn admit_retention_bytes(
+        &self,
+        map: &HashMap<String, HashMap<String, String>>,
+        topic: &str,
+        new_for: Option<u64>,
+    ) -> Result<(), i16> {
+        if self.max_memory_bytes > 0
+            && Self::committed_retention_bytes(map, topic, new_for) > self.max_memory_bytes
+        {
+            return Err(INVALID_CONFIG);
+        }
+        Ok(())
+    }
+
     /// AlterConfigs (full replace) for one topic resource. Validates every key
     /// first (returns `Err(INVALID_CONFIG)` with no partial application), then
     /// replaces the topic's override set with exactly the supplied pairs. A
-    /// `None` value clears that key back to its default.
+    /// `None` value clears that key back to its default. Also refuses a
+    /// `retention.bytes` that would over-commit the broker memory cap.
     pub fn alter_full(&self, topic: &str, configs: &[(String, Option<String>)]) -> Result<(), i16> {
         for (k, _) in configs {
             if !is_supported(k) {
@@ -66,6 +124,14 @@ impl ConfigStore {
             }
         }
         let mut map = self.overrides.lock().unwrap();
+        // Full replace: the topic's new retention.bytes is whatever this set carries.
+        let new_rb = configs
+            .iter()
+            .find(|(k, _)| k == "retention.bytes")
+            .and_then(|(_, v)| v.as_deref())
+            .and_then(parse_pos_bytes);
+        self.admit_retention_bytes(&map, topic, new_rb)?;
+
         let entry = map.entry(topic.to_string()).or_default();
         entry.clear();
         for (k, v) in configs {
@@ -87,6 +153,19 @@ impl ConfigStore {
             }
         }
         let mut map = self.overrides.lock().unwrap();
+        // Determine the topic's resulting retention.bytes after these ops, for
+        // admission control: a SET supplies it, a DELETE reverts to default
+        // (unlimited), otherwise the existing value stands.
+        let new_rb = match ops.iter().find(|o| o.key == "retention.bytes") {
+            Some(o) if o.op == OP_SET => o.value.and_then(parse_pos_bytes),
+            Some(_) => None, // DELETE -> default (-1, unlimited)
+            None => map
+                .get(topic)
+                .and_then(|kv| kv.get("retention.bytes"))
+                .and_then(|s| parse_pos_bytes(s)),
+        };
+        self.admit_retention_bytes(&map, topic, new_rb)?;
+
         let entry = map.entry(topic.to_string()).or_default();
         for o in ops {
             match o.op {
@@ -107,6 +186,26 @@ impl ConfigStore {
         Ok(())
     }
 
+    /// Effective value of a single supported key for a topic (override if set,
+    /// else the compiled-in default).
+    #[allow(dead_code)]
+    pub fn effective_value(&self, topic: &str, key: &str) -> Option<String> {
+        self.get_override(topic, key)
+            .or_else(|| default_value(key).map(str::to_string))
+    }
+
+    /// The explicit override for `key` on `topic`, if one was set (no default
+    /// fallback). The retention sweeper uses this so a topic without an override
+    /// inherits the broker-level default rather than the compiled-in constant.
+    pub fn get_override(&self, topic: &str, key: &str) -> Option<String> {
+        self.overrides
+            .lock()
+            .unwrap()
+            .get(topic)
+            .and_then(|m| m.get(key))
+            .cloned()
+    }
+
     /// Effective config for a topic: every supported key with its effective value
     /// and whether it is an explicit override. Defaults merged with overrides.
     pub fn effective(&self, topic: &str) -> Vec<(&'static str, String, bool)> {
@@ -125,6 +224,42 @@ impl ConfigStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retention_bytes_over_cap_is_refused() {
+        // Broker cap of 1000 bytes; one topic already holds 700.
+        let s = ConfigStore::with_max_memory_bytes(1000);
+        s.alter_full("a", &[("retention.bytes".into(), Some("700".into()))])
+            .unwrap();
+
+        // A second topic at 400 would over-commit (700 + 400 > 1000) -> refused.
+        assert_eq!(
+            s.alter_full("b", &[("retention.bytes".into(), Some("400".into()))]),
+            Err(INVALID_CONFIG)
+        );
+        // ...but 300 fits exactly (700 + 300 == 1000).
+        assert!(s
+            .alter_full("b", &[("retention.bytes".into(), Some("300".into()))])
+            .is_ok());
+
+        // IncrementalAlterConfigs is admitted the same way.
+        assert_eq!(
+            s.alter_incremental(
+                "c",
+                &[IncrementalOp { key: "retention.bytes", op: OP_SET, value: Some("1") }]
+            ),
+            Err(INVALID_CONFIG)
+        );
+
+        // retention.bytes = -1 (unlimited) and an unset cap never trip admission.
+        assert!(s
+            .alter_full("d", &[("retention.bytes".into(), Some("-1".into()))])
+            .is_ok());
+        let uncapped = ConfigStore::new();
+        assert!(uncapped
+            .alter_full("x", &[("retention.bytes".into(), Some("999999999".into()))])
+            .is_ok());
+    }
 
     #[test]
     fn alter_full_round_trips_and_clears() {
