@@ -5,7 +5,10 @@ use crate::producer_state::{ProducerStateManager, SequenceCheck};
 use crate::storage::LogBackend;
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
-use heimq_broker::storage::RecordBatchHeader;
+use heimq_broker::produce::{
+    append_records, ProduceAppend, ProduceAppendError, ProduceAppendStatus, SequenceDecision,
+    SequenceValidator,
+};
 use kafka_protocol::messages::produce_request::ProduceRequest;
 use kafka_protocol::messages::produce_response::{PartitionProduceResponse, TopicProduceResponse};
 use kafka_protocol::messages::{ProduceResponse, TopicName};
@@ -21,7 +24,11 @@ pub fn handle(
     producer_state: &Arc<ProducerStateManager>,
     transaction_manager: &Arc<TransactionManager>,
 ) -> Result<ProduceResponse> {
-    debug!(api_version = api_version, body_len = body.len(), "Handling produce request");
+    debug!(
+        api_version = api_version,
+        body_len = body.len(),
+        "Handling produce request"
+    );
 
     // Use kafka-protocol's decoder for proper version-aware parsing
     let mut buf = Bytes::copy_from_slice(body);
@@ -42,9 +49,41 @@ pub fn handle(
         .map(|id| id.0.to_string())
         .filter(|s| !s.is_empty());
     let transactional_attempted = txn_id.is_some();
-    let transactions_unsupported = transactional_attempted && !caps.transactions;
     let max_message_bytes = caps.max_message_bytes;
     let max_batch_bytes = caps.max_batch_bytes;
+
+    struct ProducerStateSequenceValidator<'a> {
+        producer_state: &'a ProducerStateManager,
+    }
+
+    impl SequenceValidator for ProducerStateSequenceValidator<'_> {
+        fn validate(
+            &self,
+            producer_id: i64,
+            producer_epoch: i16,
+            topic: &str,
+            partition: i32,
+            base_sequence: i32,
+            record_count: i32,
+        ) -> SequenceDecision {
+            match self.producer_state.validate(
+                producer_id,
+                producer_epoch,
+                topic,
+                partition,
+                base_sequence,
+                record_count,
+            ) {
+                SequenceCheck::Accept => SequenceDecision::Accept,
+                SequenceCheck::Duplicate => SequenceDecision::Duplicate,
+                SequenceCheck::OutOfOrder => SequenceDecision::OutOfOrder,
+            }
+        }
+    }
+
+    let sequence_validator = ProducerStateSequenceValidator {
+        producer_state: producer_state.as_ref(),
+    };
 
     for topic_data in request.topic_data {
         let topic_name = topic_data.name.0.to_string();
@@ -58,17 +97,63 @@ pub fn handle(
             let mut partition_response = PartitionProduceResponse::default();
             partition_response.index = partition;
 
-            if transactions_unsupported {
-                warn!(topic = %topic_name, partition, "Rejecting transactional produce: backend does not support transactions");
-                partition_response.error_code = 48; // INVALID_TXN_STATE
-                partition_response.base_offset = -1;
-                topic_response.partition_responses.push(partition_response);
-                continue;
-            }
-
             if let Some(records) = partition_data.records {
-                if !records.is_empty() {
-                    if records.len() > max_batch_bytes || records.len() > max_message_bytes {
+                match append_records(ProduceAppend {
+                    storage: storage.as_ref(),
+                    topic: &topic_name,
+                    partition,
+                    records: records.as_ref(),
+                    transactional_attempted,
+                    sequence_validator: &sequence_validator,
+                }) {
+                    Ok(outcome) => {
+                        if matches!(outcome.status, ProduceAppendStatus::Duplicate { .. }) {
+                            if let Some(hdr) = outcome.header {
+                                debug!(
+                                    topic = %topic_name,
+                                    partition,
+                                    producer_id = hdr.producer_id,
+                                    base_seq = hdr.base_sequence,
+                                    "Duplicate sequence; returning successful de-duplication"
+                                );
+                            }
+                        } else if matches!(outcome.status, ProduceAppendStatus::Appended { .. }) {
+                            debug!(
+                                topic = %topic_name,
+                                partition,
+                                base_offset = outcome.status.base_offset(),
+                                "Produced records"
+                            );
+                        }
+
+                        if let Some(hdr) = outcome.header {
+                            if hdr.producer_id != -1
+                                && hdr.is_transactional
+                                && matches!(outcome.status, ProduceAppendStatus::Appended { .. })
+                            {
+                                transaction_manager.record_produce(
+                                    txn_id.as_deref(),
+                                    &topic_name,
+                                    partition,
+                                    outcome.status.base_offset(),
+                                    hdr.producer_id,
+                                );
+                            }
+                        }
+
+                        partition_response.base_offset = outcome.status.base_offset();
+                        partition_response.error_code = 0;
+                        if !matches!(outcome.status, ProduceAppendStatus::Empty { .. }) {
+                            partition_response.log_append_time_ms =
+                                chrono::Utc::now().timestamp_millis();
+                        }
+                    }
+                    Err(ProduceAppendError::TransactionsUnsupported) => {
+                        warn!(topic = %topic_name, partition, "Rejecting transactional produce: backend does not support transactions");
+                        partition_response.error_code = 48; // INVALID_TXN_STATE
+                        partition_response.base_offset = -1;
+                    }
+                    Err(ProduceAppendError::MessageTooLarge) => {
                         warn!(
                             topic = %topic_name,
                             partition,
@@ -79,100 +164,25 @@ pub fn handle(
                         );
                         partition_response.error_code = 10; // MESSAGE_TOO_LARGE
                         partition_response.base_offset = -1;
-                        topic_response.partition_responses.push(partition_response);
-                        continue;
                     }
-
-                    // Read the batch header cheaply (constant-offset fields only;
-                    // no full record decode) — the hot path for every produce.
-                    let batch_header = RecordBatchHeader::peek(&records);
-
-                    // Idempotent sequence validation (US-003-AC2, AC3, AC4).
-                    // Only fires when producer_id != -1 (idempotent producer).
-                    if let Some(hdr) = batch_header {
-                        if hdr.producer_id != -1 {
-                            match producer_state.validate(
-                                hdr.producer_id,
-                                hdr.producer_epoch,
-                                &topic_name,
-                                partition,
-                                hdr.base_sequence,
-                                hdr.record_count,
-                            ) {
-                                SequenceCheck::Accept => {}
-                                SequenceCheck::Duplicate => {
-                                    debug!(
-                                        topic = %topic_name, partition,
-                                        producer_id = hdr.producer_id,
-                                        base_seq = hdr.base_sequence,
-                                        "Duplicate sequence; returning successful de-duplication"
-                                    );
-                                    partition_response.error_code = 0;
-                                    let high_watermark = storage
-                                        .high_watermark(&topic_name, partition)
-                                        .unwrap_or(0);
-                                    partition_response.base_offset =
-                                        high_watermark.saturating_sub(i64::from(hdr.record_count));
-                                    partition_response.log_append_time_ms =
-                                        chrono::Utc::now().timestamp_millis();
-                                    topic_response.partition_responses.push(partition_response);
-                                    continue;
-                                }
-                                SequenceCheck::OutOfOrder => {
-                                    warn!(
-                                        topic = %topic_name, partition,
-                                        producer_id = hdr.producer_id,
-                                        base_seq = hdr.base_sequence,
-                                        "Out-of-order sequence"
-                                    );
-                                    partition_response.error_code = 45; // OUT_OF_ORDER_SEQUENCE_NUMBER
-                                    partition_response.base_offset = -1;
-                                    topic_response.partition_responses.push(partition_response);
-                                    continue;
-                                }
-                            }
-                        }
+                    Err(ProduceAppendError::OutOfOrderSequenceNumber) => {
+                        warn!(
+                            topic = %topic_name,
+                            partition,
+                            "Out-of-order sequence"
+                        );
+                        partition_response.error_code = 45; // OUT_OF_ORDER_SEQUENCE_NUMBER
+                        partition_response.base_offset = -1;
                     }
-
-                    // Append to storage
-                    match storage.append(&topic_name, partition, &records) {
-                        Ok((base_offset, count)) => {
-                            debug!(
-                                topic = %topic_name,
-                                partition = partition,
-                                base_offset = base_offset,
-                                count = count,
-                                "Produced records"
-                            );
-                            // Track transactional produce for LSO calculation (US-004)
-                            if let Some(hdr) = batch_header {
-                                if hdr.producer_id != -1 && hdr.is_transactional {
-                                    transaction_manager.record_produce(
-                                        txn_id.as_deref(),
-                                        &topic_name,
-                                        partition,
-                                        base_offset,
-                                        hdr.producer_id,
-                                    );
-                                }
-                            }
-                            partition_response.base_offset = base_offset;
-                            partition_response.error_code = 0;
-                            partition_response.log_append_time_ms =
-                                chrono::Utc::now().timestamp_millis();
+                    Err(err @ ProduceAppendError::Storage(_)) => {
+                        if let Some(storage_err) = err.storage_error() {
+                            warn!(error = %storage_err, topic = %topic_name, partition, "Failed to append records");
+                            partition_response.error_code = storage_err.to_error_code();
+                        } else {
+                            partition_response.error_code = -1;
                         }
-                        Err(e) => {
-                            warn!(error = %e, topic = %topic_name, partition, "Failed to append records");
-                            partition_response.error_code = e.to_error_code();
-                            partition_response.base_offset = -1;
-                        }
+                        partition_response.base_offset = -1;
                     }
-                } else {
-                    // Empty records - still valid, just no-op
-                    partition_response.base_offset = storage
-                        .high_watermark(&topic_name, partition)
-                        .unwrap_or(0);
-                    partition_response.error_code = 0;
                 }
             } else {
                 // Null records
