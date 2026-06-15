@@ -14,6 +14,15 @@ authors = ["heimq contributors"]
 license = "MIT"
 repository = "https://github.com/heimq/heimq"
 
+# Pinned fork of kafka-protocol 0.15.1 that bounds Array/CompactArray decode
+# pre-allocation to the remaining buffer (fixes a remotely-triggerable OOM DoS:
+# a small request with a huge array-count field caused a multi-GB Vec::with_capacity
+# before reading any element). Upstream is unbounded in all versions (0.15-0.17).
+# Same version (0.15.1), so it transparently satisfies `kafka-protocol = "0.15"`.
+# Remove once an upstream release carries the bound. Tracked: heimq-bb299c68.
+[patch.crates-io]
+kafka-protocol = { git = "https://github.com/easel/kafka-protocol-rs", branch = "heimq-bound-array-capacity" }
+
 [profile.release]
 lto = true
 codegen-units = 1
