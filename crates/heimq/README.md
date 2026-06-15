@@ -96,6 +96,18 @@ Segment Structure:
 cargo build --release
 ```
 
+## Release Artifacts
+
+Tagged releases publish Linux x86_64 binary artifacts from the
+`release-binaries` GitHub Actions workflow. Download the `heimq-linux-x86_64`
+artifact and its `.sha256` file from the workflow run for the tag, then run:
+
+```bash
+sha256sum -c heimq-linux-x86_64.sha256
+chmod +x heimq-linux-x86_64
+./heimq-linux-x86_64 --help
+```
+
 ## Running
 
 ```bash
@@ -111,8 +123,27 @@ cargo build --release
 
 ### Docker
 
+Tagged releases publish `ghcr.io/easel/heimq:<tag>` from the `docker-image`
+GitHub Actions workflow. The image exposes the Kafka listener on port 9092 and
+uses the heimq binary as its entrypoint.
+
 ```bash
-docker run --rm -p 9092:9092 ghcr.io/easel/heimq:latest --memory-only
+docker run --rm -p 9092:9092 ghcr.io/easel/heimq:v0.1.0 --memory-only
+```
+
+### Helm
+
+The chart installs one memory-only heimq broker by default behind a ClusterIP
+Service on port 9092.
+
+```bash
+helm install heimq charts/heimq \
+  --set image.repository=ghcr.io/easel/heimq \
+  --set image.tag=v0.1.0
+
+helm upgrade --install heimq charts/heimq \
+  --set image.tag=v0.1.0 \
+  --set service.type=LoadBalancer
 ```
 
 ## Configuration

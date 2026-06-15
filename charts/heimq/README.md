@@ -5,7 +5,25 @@ Install a single heimq broker:
 ```bash
 helm install heimq charts/heimq \
   --set image.repository=ghcr.io/easel/heimq \
-  --set image.tag=latest
+  --set image.tag=v0.1.0
+```
+
+Upgrade an existing install and expose it through a LoadBalancer:
+
+```bash
+helm upgrade --install heimq charts/heimq \
+  --set image.repository=ghcr.io/easel/heimq \
+  --set image.tag=v0.1.0 \
+  --set service.type=LoadBalancer
+```
+
+Override runtime defaults:
+
+```bash
+helm upgrade --install heimq charts/heimq \
+  --set heimq.memoryOnly=true \
+  --set heimq.retentionMs=3600000 \
+  --set heimq.maxMemoryBytes=268435456
 ```
 
 Common values:
