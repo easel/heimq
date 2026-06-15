@@ -27,19 +27,26 @@ fn one_record_batch() -> Vec<u8> {
 /// Backend has a capabilities descriptor with a non-empty name.
 pub fn check_capabilities_name(backend: &dyn LogBackend) {
     let caps = backend.capabilities();
-    assert!(!caps.name.is_empty(), "capabilities().name must be non-empty");
+    assert!(
+        !caps.name.is_empty(),
+        "capabilities().name must be non-empty"
+    );
 }
 
 /// Creating a topic returns a TopicLog with the requested partition count.
 pub fn check_create_topic(backend: &dyn LogBackend) {
-    let topic = backend.create_topic("suite-create", 3).expect("create_topic must succeed");
+    let topic = backend
+        .create_topic("suite-create", 3)
+        .expect("create_topic must succeed");
     assert_eq!(topic.name(), "suite-create");
     assert_eq!(topic.num_partitions(), 3);
 }
 
 /// Creating a duplicate topic returns an error or the existing topic.
 pub fn check_create_duplicate_topic(backend: &dyn LogBackend) {
-    backend.create_topic("suite-dup", 2).expect("first create must succeed");
+    backend
+        .create_topic("suite-dup", 2)
+        .expect("first create must succeed");
     let result = backend.create_topic("suite-dup", 2);
     // Either error or idempotent success is acceptable; must not panic.
     let _ = result;
@@ -55,7 +62,9 @@ pub fn check_topic_unknown(backend: &dyn LogBackend) {
 
 /// topic() returns Some after create_topic.
 pub fn check_topic_after_create(backend: &dyn LogBackend) {
-    backend.create_topic("suite-find", 1).expect("create_topic must succeed");
+    backend
+        .create_topic("suite-find", 1)
+        .expect("create_topic must succeed");
     assert!(
         backend.topic("suite-find").is_some(),
         "topic() must return Some after create_topic"
@@ -100,13 +109,18 @@ pub fn check_high_watermark(backend: &dyn LogBackend) {
     let raw = one_record_batch();
     backend.append("suite-hwm", 0, &raw).expect("append");
     let hwm_after = backend.high_watermark("suite-hwm", 0).expect("hwm");
-    assert!(hwm_after > hwm_before, "high_watermark must advance after append");
+    assert!(
+        hwm_after > hwm_before,
+        "high_watermark must advance after append"
+    );
 }
 
 /// log_start_offset is 0 for a freshly created partition.
 pub fn check_log_start_offset_initial(backend: &dyn LogBackend) {
     backend.create_topic("suite-lso", 1).expect("create");
-    let lso = backend.log_start_offset("suite-lso", 0).expect("log_start_offset");
+    let lso = backend
+        .log_start_offset("suite-lso", 0)
+        .expect("log_start_offset");
     assert_eq!(lso, 0, "initial log_start_offset must be 0");
 }
 
@@ -114,13 +128,19 @@ pub fn check_log_start_offset_initial(backend: &dyn LogBackend) {
 pub fn check_get_or_create_idempotent(backend: &dyn LogBackend) {
     let t1 = backend.get_or_create_topic("suite-goc", 2);
     let t2 = backend.get_or_create_topic("suite-goc", 2);
-    assert_eq!(t1.num_partitions(), t2.num_partitions(), "get_or_create must be idempotent");
+    assert_eq!(
+        t1.num_partitions(),
+        t2.num_partitions(),
+        "get_or_create must be idempotent"
+    );
 }
 
 /// delete_topic removes the topic from list_topics.
 pub fn check_delete_topic(backend: &dyn LogBackend) {
     backend.create_topic("suite-del", 1).expect("create");
-    backend.delete_topic("suite-del").expect("delete must succeed");
+    backend
+        .delete_topic("suite-del")
+        .expect("delete must succeed");
     assert!(
         backend.topic("suite-del").is_none(),
         "topic must not exist after delete"

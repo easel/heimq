@@ -2,25 +2,41 @@ use super::*;
 use crate::consumer_group::{GroupState, Member, MemoryOffsetStore};
 use crate::producer_state::ProducerStateManager;
 use crate::storage::SingleNodeClusterView;
-use crate::test_support::{encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage};
+use crate::test_support::{
+    encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage,
+};
 use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
 use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
 use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
-use kafka_protocol::messages::describe_topic_partitions_request::{DescribeTopicPartitionsRequest, TopicRequest as DtpTopicRequest};
-use kafka_protocol::messages::elect_leaders_request::{ElectLeadersRequest, TopicPartitions as ElectLeadersTopicPartitions};
-use kafka_protocol::messages::list_transactions_request::ListTransactionsRequest;
-use kafka_protocol::messages::offset_for_leader_epoch_request::{OffsetForLeaderEpochRequest, OffsetForLeaderTopic, OffsetForLeaderPartition};
+use kafka_protocol::messages::describe_topic_partitions_request::{
+    DescribeTopicPartitionsRequest, TopicRequest as DtpTopicRequest,
+};
+use kafka_protocol::messages::elect_leaders_request::{
+    ElectLeadersRequest, TopicPartitions as ElectLeadersTopicPartitions,
+};
 use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
 use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
 use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
 use kafka_protocol::messages::join_group_request::{JoinGroupRequest, JoinGroupRequestProtocol};
 use kafka_protocol::messages::leave_group_request::{LeaveGroupRequest, MemberIdentity};
-use kafka_protocol::messages::list_offsets_request::{ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic};
+use kafka_protocol::messages::list_offsets_request::{
+    ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic,
+};
+use kafka_protocol::messages::list_transactions_request::ListTransactionsRequest;
 use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
-use kafka_protocol::messages::offset_commit_request::{OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic};
-use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestGroup, OffsetFetchRequestTopic, OffsetFetchRequestTopics};
-use kafka_protocol::messages::produce_request::{PartitionProduceData, ProduceRequest, TopicProduceData};
+use kafka_protocol::messages::offset_commit_request::{
+    OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic,
+};
+use kafka_protocol::messages::offset_fetch_request::{
+    OffsetFetchRequest, OffsetFetchRequestGroup, OffsetFetchRequestTopic, OffsetFetchRequestTopics,
+};
+use kafka_protocol::messages::offset_for_leader_epoch_request::{
+    OffsetForLeaderEpochRequest, OffsetForLeaderPartition, OffsetForLeaderTopic,
+};
+use kafka_protocol::messages::produce_request::{
+    PartitionProduceData, ProduceRequest, TopicProduceData,
+};
 use kafka_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
 use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
 use kafka_protocol::protocol::StrBytes;
@@ -72,8 +88,12 @@ fn metadata_all_topics_and_unknown_topic() {
     storage.create_topic("t1", 1).unwrap();
 
     let body = encode_body(&MetadataRequest::default(), 1);
-    let response = metadata::handle(1, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
-    assert!(response.topics.iter().any(|t| t.name.as_ref().map(|n| n.0.as_str()) == Some("t1")));
+    let response =
+        metadata::handle(1, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    assert!(response
+        .topics
+        .iter()
+        .any(|t| t.name.as_ref().map(|n| n.0.as_str()) == Some("t1")));
 
     let config_no_auto = test_config(false);
     let storage_no_auto = test_storage(false);
@@ -82,7 +102,13 @@ fn metadata_all_topics_and_unknown_topic() {
     let mut request = MetadataRequest::default();
     request.topics = Some(vec![topic]);
     let body = encode_body(&request, 4);
-    let response = metadata::handle(4, &body, &storage_no_auto, &SingleNodeClusterView::new(&config_no_auto)).unwrap();
+    let response = metadata::handle(
+        4,
+        &body,
+        &storage_no_auto,
+        &SingleNodeClusterView::new(&config_no_auto),
+    )
+    .unwrap();
     let missing = response.topics.first().unwrap();
     assert_eq!(missing.error_code, 3);
 }
@@ -101,7 +127,8 @@ fn metadata_mixed_existing_and_missing_topics() {
     let mut request = MetadataRequest::default();
     request.topics = Some(vec![existing, missing]);
     let body = encode_body(&request, 4);
-    let response = metadata::handle(4, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        metadata::handle(4, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(response
         .topics
         .iter()
@@ -122,7 +149,8 @@ fn metadata_version_zero_parses_topics() {
     buf.put_i32(1);
     put_str(&mut buf, Some("meta-v0"));
 
-    let response = metadata::handle(0, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        metadata::handle(0, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert_eq!(response.topics.len(), 1);
     assert!(response.cluster_id.is_none());
 }
@@ -256,7 +284,14 @@ fn produce_empty_null_and_unknown_topic() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
+    let response = produce::handle(
+        2,
+        &body,
+        &storage,
+        &ProducerStateManager::new(),
+        &TransactionManager::new(),
+    )
+    .unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 0);
 
     let mut null_partition = PartitionProduceData::default();
@@ -271,7 +306,14 @@ fn produce_empty_null_and_unknown_topic() {
     null_request.topic_data = vec![null_topic];
 
     let body = encode_body(&null_request, 2);
-    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
+    let response = produce::handle(
+        2,
+        &body,
+        &storage,
+        &ProducerStateManager::new(),
+        &TransactionManager::new(),
+    )
+    .unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 87);
 
     let storage_no_auto = test_storage(false);
@@ -287,10 +329,24 @@ fn produce_empty_null_and_unknown_topic() {
     bad_request.topic_data = vec![bad_topic];
 
     let body = encode_body(&bad_request, 2);
-    let response = produce::handle(2, &body, &storage_no_auto, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
+    let response = produce::handle(
+        2,
+        &body,
+        &storage_no_auto,
+        &ProducerStateManager::new(),
+        &TransactionManager::new(),
+    )
+    .unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 3);
 
-    let response = produce::handle(2, &[0, 1, 2], &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
+    let response = produce::handle(
+        2,
+        &[0, 1, 2],
+        &storage,
+        &ProducerStateManager::new(),
+        &TransactionManager::new(),
+    )
+    .unwrap();
     assert!(response.responses.is_empty());
 }
 
@@ -607,7 +663,10 @@ fn join_group_select_protocol_fallback_for_non_leader() {
     let body = encode_body(&request_b, 1);
     let response_b = join_group::handle(1, &body, consumer_groups.as_ref()).unwrap();
     assert_eq!(response_b.error_code, 0);
-    assert_eq!(response_b.protocol_name.as_ref().unwrap().as_str(), "roundrobin");
+    assert_eq!(
+        response_b.protocol_name.as_ref().unwrap().as_str(),
+        "roundrobin"
+    );
     assert!(response_b.members.is_empty());
 }
 
@@ -635,7 +694,8 @@ fn find_coordinator_request_ignored() {
     let mut request = FindCoordinatorRequest::default();
     request.key = StrBytes::from_string("group".to_string());
     let body = encode_body(&request, 1);
-    let response = find_coordinator::handle(1, &body, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        find_coordinator::handle(1, &body, &SingleNodeClusterView::new(&config)).unwrap();
     assert_eq!(response.error_code, 0);
 }
 
@@ -646,9 +706,14 @@ fn find_coordinator_v4_populates_coordinators_array() {
     let mut request = FindCoordinatorRequest::default();
     request.coordinator_keys = vec![StrBytes::from_string("my-group".to_string())];
     let body = encode_body(&request, 4);
-    let response = find_coordinator::handle(4, &body, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        find_coordinator::handle(4, &body, &SingleNodeClusterView::new(&config)).unwrap();
     // v4: coordinators array must be populated; legacy fields are absent.
-    assert_eq!(response.coordinators.len(), 1, "v4 must return one coordinator entry");
+    assert_eq!(
+        response.coordinators.len(),
+        1,
+        "v4 must return one coordinator entry"
+    );
     let coord = &response.coordinators[0];
     assert_eq!(coord.error_code, 0);
     assert_eq!(coord.node_id.0, config.broker_id);
@@ -985,30 +1050,39 @@ fn metadata_parsing_edges() {
     let mut body = BytesMut::new();
     body.put_i32(1);
     put_str(&mut body, Some("newtopic"));
-    let response = metadata::handle(1, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
-    assert!(response.topics.iter().any(|t| t.name.as_ref().map(|n| n.0.as_str()) == Some("newtopic")));
+    let response =
+        metadata::handle(1, &body, &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    assert!(response
+        .topics
+        .iter()
+        .any(|t| t.name.as_ref().map(|n| n.0.as_str()) == Some("newtopic")));
 
-    let response = metadata::handle(1, &[], &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        metadata::handle(1, &[], &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.brokers.is_empty());
 
-    let response = metadata::handle(1, &[0], &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        metadata::handle(1, &[0], &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i32(0);
-    let response = metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i32(1);
-    let response = metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.topics.is_empty());
 
     let mut buf = BytesMut::new();
     buf.put_i32(1);
     buf.put_i16(4);
     buf.extend_from_slice(b"ab");
-    let response = metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
+    let response =
+        metadata::handle(1, &buf, &storage, &SingleNodeClusterView::new(&config)).unwrap();
     assert!(!response.topics.is_empty());
 }
 
@@ -1151,7 +1225,9 @@ fn offset_fetch_truncated_and_missing_offsets() {
 #[test]
 fn offset_fetch_v8_groups_response_path() {
     use crate::handler::offset_commit;
-    use kafka_protocol::messages::offset_commit_request::{OffsetCommitRequestPartition, OffsetCommitRequestTopic};
+    use kafka_protocol::messages::offset_commit_request::{
+        OffsetCommitRequestPartition, OffsetCommitRequestTopic,
+    };
 
     let config = test_config(true);
     let consumer_groups = test_consumer_groups(config);
@@ -1200,7 +1276,10 @@ fn offset_fetch_v8_groups_response_path() {
 
     let body = encode_body(&req_all, 8);
     let response = offset_fetch::handle(8, &body, consumer_groups.offset_store()).unwrap();
-    assert_eq!(response.groups[0].topics[0].partitions[0].committed_offset, 42);
+    assert_eq!(
+        response.groups[0].topics[0].partitions[0].committed_offset,
+        42
+    );
 
     // Truncated v8 body → default (empty groups).
     let response = offset_fetch::handle(8, &[], consumer_groups.offset_store()).unwrap();
@@ -1226,7 +1305,11 @@ fn produce_oversize_batch_rejected_with_message_too_large() {
     let mut record = new_record(0);
     record.value = Some(big_value.into());
     let batch = encode_record_batch(&[record]);
-    assert!(batch.len() > 1024, "expected batch > 1KB, got {}", batch.len());
+    assert!(
+        batch.len() > 1024,
+        "expected batch > 1KB, got {}",
+        batch.len()
+    );
 
     let mut partition = PartitionProduceData::default();
     partition.index = 0;
@@ -1242,10 +1325,16 @@ fn produce_oversize_batch_rejected_with_message_too_large() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
+    let response = produce::handle(
+        2,
+        &body,
+        &storage,
+        &ProducerStateManager::new(),
+        &TransactionManager::new(),
+    )
+    .unwrap();
     assert_eq!(
-        response.responses[0].partition_responses[0].error_code,
-        10,
+        response.responses[0].partition_responses[0].error_code, 10,
         "expected MESSAGE_TOO_LARGE (10)"
     );
     assert_eq!(response.responses[0].partition_responses[0].base_offset, -1);
@@ -1258,16 +1347,21 @@ fn produce_oversize_batch_rejected_with_message_too_large() {
     tx_topic.name = TopicName(StrBytes::from_string("oversize".to_string()));
     tx_topic.partition_data = vec![tx_partition];
     let mut tx_request = ProduceRequest::default();
-    tx_request.transactional_id =
-        Some(TransactionalId(StrBytes::from_string("txn-1".to_string())));
+    tx_request.transactional_id = Some(TransactionalId(StrBytes::from_string("txn-1".to_string())));
     tx_request.acks = -1;
     tx_request.timeout_ms = 1000;
     tx_request.topic_data = vec![tx_topic];
     let body = encode_body(&tx_request, 3);
-    let response = produce::handle(3, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
+    let response = produce::handle(
+        3,
+        &body,
+        &storage,
+        &ProducerStateManager::new(),
+        &TransactionManager::new(),
+    )
+    .unwrap();
     assert_eq!(
-        response.responses[0].partition_responses[0].error_code,
-        48,
+        response.responses[0].partition_responses[0].error_code, 48,
         "expected INVALID_TXN_STATE (48) for transactional produce against non-tx backend"
     );
 }
@@ -1293,7 +1387,14 @@ fn produce_appends_records() {
     request.topic_data = vec![topic];
 
     let body = encode_body(&request, 2);
-    let response = produce::handle(2, &body, &storage, &ProducerStateManager::new(), &TransactionManager::new()).unwrap();
+    let response = produce::handle(
+        2,
+        &body,
+        &storage,
+        &ProducerStateManager::new(),
+        &TransactionManager::new(),
+    )
+    .unwrap();
     assert_eq!(response.responses[0].partition_responses[0].error_code, 0);
 }
 
@@ -1602,7 +1703,11 @@ fn elect_leaders_always_succeeds() {
     assert_eq!(response.replica_election_results.len(), 1);
     let result = &response.replica_election_results[0];
     for p in &result.partition_result {
-        assert_eq!(p.error_code, 0, "partition {} should succeed", p.partition_id);
+        assert_eq!(
+            p.error_code, 0,
+            "partition {} should succeed",
+            p.partition_id
+        );
     }
 }
 
@@ -1704,7 +1809,10 @@ fn init_producer_id_assigns_id() {
     let body = encode_body(&req, 0);
     let response = init_producer_id::handle(0, &body, &txn_mgr).unwrap();
     assert_eq!(response.error_code, 0);
-    assert!(response.producer_id.0 >= 0, "producer_id must be non-negative");
+    assert!(
+        response.producer_id.0 >= 0,
+        "producer_id must be non-negative"
+    );
 }
 
 #[test]
@@ -1718,7 +1826,10 @@ fn init_producer_id_transactional_assigns_id() {
     let body = encode_body(&req, 0);
     let response = init_producer_id::handle(0, &body, &txn_mgr).unwrap();
     assert_eq!(response.error_code, 0);
-    assert!(response.producer_id.0 >= 0, "transactional producer_id must be non-negative");
+    assert!(
+        response.producer_id.0 >= 0,
+        "transactional producer_id must be non-negative"
+    );
 }
 
 #[test]
@@ -1730,13 +1841,21 @@ fn describe_cluster_returns_broker_list() {
     let body = encode_body(&req, 0);
     let response = describe_cluster::handle(0, &body, &cluster_view).unwrap();
     assert_eq!(response.error_code, 0);
-    assert!(!response.brokers.is_empty(), "must return at least one broker");
-    assert!(!response.cluster_id.is_empty(), "cluster_id must be non-empty");
+    assert!(
+        !response.brokers.is_empty(),
+        "must return at least one broker"
+    );
+    assert!(
+        !response.cluster_id.is_empty(),
+        "cluster_id must be non-empty"
+    );
 }
 
 #[test]
 fn describe_configs_returns_entries() {
-    use kafka_protocol::messages::describe_configs_request::{DescribeConfigsRequest, DescribeConfigsResource};
+    use kafka_protocol::messages::describe_configs_request::{
+        DescribeConfigsRequest, DescribeConfigsResource,
+    };
     let mut req = DescribeConfigsRequest::default();
     let mut resource = DescribeConfigsResource::default();
     resource.resource_type = 2; // TOPIC
@@ -1748,13 +1867,22 @@ fn describe_configs_returns_entries() {
     assert_eq!(response.results.len(), 1);
     let result = &response.results[0];
     assert_eq!(result.error_code, 0);
-    assert!(!result.configs.is_empty(), "must return at least one config entry");
+    assert!(
+        !result.configs.is_empty(),
+        "must return at least one config entry"
+    );
 }
 
 /// Helper: DescribeConfigs a topic and return the value reported for `key`.
 #[cfg(test)]
-fn describe_config_value(store: &crate::config_store::ConfigStore, topic: &str, key: &str) -> Option<String> {
-    use kafka_protocol::messages::describe_configs_request::{DescribeConfigsRequest, DescribeConfigsResource};
+fn describe_config_value(
+    store: &crate::config_store::ConfigStore,
+    topic: &str,
+    key: &str,
+) -> Option<String> {
+    use kafka_protocol::messages::describe_configs_request::{
+        DescribeConfigsRequest, DescribeConfigsResource,
+    };
     let mut req = DescribeConfigsRequest::default();
     let mut resource = DescribeConfigsResource::default();
     resource.resource_type = 2;
@@ -1770,7 +1898,9 @@ fn describe_config_value(store: &crate::config_store::ConfigStore, topic: &str, 
 }
 
 fn alter_configs_body(topic: &str, key: &str, value: &str) -> Vec<u8> {
-    use kafka_protocol::messages::alter_configs_request::{AlterConfigsRequest, AlterConfigsResource, AlterableConfig};
+    use kafka_protocol::messages::alter_configs_request::{
+        AlterConfigsRequest, AlterConfigsResource, AlterableConfig,
+    };
     let mut req = AlterConfigsRequest::default();
     let mut resource = AlterConfigsResource::default();
     resource.resource_type = 2; // TOPIC
@@ -1801,12 +1931,15 @@ fn alter_configs_round_trips_and_rejects_unknown() {
     // Unsupported key: rejected with INVALID_CONFIG (40), not silent success.
     let body = alter_configs_body("my-topic", "bogus.unknown.key", "1");
     let response = alter_configs::handle(0, &body, &store).unwrap();
-    assert_eq!(response.responses[0].error_code, 40, "unknown key must be INVALID_CONFIG");
+    assert_eq!(
+        response.responses[0].error_code, 40,
+        "unknown key must be INVALID_CONFIG"
+    );
 }
 
 fn incremental_alter_body(topic: &str, key: &str, op: i8, value: Option<&str>) -> Vec<u8> {
     use kafka_protocol::messages::incremental_alter_configs_request::{
-        IncrementalAlterConfigsRequest, AlterConfigsResource, AlterableConfig,
+        AlterConfigsResource, AlterableConfig, IncrementalAlterConfigsRequest,
     };
     let mut req = IncrementalAlterConfigsRequest::default();
     let mut resource = AlterConfigsResource::default();
@@ -1854,7 +1987,10 @@ fn list_groups_empty() {
     let body = encode_body(&req, 0);
     let response = list_groups::handle(0, &body, coordinator.as_ref()).unwrap();
     assert_eq!(response.error_code, 0);
-    assert!(response.groups.is_empty(), "fresh coordinator must have no groups");
+    assert!(
+        response.groups.is_empty(),
+        "fresh coordinator must have no groups"
+    );
 }
 
 #[test]
@@ -1868,7 +2004,10 @@ fn describe_groups_unknown_returns_error() {
     let body = encode_body(&req, 0);
     let response = describe_groups::handle(0, &body, coordinator.as_ref()).unwrap();
     assert_eq!(response.groups.len(), 1);
-    assert_ne!(response.groups[0].error_code, 0, "unknown group must return non-zero error_code");
+    assert_ne!(
+        response.groups[0].error_code, 0,
+        "unknown group must return non-zero error_code"
+    );
 }
 
 #[test]
@@ -1883,12 +2022,17 @@ fn describe_log_dirs_known_topic() {
     let response = describe_log_dirs::handle(0, &body, &storage).unwrap();
     assert_eq!(response.results.len(), 1);
     assert_eq!(response.results[0].error_code, 0);
-    assert!(!response.results[0].topics.is_empty(), "must return at least one topic entry");
+    assert!(
+        !response.results[0].topics.is_empty(),
+        "must return at least one topic entry"
+    );
 }
 
 #[test]
 fn create_partitions_expands_topic() {
-    use kafka_protocol::messages::create_partitions_request::{CreatePartitionsRequest, CreatePartitionsTopic};
+    use kafka_protocol::messages::create_partitions_request::{
+        CreatePartitionsRequest, CreatePartitionsTopic,
+    };
     let storage = test_storage(false);
     storage.create_topic("expand-me", 1).unwrap();
     let mut req = CreatePartitionsRequest::default();
@@ -1899,13 +2043,18 @@ fn create_partitions_expands_topic() {
     let body = encode_body(&req, 0);
     let response = create_partitions::handle(0, &body, &storage).unwrap();
     assert_eq!(response.results.len(), 1);
-    assert_eq!(response.results[0].error_code, 0, "expand from 1→3 must succeed");
+    assert_eq!(
+        response.results[0].error_code, 0,
+        "expand from 1→3 must succeed"
+    );
     assert_eq!(storage.topic("expand-me").unwrap().num_partitions(), 3);
 }
 
 #[test]
 fn delete_records_updates_low_watermark() {
-    use kafka_protocol::messages::delete_records_request::{DeleteRecordsRequest, DeleteRecordsTopic, DeleteRecordsPartition};
+    use kafka_protocol::messages::delete_records_request::{
+        DeleteRecordsPartition, DeleteRecordsRequest, DeleteRecordsTopic,
+    };
     let storage = test_storage(false);
     storage.create_topic("del-rec-test", 1).unwrap();
     let batch = encode_record_batch(&[new_record(0), new_record(1), new_record(2), new_record(3)]);
@@ -1924,7 +2073,10 @@ fn delete_records_updates_low_watermark() {
     assert_eq!(response.topics.len(), 1);
     let pr = &response.topics[0].partitions[0];
     assert_eq!(pr.error_code, 0);
-    assert_eq!(pr.low_watermark, 2, "low watermark must advance to the requested offset");
+    assert_eq!(
+        pr.low_watermark, 2,
+        "low watermark must advance to the requested offset"
+    );
 }
 
 #[test]
@@ -1941,12 +2093,17 @@ fn end_txn_unknown_txn_returns_invalid_epoch() {
     req.committed = true;
     let body = encode_body(&req, 0);
     let response = end_txn::handle(0, &body, &storage, &offset_store, &txn_mgr).unwrap();
-    assert_ne!(response.error_code, 0, "unknown transaction must return non-zero error_code");
+    assert_ne!(
+        response.error_code, 0,
+        "unknown transaction must return non-zero error_code"
+    );
 }
 
 #[test]
 fn add_partitions_to_txn_unknown_returns_error() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{AddPartitionsToTxnRequest, AddPartitionsToTxnTopic};
+    use kafka_protocol::messages::add_partitions_to_txn_request::{
+        AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
+    };
     use kafka_protocol::messages::{ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     let mut req = AddPartitionsToTxnRequest::default();
@@ -1960,13 +2117,19 @@ fn add_partitions_to_txn_unknown_returns_error() {
     let body = encode_body(&req, 0);
     let response = add_partitions_to_txn::handle(0, &body, &txn_mgr).unwrap();
     assert_eq!(response.results_by_topic_v3_and_below.len(), 1);
-    let err = response.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code;
-    assert_ne!(err, 0, "unknown txn must return non-zero error on partition");
+    let err =
+        response.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code;
+    assert_ne!(
+        err, 0,
+        "unknown txn must return non-zero error on partition"
+    );
 }
 
 #[test]
 fn add_partitions_to_txn_valid_txn_succeeds() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{AddPartitionsToTxnRequest, AddPartitionsToTxnTopic};
+    use kafka_protocol::messages::add_partitions_to_txn_request::{
+        AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
+    };
     use kafka_protocol::messages::{ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     // Initialise a real transaction first.
@@ -1982,7 +2145,8 @@ fn add_partitions_to_txn_valid_txn_succeeds() {
     let body = encode_body(&req, 0);
     let response = add_partitions_to_txn::handle(0, &body, &txn_mgr).unwrap();
     assert_eq!(response.results_by_topic_v3_and_below.len(), 1);
-    let err = response.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code;
+    let err =
+        response.results_by_topic_v3_and_below[0].results_by_partition[0].partition_error_code;
     assert_eq!(err, 0, "valid txn must return 0 error on partition");
 }
 
@@ -1998,7 +2162,10 @@ fn add_offsets_to_txn_unknown_returns_error() {
     req.group_id = GroupId(StrBytes::from_static_str("my-group"));
     let body = encode_body(&req, 0);
     let response = add_offsets_to_txn::handle(0, &body, &txn_mgr).unwrap();
-    assert_ne!(response.error_code, 0, "unknown txn must return non-zero error");
+    assert_ne!(
+        response.error_code, 0,
+        "unknown txn must return non-zero error"
+    );
 }
 
 #[test]
@@ -2019,7 +2186,9 @@ fn add_offsets_to_txn_valid_txn_succeeds() {
 
 #[test]
 fn txn_offset_commit_unknown_txn_returns_error() {
-    use kafka_protocol::messages::txn_offset_commit_request::{TxnOffsetCommitRequest, TxnOffsetCommitRequestPartition, TxnOffsetCommitRequestTopic};
+    use kafka_protocol::messages::txn_offset_commit_request::{
+        TxnOffsetCommitRequest, TxnOffsetCommitRequestPartition, TxnOffsetCommitRequestTopic,
+    };
     use kafka_protocol::messages::{GroupId, ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     let mut req = TxnOffsetCommitRequest::default();
@@ -2038,12 +2207,17 @@ fn txn_offset_commit_unknown_txn_returns_error() {
     let response = txn_offset_commit::handle(0, &body, &txn_mgr).unwrap();
     assert_eq!(response.topics.len(), 1);
     let err = response.topics[0].partitions[0].error_code;
-    assert_ne!(err, 0, "unknown txn offset commit must return non-zero error");
+    assert_ne!(
+        err, 0,
+        "unknown txn offset commit must return non-zero error"
+    );
 }
 
 #[test]
 fn write_txn_markers_appends_control_record() {
-    use kafka_protocol::messages::write_txn_markers_request::{WriteTxnMarkersRequest, WritableTxnMarker, WritableTxnMarkerTopic};
+    use kafka_protocol::messages::write_txn_markers_request::{
+        WritableTxnMarker, WritableTxnMarkerTopic, WriteTxnMarkersRequest,
+    };
     use kafka_protocol::messages::ProducerId;
     let storage = test_storage(false);
     storage.create_topic("markers-test", 1).unwrap();
@@ -2067,7 +2241,9 @@ fn write_txn_markers_appends_control_record() {
 
 #[test]
 fn offset_delete_removes_group_offsets() {
-    use kafka_protocol::messages::offset_delete_request::{OffsetDeleteRequest, OffsetDeleteRequestTopic, OffsetDeleteRequestPartition};
+    use kafka_protocol::messages::offset_delete_request::{
+        OffsetDeleteRequest, OffsetDeleteRequestPartition, OffsetDeleteRequestTopic,
+    };
     let offset_store: Arc<dyn crate::storage::OffsetStore> = Arc::new(MemoryOffsetStore::new());
     let mut req = OffsetDeleteRequest::default();
     req.group_id = GroupId(StrBytes::from_static_str("del-off-grp"));

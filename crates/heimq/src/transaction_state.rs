@@ -131,13 +131,7 @@ impl TransactionManager {
 
     /// AddOffsetsToTxn: add consumer group to transaction.
     /// Returns error_code.
-    pub fn add_offsets(
-        &self,
-        txn_id: &str,
-        producer_id: i64,
-        epoch: i16,
-        group_id: &str,
-    ) -> i16 {
+    pub fn add_offsets(&self, txn_id: &str, producer_id: i64, epoch: i16, group_id: &str) -> i16 {
         let mut state = self.state.lock();
         match state.transactions.get_mut(txn_id) {
             None => 47,
@@ -216,9 +210,10 @@ impl TransactionManager {
                 if entry.status != TxnStatus::Ongoing {
                     return 49; // INVALID_TXN_STATE
                 }
-                entry
-                    .pending_offsets
-                    .insert((topic.to_string(), partition, group_id.to_string()), (offset, metadata));
+                entry.pending_offsets.insert(
+                    (topic.to_string(), partition, group_id.to_string()),
+                    (offset, metadata),
+                );
                 0
             }
         }
@@ -392,14 +387,10 @@ impl TransactionManager {
                 map.remove(&fo);
             }
             if !commit {
-                state
-                    .aborted
-                    .entry(key)
-                    .or_default()
-                    .push(AbortedRange {
-                        producer_id,
-                        first_offset: fo,
-                    });
+                state.aborted.entry(key).or_default().push(AbortedRange {
+                    producer_id,
+                    first_offset: fo,
+                });
             }
         }
 

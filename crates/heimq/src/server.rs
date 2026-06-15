@@ -12,10 +12,10 @@ use crate::storage::{
 };
 use crate::transaction_state::TransactionManager;
 use bytes::{Buf, Bytes, BytesMut};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use std::net::SocketAddr;
 use tracing::{debug, error, info, warn};
 
 /// The heimq server
@@ -67,8 +67,7 @@ impl Server {
     pub fn new(config: Config) -> Result<Self> {
         let config = Arc::new(config);
         let storage_cfg = config.storage();
-        let storage: Arc<dyn LogBackend> =
-            dispatch_log_backend(&storage_cfg.log, config.clone())?;
+        let storage: Arc<dyn LogBackend> = dispatch_log_backend(&storage_cfg.log, config.clone())?;
         Self::build(config, storage)
     }
 
@@ -231,7 +230,9 @@ impl Server {
         let mut served = 0usize;
         loop {
             let result = listener.accept().await;
-            if !self.handle_accept_result(result, max_connections, &mut served) { break; }
+            if !self.handle_accept_result(result, max_connections, &mut served) {
+                break;
+            }
         }
         Ok(())
     }
@@ -266,7 +267,9 @@ impl Server {
                     }
                 });
                 *served += 1;
-                if max_connections.is_some_and(|limit| *served >= limit) { return false; }
+                if max_connections.is_some_and(|limit| *served >= limit) {
+                    return false;
+                }
             }
             Err(e) => {
                 error!(error = %e, "Accept error");
@@ -415,9 +418,9 @@ mod tests {
     use super::*;
     use crate::test_support::{init_tracing, test_config, test_consumer_groups, test_storage};
     use bytes::BufMut;
+    use clap::Parser;
     use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
     use kafka_protocol::protocol::Encodable;
-    use clap::Parser;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::io::AsyncWriteExt;
@@ -585,7 +588,8 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
-        let server_task = tokio::spawn(async move { server.run_with_listener(listener, Some(1)).await });
+        let server_task =
+            tokio::spawn(async move { server.run_with_listener(listener, Some(1)).await });
 
         let mut stream = TcpStream::connect(addr).await.unwrap();
         let mut body = BytesMut::new();
@@ -618,7 +622,8 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
-        let server_task = tokio::spawn(async move { server.run_with_listener(listener, Some(1)).await });
+        let server_task =
+            tokio::spawn(async move { server.run_with_listener(listener, Some(1)).await });
         let _client = TcpStream::connect(addr).await.unwrap();
         tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
             .await
@@ -636,7 +641,8 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
 
-        let server_task = tokio::spawn(async move { server.run_with_listener(listener, Some(2)).await });
+        let server_task =
+            tokio::spawn(async move { server.run_with_listener(listener, Some(2)).await });
 
         let _client1 = TcpStream::connect(addr).await.unwrap();
         let _client2 = TcpStream::connect(addr).await.unwrap();
@@ -660,7 +666,8 @@ mod tests {
         config.port = port;
         let server = Server::new(config).unwrap();
 
-        let server_task = tokio::spawn(async move { server.run_with_max_connections(Some(1)).await });
+        let server_task =
+            tokio::spawn(async move { server.run_with_max_connections(Some(1)).await });
         for _ in 0..10 {
             if TcpStream::connect(("127.0.0.1", port)).await.is_ok() {
                 break;
@@ -920,7 +927,11 @@ mod tests {
         let result = handle_connection(Box::new(stream), router).await;
         assert!(result.is_err());
         let msg = format!("{}", result.unwrap_err());
-        assert!(msg.contains("max_frame_bytes"), "error should mention max_frame_bytes: {}", msg);
+        assert!(
+            msg.contains("max_frame_bytes"),
+            "error should mention max_frame_bytes: {}",
+            msg
+        );
     }
 
     // WIRE-001 §3: error frame helpers build the correct bytes
@@ -1021,10 +1032,14 @@ mod tests {
         let mut corr_ids_seen = Vec::new();
         while corr_ids_seen.len() < 2 {
             let n = client.read_buf(&mut buf).await.unwrap();
-            if n == 0 { break; }
+            if n == 0 {
+                break;
+            }
             while buf.len() >= 4 {
                 let frame_len = i32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
-                if buf.len() < 4 + frame_len { break; }
+                if buf.len() < 4 + frame_len {
+                    break;
+                }
                 buf.advance(4);
                 let frame = buf.split_to(frame_len);
                 if frame.len() >= 4 {
@@ -1035,9 +1050,20 @@ mod tests {
         }
         drop(client);
 
-        assert_eq!(corr_ids_seen.len(), 2, "expected 2 responses; got {:?}", corr_ids_seen);
-        assert_eq!(corr_ids_seen[0], 101, "first response should match first request");
-        assert_eq!(corr_ids_seen[1], 202, "second response should match second request");
+        assert_eq!(
+            corr_ids_seen.len(),
+            2,
+            "expected 2 responses; got {:?}",
+            corr_ids_seen
+        );
+        assert_eq!(
+            corr_ids_seen[0], 101,
+            "first response should match first request"
+        );
+        assert_eq!(
+            corr_ids_seen[1], 202,
+            "second response should match second request"
+        );
 
         // Server should exit cleanly (connection closed by client)
         let _ = server_task.await; // may be Ok or Err(BrokenPipe) depending on timing
@@ -1063,7 +1089,9 @@ mod tests {
         // We test that our server code CAN set it (not that we intercepted the real call)
         // verify: set_nodelay(true) succeeds on a TcpStream
         assert!(accepted.set_nodelay(true).is_ok());
-        drop(nodelay_result); drop(tx); drop(rx);
+        drop(nodelay_result);
+        drop(tx);
+        drop(rx);
         let _ = server;
     }
 
@@ -1118,10 +1146,16 @@ mod tests {
         }
         drop(client);
 
-        assert_eq!(error_count, 10, "expected exactly 10 error frames before close");
+        assert_eq!(
+            error_count, 10,
+            "expected exactly 10 error frames before close"
+        );
 
         let result = server_task.await.unwrap();
-        assert!(result.is_err(), "server must return Err after consecutive error limit");
+        assert!(
+            result.is_err(),
+            "server must return Err after consecutive error limit"
+        );
     }
 }
 
@@ -1136,7 +1170,11 @@ struct CapturingStream {
 #[cfg(test)]
 impl CapturingStream {
     fn new(input: Vec<u8>, captured: *mut Vec<u8>) -> Self {
-        Self { input, pos: 0, captured }
+        Self {
+            input,
+            pos: 0,
+            captured,
+        }
     }
 }
 
@@ -1173,10 +1211,16 @@ impl AsyncWrite for CapturingStream {
         unsafe { (*this.captured).extend_from_slice(buf) };
         std::task::Poll::Ready(Ok(buf.len()))
     }
-    fn poll_flush(self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
         std::task::Poll::Ready(Ok(()))
     }
-    fn poll_shutdown(self: std::pin::Pin<&mut Self>, _cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
         std::task::Poll::Ready(Ok(()))
     }
 }

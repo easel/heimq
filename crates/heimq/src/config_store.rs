@@ -246,7 +246,11 @@ mod tests {
         assert_eq!(
             s.alter_incremental(
                 "c",
-                &[IncrementalOp { key: "retention.bytes", op: OP_SET, value: Some("1") }]
+                &[IncrementalOp {
+                    key: "retention.bytes",
+                    op: OP_SET,
+                    value: Some("1")
+                }]
             ),
             Err(INVALID_CONFIG)
         );
@@ -284,13 +288,31 @@ mod tests {
         let s = ConfigStore::new();
         s.alter_incremental(
             "t",
-            &[IncrementalOp { key: "retention.ms", op: OP_SET, value: Some("3600000") }],
+            &[IncrementalOp {
+                key: "retention.ms",
+                op: OP_SET,
+                value: Some("3600000"),
+            }],
         )
         .unwrap();
-        assert_eq!(s.effective("t").iter().find(|(k, _, _)| *k == "retention.ms").unwrap().1, "3600000");
+        assert_eq!(
+            s.effective("t")
+                .iter()
+                .find(|(k, _, _)| *k == "retention.ms")
+                .unwrap()
+                .1,
+            "3600000"
+        );
 
-        s.alter_incremental("t", &[IncrementalOp { key: "retention.ms", op: OP_DELETE, value: None }])
-            .unwrap();
+        s.alter_incremental(
+            "t",
+            &[IncrementalOp {
+                key: "retention.ms",
+                op: OP_DELETE,
+                value: None,
+            }],
+        )
+        .unwrap();
         let r = s.effective("t");
         let e = r.iter().find(|(k, _, _)| *k == "retention.ms").unwrap();
         assert_eq!(e.1, "604800000");
@@ -305,14 +327,30 @@ mod tests {
             Err(INVALID_CONFIG)
         );
         assert_eq!(
-            s.alter_incremental("t", &[IncrementalOp { key: "bogus.key", op: OP_SET, value: Some("1") }]),
+            s.alter_incremental(
+                "t",
+                &[IncrementalOp {
+                    key: "bogus.key",
+                    op: OP_SET,
+                    value: Some("1")
+                }]
+            ),
             Err(INVALID_CONFIG)
         );
         // A valid key alongside an invalid one must not be partially applied.
         let _ = s.alter_full(
             "t",
-            &[("retention.ms".into(), Some("5".into())), ("bogus".into(), Some("1".into()))],
+            &[
+                ("retention.ms".into(), Some("5".into())),
+                ("bogus".into(), Some("1".into())),
+            ],
         );
-        assert!(!s.effective("t").iter().find(|(k, _, _)| *k == "retention.ms").unwrap().2);
+        assert!(
+            !s.effective("t")
+                .iter()
+                .find(|(k, _, _)| *k == "retention.ms")
+                .unwrap()
+                .2
+        );
     }
 }

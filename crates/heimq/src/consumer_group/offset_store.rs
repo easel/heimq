@@ -81,14 +81,16 @@ impl OffsetStore for MemoryOffsetStore {
         self.offsets.get(&key).map(|e| e.clone())
     }
 
-    fn fetch_all_for_group(
-        &self,
-        group_id: &str,
-    ) -> HashMap<(String, i32), CommittedOffset> {
+    fn fetch_all_for_group(&self, group_id: &str) -> HashMap<(String, i32), CommittedOffset> {
         self.offsets
             .iter()
             .filter(|e| e.key().group_id == group_id)
-            .map(|e| ((e.key().topic.clone(), e.key().partition), e.value().clone()))
+            .map(|e| {
+                (
+                    (e.key().topic.clone(), e.key().partition),
+                    e.value().clone(),
+                )
+            })
             .collect()
     }
 
@@ -133,7 +135,9 @@ mod tests {
     fn test_fetch_all_and_delete_group() {
         let store = MemoryOffsetStore::new();
         store.commit("group1", "topic1", 0, 10, 0, None).unwrap();
-        store.commit("group1", "topic2", 1, 20, 0, Some("meta".into())).unwrap();
+        store
+            .commit("group1", "topic2", 1, 20, 0, Some("meta".into()))
+            .unwrap();
         store.commit("group2", "topic1", 0, 30, 0, None).unwrap();
 
         let all = store.fetch_all_for_group("group1");
@@ -162,8 +166,7 @@ mod tests {
 
     #[test]
     fn test_trait_object() {
-        let store: std::sync::Arc<dyn OffsetStore> =
-            std::sync::Arc::new(MemoryOffsetStore::new());
+        let store: std::sync::Arc<dyn OffsetStore> = std::sync::Arc::new(MemoryOffsetStore::new());
         store.commit("g", "t", 0, 5, 0, None).unwrap();
         assert_eq!(store.fetch("g", "t", 0).unwrap().offset, 5);
     }

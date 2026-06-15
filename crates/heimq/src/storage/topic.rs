@@ -37,22 +37,21 @@ impl MemoryTopicLog {
         }
         Self {
             name,
-            config: TopicConfig { num_partitions: new_count },
+            config: TopicConfig {
+                num_partitions: new_count,
+            },
             partitions,
         }
     }
 
     /// Get a specific partition as the concrete in-memory type.
-    pub(crate) fn get_memory_partition(
-        &self,
-        partition: i32,
-    ) -> Result<&Arc<MemoryPartitionLog>> {
-        self.partitions.get(partition as usize).ok_or_else(|| {
-            HeimqError::PartitionNotFound {
+    pub(crate) fn get_memory_partition(&self, partition: i32) -> Result<&Arc<MemoryPartitionLog>> {
+        self.partitions
+            .get(partition as usize)
+            .ok_or_else(|| HeimqError::PartitionNotFound {
                 topic: self.name.clone(),
                 partition,
-            }
-        })
+            })
     }
 
     /// Get all partitions (in-memory handles).

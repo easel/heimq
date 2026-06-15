@@ -7,7 +7,10 @@ use heimq::storage::ClusterView;
 /// self_broker returns a broker with a non-empty host.
 pub fn check_self_broker(view: &dyn ClusterView) {
     let broker = view.self_broker();
-    assert!(!broker.host.is_empty(), "self_broker().host must be non-empty");
+    assert!(
+        !broker.host.is_empty(),
+        "self_broker().host must be non-empty"
+    );
     assert!(broker.port > 0, "self_broker().port must be > 0");
 }
 

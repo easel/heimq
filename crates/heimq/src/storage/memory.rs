@@ -84,11 +84,7 @@ impl MemoryLog {
         self.topics.get(name).map(|t| t.clone())
     }
 
-    fn get_or_create_memory_topic(
-        &self,
-        name: &str,
-        num_partitions: i32,
-    ) -> Arc<MemoryTopicLog> {
+    fn get_or_create_memory_topic(&self, name: &str, num_partitions: i32) -> Arc<MemoryTopicLog> {
         if let Some(topic) = self.topics.get(name) {
             return topic.clone();
         }
@@ -170,7 +166,12 @@ impl LogBackend for MemoryLog {
             new_count,
         ));
         self.topics.insert(name.to_string(), expanded);
-        info!(topic = name, from = current, to = new_count, "Expanded topic partitions");
+        info!(
+            topic = name,
+            from = current,
+            to = new_count,
+            "Expanded topic partitions"
+        );
         Ok(())
     }
 
@@ -195,7 +196,8 @@ impl LogBackend for MemoryLog {
         let partition_log = topic.get_memory_partition(partition)?;
         let (base_offset, count) = partition_log.append_raw(records);
         self.total_messages.fetch_add(count, Ordering::Relaxed);
-        self.total_bytes.fetch_add(records.len() as i64, Ordering::Relaxed);
+        self.total_bytes
+            .fetch_add(records.len() as i64, Ordering::Relaxed);
 
         debug!(
             topic = topic_name,
@@ -394,7 +396,10 @@ mod tests {
         let _ = storage.create_topic("trait-t", 1).unwrap();
 
         let mut headers = IndexMap::new();
-        headers.insert(StrBytes::from_static_str("h"), Some(Bytes::from_static(b"v")));
+        headers.insert(
+            StrBytes::from_static_str("h"),
+            Some(Bytes::from_static(b"v")),
+        );
         let records = vec![Record {
             transactional: false,
             control: false,
@@ -432,7 +437,14 @@ mod tests {
         assert_eq!(count, 1);
 
         let (data, hw) = partition
-            .read(0, 1024, FetchWait::LongPoll { min_bytes: 1, max_wait_ms: 0 })
+            .read(
+                0,
+                1024,
+                FetchWait::LongPoll {
+                    min_bytes: 1,
+                    max_wait_ms: 0,
+                },
+            )
             .unwrap();
         assert_eq!(hw, 1);
         assert!(!data.is_empty());

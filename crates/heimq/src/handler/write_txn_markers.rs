@@ -39,12 +39,7 @@ pub fn handle(
         let epoch = marker.producer_epoch;
         let committed = marker.transaction_result;
 
-        debug!(
-            producer_id,
-            epoch,
-            committed,
-            "WriteTxnMarker"
-        );
+        debug!(producer_id, epoch, committed, "WriteTxnMarker");
 
         let mut marker_result = WritableTxnMarkerResult::default();
         marker_result.producer_id = ProducerId(producer_id);

@@ -45,7 +45,10 @@ impl PartitionLog for ObjectStoreShapePartitionLog {
         // Record manifest entry BEFORE storing (upload-before-manifest pattern)
         let batch_len = raw_bytes.map(|b| b.len()).unwrap_or(0);
         let (base_offset, hwm) = self.inner.append(view, raw_bytes)?;
-        self.manifest.lock().unwrap().push(ManifestEntry { base_offset, batch_len });
+        self.manifest.lock().unwrap().push(ManifestEntry {
+            base_offset,
+            batch_len,
+        });
         Ok((base_offset, hwm))
     }
 

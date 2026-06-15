@@ -1,9 +1,9 @@
 //! Request routing
 
+use crate::config_store::ConfigStore;
 use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::handler::*;
-use crate::config_store::ConfigStore;
 use crate::producer_state::ProducerStateManager;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend};
@@ -66,7 +66,10 @@ impl Router {
         self
     }
 
-    pub fn with_transaction_manager(mut self, transaction_manager: Arc<TransactionManager>) -> Self {
+    pub fn with_transaction_manager(
+        mut self,
+        transaction_manager: Arc<TransactionManager>,
+    ) -> Self {
         self.transaction_manager = transaction_manager;
         self
     }
@@ -112,13 +115,22 @@ impl Router {
 
         let (max_wait_ms, topics) = match decode_request(data) {
             Ok((header, body)) => {
-                match FetchRequest::decode(&mut RawBytes::copy_from_slice(&body), header.api_version) {
+                match FetchRequest::decode(
+                    &mut RawBytes::copy_from_slice(&body),
+                    header.api_version,
+                ) {
                     Ok(req) => {
                         let mw = req.max_wait_ms.max(0) as u32;
-                        let topics: Vec<(String, i32, i64)> = req.topics.iter().flat_map(|t| {
-                            let name = t.topic.0.to_string();
-                            t.partitions.iter().map(move |p| (name.clone(), p.partition, p.fetch_offset))
-                        }).collect();
+                        let topics: Vec<(String, i32, i64)> = req
+                            .topics
+                            .iter()
+                            .flat_map(|t| {
+                                let name = t.topic.0.to_string();
+                                t.partitions
+                                    .iter()
+                                    .map(move |p| (name.clone(), p.partition, p.fetch_offset))
+                            })
+                            .collect();
                         (mw, topics)
                     }
                     Err(_) => return self.route(data),
@@ -230,8 +242,13 @@ impl Router {
         header: &RequestHeader,
         response: &R,
     ) -> Result<Bytes> {
-        encode_response(header.correlation_id, header.api_key, header.api_version, response)
-            .map_err(Into::into)
+        encode_response(
+            header.correlation_id,
+            header.api_key,
+            header.api_version,
+            response,
+        )
+        .map_err(Into::into)
     }
 
     fn handle_and_encode<R>(
@@ -254,7 +271,14 @@ impl Router {
     fn handle_metadata(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| metadata::handle(header.api_version, body, &self.storage, self.cluster_view.as_ref())),
+            Box::new(|| {
+                metadata::handle(
+                    header.api_version,
+                    body,
+                    &self.storage,
+                    self.cluster_view.as_ref(),
+                )
+            }),
         )
     }
 
@@ -400,21 +424,27 @@ impl Router {
     fn handle_find_coordinator(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| find_coordinator::handle(header.api_version, body, self.cluster_view.as_ref())),
+            Box::new(|| {
+                find_coordinator::handle(header.api_version, body, self.cluster_view.as_ref())
+            }),
         )
     }
 
     fn handle_join_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| join_group::handle(header.api_version, body, self.consumer_groups.as_ref())),
+            Box::new(|| {
+                join_group::handle(header.api_version, body, self.consumer_groups.as_ref())
+            }),
         )
     }
 
     fn handle_sync_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| sync_group::handle(header.api_version, body, self.consumer_groups.as_ref())),
+            Box::new(|| {
+                sync_group::handle(header.api_version, body, self.consumer_groups.as_ref())
+            }),
         )
     }
 
@@ -428,28 +458,36 @@ impl Router {
     fn handle_leave_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| leave_group::handle(header.api_version, body, self.consumer_groups.as_ref())),
+            Box::new(|| {
+                leave_group::handle(header.api_version, body, self.consumer_groups.as_ref())
+            }),
         )
     }
 
     fn handle_describe_groups(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| describe_groups::handle(header.api_version, body, self.consumer_groups.as_ref())),
+            Box::new(|| {
+                describe_groups::handle(header.api_version, body, self.consumer_groups.as_ref())
+            }),
         )
     }
 
     fn handle_list_groups(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| list_groups::handle(header.api_version, body, self.consumer_groups.as_ref())),
+            Box::new(|| {
+                list_groups::handle(header.api_version, body, self.consumer_groups.as_ref())
+            }),
         )
     }
 
     fn handle_delete_groups(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| delete_groups::handle(header.api_version, body, self.consumer_groups.as_ref())),
+            Box::new(|| {
+                delete_groups::handle(header.api_version, body, self.consumer_groups.as_ref())
+            }),
         )
     }
 
@@ -467,7 +505,11 @@ impl Router {
         )
     }
 
-    fn handle_describe_topic_partitions(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+    fn handle_describe_topic_partitions(
+        &self,
+        header: &RequestHeader,
+        body: &[u8],
+    ) -> Result<Bytes> {
         self.handle_and_encode(
             header,
             Box::new(|| {
@@ -505,7 +547,11 @@ impl Router {
         )
     }
 
-    fn handle_incremental_alter_configs(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+    fn handle_incremental_alter_configs(
+        &self,
+        header: &RequestHeader,
+        body: &[u8],
+    ) -> Result<Bytes> {
         self.handle_and_encode(
             header,
             Box::new(|| {
@@ -517,7 +563,9 @@ impl Router {
     fn handle_describe_cluster(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
-            Box::new(|| describe_cluster::handle(header.api_version, body, self.cluster_view.as_ref())),
+            Box::new(|| {
+                describe_cluster::handle(header.api_version, body, self.cluster_view.as_ref())
+            }),
         )
     }
 
@@ -558,41 +606,52 @@ impl Router {
 mod tests {
     use super::*;
     use crate::storage::SingleNodeClusterView;
-    use crate::test_support::{encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups, test_storage};
+    use crate::test_support::{
+        encode_body, encode_record_batch, init_tracing, test_config, test_consumer_groups,
+        test_storage,
+    };
+    use anyhow::anyhow;
     use bytes::{Buf, BufMut, BytesMut};
     use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
-    use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
-    use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
-    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
-    use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
-    use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
-    use kafka_protocol::messages::join_group_request::{JoinGroupRequest, JoinGroupRequestProtocol};
-    use kafka_protocol::messages::leave_group_request::LeaveGroupRequest;
-    use kafka_protocol::messages::list_offsets_request::{ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic};
-    use kafka_protocol::messages::metadata_request::MetadataRequest;
-    use kafka_protocol::messages::offset_commit_request::{OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic};
-    use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequest;
-    use kafka_protocol::messages::produce_request::{PartitionProduceData, ProduceRequest, TopicProduceData};
-    use kafka_protocol::messages::sync_group_request::SyncGroupRequest;
-    use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
-    use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
-    use kafka_protocol::messages::delete_groups_request::DeleteGroupsRequest;
     use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
+    use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
     use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
+    use kafka_protocol::messages::delete_groups_request::DeleteGroupsRequest;
+    use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
     use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
+    use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
+    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
     use kafka_protocol::messages::fetch_response::FetchResponse;
+    use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
     use kafka_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
+    use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
     use kafka_protocol::messages::heartbeat_response::HeartbeatResponse;
+    use kafka_protocol::messages::join_group_request::{
+        JoinGroupRequest, JoinGroupRequestProtocol,
+    };
     use kafka_protocol::messages::join_group_response::JoinGroupResponse;
+    use kafka_protocol::messages::leave_group_request::LeaveGroupRequest;
     use kafka_protocol::messages::leave_group_response::LeaveGroupResponse;
+    use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
+    use kafka_protocol::messages::list_offsets_request::{
+        ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic,
+    };
     use kafka_protocol::messages::list_offsets_response::ListOffsetsResponse;
+    use kafka_protocol::messages::metadata_request::MetadataRequest;
     use kafka_protocol::messages::metadata_response::MetadataResponse;
+    use kafka_protocol::messages::offset_commit_request::{
+        OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic,
+    };
     use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
+    use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequest;
     use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
+    use kafka_protocol::messages::produce_request::{
+        PartitionProduceData, ProduceRequest, TopicProduceData,
+    };
     use kafka_protocol::messages::produce_response::ProduceResponse;
+    use kafka_protocol::messages::sync_group_request::SyncGroupRequest;
     use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
     use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
-    use anyhow::anyhow;
     use kafka_protocol::protocol::{Encodable, StrBytes};
 
     fn build_request(api_key: i16, api_version: i16, correlation_id: i32, body: &[u8]) -> Vec<u8> {
@@ -852,7 +911,11 @@ mod tests {
 
         let err = router.handle_and_encode::<ApiVersionsResponse>(
             &header,
-            Box::new(|| Err(crate::error::HeimqError::Protocol("handler-fail".to_string()))),
+            Box::new(|| {
+                Err(crate::error::HeimqError::Protocol(
+                    "handler-fail".to_string(),
+                ))
+            }),
         );
         assert!(err.is_err());
     }
@@ -875,7 +938,11 @@ mod tests {
         fn assert_handler_error<R: Encodable>(router: &Router, header: &RequestHeader) {
             let err = router.handle_and_encode::<R>(
                 header,
-                Box::new(|| Err(crate::error::HeimqError::Protocol("handler-fail".to_string()))),
+                Box::new(|| {
+                    Err(crate::error::HeimqError::Protocol(
+                        "handler-fail".to_string(),
+                    ))
+                }),
             );
             assert!(err.is_err());
         }
@@ -916,7 +983,9 @@ mod tests {
         let mut body_bytes = bytes::Bytes::copy_from_slice(&resp[8..]);
         let api_versions = ApiVersionsResponse::decode(&mut body_bytes, 0).unwrap();
 
-        let sasl_keys: Vec<i16> = api_versions.api_keys.iter()
+        let sasl_keys: Vec<i16> = api_versions
+            .api_keys
+            .iter()
             .map(|a| a.api_key)
             .filter(|k| *k == 17 || *k == 36)
             .collect();
@@ -942,26 +1011,58 @@ mod tests {
             fn create_topic(&self, n: &str, p: i32) -> crate::error::Result<Arc<dyn TopicLog>> {
                 self.inner.create_topic(n, p)
             }
-            fn delete_topic(&self, n: &str) -> crate::error::Result<()> { self.inner.delete_topic(n) }
-            fn list_topics(&self) -> Vec<String> { self.inner.list_topics() }
-            fn topic(&self, n: &str) -> Option<Arc<dyn TopicLog>> { self.inner.topic(n) }
-            fn capabilities(&self) -> &BackendCapabilities { &self.caps }
+            fn delete_topic(&self, n: &str) -> crate::error::Result<()> {
+                self.inner.delete_topic(n)
+            }
+            fn list_topics(&self) -> Vec<String> {
+                self.inner.list_topics()
+            }
+            fn topic(&self, n: &str) -> Option<Arc<dyn TopicLog>> {
+                self.inner.topic(n)
+            }
+            fn capabilities(&self) -> &BackendCapabilities {
+                &self.caps
+            }
             fn get_or_create_topic(&self, n: &str, p: i32) -> Arc<dyn TopicLog> {
                 self.inner.get_or_create_topic(n, p)
             }
-            fn get_all_topic_metadata(&self) -> Vec<(String, i32)> { self.inner.get_all_topic_metadata() }
-            fn default_num_partitions(&self) -> i32 { 1 }
-            fn auto_create_topics(&self) -> bool { true }
-            fn append(&self, topic: &str, partition: i32, records: &[u8]) -> crate::error::Result<(i64, i64)> {
+            fn get_all_topic_metadata(&self) -> Vec<(String, i32)> {
+                self.inner.get_all_topic_metadata()
+            }
+            fn default_num_partitions(&self) -> i32 {
+                1
+            }
+            fn auto_create_topics(&self) -> bool {
+                true
+            }
+            fn append(
+                &self,
+                topic: &str,
+                partition: i32,
+                records: &[u8],
+            ) -> crate::error::Result<(i64, i64)> {
                 // WAL write BEFORE ack (simulating niflheim durability guarantee)
-                self.wal.lock().unwrap().push((topic.to_string(), partition, records.to_vec()));
+                self.wal
+                    .lock()
+                    .unwrap()
+                    .push((topic.to_string(), partition, records.to_vec()));
                 self.inner.append(topic, partition, records)
             }
-            fn fetch(&self, t: &str, p: i32, o: i64, max: i32) -> crate::error::Result<(Vec<u8>, i64)> {
+            fn fetch(
+                &self,
+                t: &str,
+                p: i32,
+                o: i64,
+                max: i32,
+            ) -> crate::error::Result<(Vec<u8>, i64)> {
                 self.inner.fetch(t, p, o, max)
             }
-            fn high_watermark(&self, t: &str, p: i32) -> crate::error::Result<i64> { self.inner.high_watermark(t, p) }
-            fn log_start_offset(&self, t: &str, p: i32) -> crate::error::Result<i64> { self.inner.log_start_offset(t, p) }
+            fn high_watermark(&self, t: &str, p: i32) -> crate::error::Result<i64> {
+                self.inner.high_watermark(t, p)
+            }
+            fn log_start_offset(&self, t: &str, p: i32) -> crate::error::Result<i64> {
+                self.inner.log_start_offset(t, p)
+            }
         }
 
         let config = test_config(true);
@@ -977,11 +1078,18 @@ mod tests {
         let router = Router::new(backend, consumer_groups, cluster_view);
 
         let batch = encode_record_batch(&[kafka_protocol::records::Record {
-            transactional: false, control: false, partition_leader_epoch: 0,
-            producer_id: -1, producer_epoch: -1,
+            transactional: false,
+            control: false,
+            partition_leader_epoch: 0,
+            producer_id: -1,
+            producer_epoch: -1,
             timestamp_type: kafka_protocol::records::TimestampType::Creation,
-            timestamp: 0, sequence: 0, offset: 0,
-            key: Some("k".into()), value: Some("v".into()), headers: Default::default(),
+            timestamp: 0,
+            sequence: 0,
+            offset: 0,
+            key: Some("k".into()),
+            value: Some("v".into()),
+            headers: Default::default(),
         }]);
         let mut partition = PartitionProduceData::default();
         partition.index = 0;
@@ -1000,7 +1108,11 @@ mod tests {
         assert_eq!(response_correlation_id(resp), 42);
 
         let guard = wal.lock().unwrap();
-        assert_eq!(guard.len(), 1, "WAL must have exactly one entry after one produce");
+        assert_eq!(
+            guard.len(),
+            1,
+            "WAL must have exactly one entry after one produce"
+        );
         assert_eq!(guard[0].0, "wal-test");
         assert_eq!(guard[0].1, 0);
     }
@@ -1021,27 +1133,56 @@ mod tests {
             fn create_topic(&self, _n: &str, _p: i32) -> crate::error::Result<Arc<dyn TopicLog>> {
                 Err(crate::error::HeimqError::Protocol("pqueue-sink: no topics".into()).into())
             }
-            fn delete_topic(&self, _n: &str) -> crate::error::Result<()> { Ok(()) }
-            fn list_topics(&self) -> Vec<String> { vec![] }
-            fn topic(&self, _n: &str) -> Option<Arc<dyn TopicLog>> { None }
-            fn capabilities(&self) -> &BackendCapabilities { &self.caps }
+            fn delete_topic(&self, _n: &str) -> crate::error::Result<()> {
+                Ok(())
+            }
+            fn list_topics(&self) -> Vec<String> {
+                vec![]
+            }
+            fn topic(&self, _n: &str) -> Option<Arc<dyn TopicLog>> {
+                None
+            }
+            fn capabilities(&self) -> &BackendCapabilities {
+                &self.caps
+            }
             fn get_or_create_topic(&self, n: &str, _p: i32) -> Arc<dyn TopicLog> {
                 // Minimal stub to satisfy the produce handler's auto-create path
                 Arc::new(crate::storage::MemoryTopicLog::new(n.to_string(), 1))
             }
-            fn get_all_topic_metadata(&self) -> Vec<(String, i32)> { vec![] }
-            fn default_num_partitions(&self) -> i32 { 1 }
-            fn auto_create_topics(&self) -> bool { true }
-            fn append(&self, _topic: &str, _partition: i32, records: &[u8]) -> crate::error::Result<(i64, i64)> {
+            fn get_all_topic_metadata(&self) -> Vec<(String, i32)> {
+                vec![]
+            }
+            fn default_num_partitions(&self) -> i32 {
+                1
+            }
+            fn auto_create_topics(&self) -> bool {
+                true
+            }
+            fn append(
+                &self,
+                _topic: &str,
+                _partition: i32,
+                records: &[u8],
+            ) -> crate::error::Result<(i64, i64)> {
                 // Enqueue batch to processing sink (pqueue pattern)
                 let _ = self.sink.try_send(records.to_vec());
                 Ok((0, 1))
             }
-            fn fetch(&self, _t: &str, _p: i32, _o: i64, _max: i32) -> crate::error::Result<(Vec<u8>, i64)> {
+            fn fetch(
+                &self,
+                _t: &str,
+                _p: i32,
+                _o: i64,
+                _max: i32,
+            ) -> crate::error::Result<(Vec<u8>, i64)> {
                 Ok((vec![], 0))
             }
-            fn high_watermark(&self, _t: &str, _p: i32) -> crate::error::Result<i64> { Ok(0) }
-            fn log_start_offset(&self, _t: &str, _p: i32) -> crate::error::Result<i64> { Ok(0) }
+            fn high_watermark(&self, _t: &str, _p: i32) -> crate::error::Result<i64> {
+                Ok(0)
+            }
+            fn log_start_offset(&self, _t: &str, _p: i32) -> crate::error::Result<i64> {
+                Ok(0)
+            }
         }
 
         let config = test_config(true);
@@ -1055,11 +1196,18 @@ mod tests {
         let router = Router::new(backend, consumer_groups, cluster_view);
 
         let batch = encode_record_batch(&[kafka_protocol::records::Record {
-            transactional: false, control: false, partition_leader_epoch: 0,
-            producer_id: -1, producer_epoch: -1,
+            transactional: false,
+            control: false,
+            partition_leader_epoch: 0,
+            producer_id: -1,
+            producer_epoch: -1,
             timestamp_type: kafka_protocol::records::TimestampType::Creation,
-            timestamp: 0, sequence: 0, offset: 0,
-            key: Some("k".into()), value: Some("v".into()), headers: Default::default(),
+            timestamp: 0,
+            sequence: 0,
+            offset: 0,
+            key: Some("k".into()),
+            value: Some("v".into()),
+            headers: Default::default(),
         }]);
         let mut partition = PartitionProduceData::default();
         partition.index = 0;
@@ -1078,7 +1226,9 @@ mod tests {
         assert_eq!(response_correlation_id(resp), 99);
 
         // Verify the record batch arrived at the queue sink
-        let received = rx.try_recv().expect("queue sink must have received a batch");
+        let received = rx
+            .try_recv()
+            .expect("queue sink must have received a batch");
         assert!(!received.is_empty(), "received batch must be non-empty");
     }
 }

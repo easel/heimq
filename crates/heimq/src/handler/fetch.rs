@@ -5,7 +5,9 @@ use crate::storage::LogBackend;
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
 use kafka_protocol::messages::fetch_request::FetchRequest;
-use kafka_protocol::messages::fetch_response::{AbortedTransaction, FetchableTopicResponse, PartitionData};
+use kafka_protocol::messages::fetch_response::{
+    AbortedTransaction, FetchableTopicResponse, PartitionData,
+};
 use kafka_protocol::messages::{FetchResponse, ProducerId, TopicName};
 use kafka_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
@@ -62,11 +64,15 @@ pub fn handle(
                     // For READ_COMMITTED (isolation_level=1), use LSO as high_watermark
                     // and include aborted transaction list.
                     if isolation_level == 1 {
-                        let lso = transaction_manager.get_lso(&topic_name, partition, high_watermark);
+                        let lso =
+                            transaction_manager.get_lso(&topic_name, partition, high_watermark);
                         partition_data.high_watermark = lso;
                         partition_data.last_stable_offset = lso;
-                        let aborted = transaction_manager
-                            .get_aborted_transactions(&topic_name, partition, fetch_offset);
+                        let aborted = transaction_manager.get_aborted_transactions(
+                            &topic_name,
+                            partition,
+                            fetch_offset,
+                        );
                         if !aborted.is_empty() {
                             partition_data.aborted_transactions = Some(
                                 aborted

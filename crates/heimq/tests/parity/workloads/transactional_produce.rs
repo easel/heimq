@@ -66,9 +66,13 @@ fn run_sync(bootstrap: &str) -> Result<Vec<Observation>> {
     for i in 0..3i32 {
         let key = format!("commit-key-{}", i);
         let val = format!("commit-val-{}", i);
-        producer.send(
-            BaseRecord::to(TOPIC).key(key.as_str()).payload(val.as_str()),
-        ).map_err(|(e, _)| anyhow::anyhow!("produce failed: {}", e))?;
+        producer
+            .send(
+                BaseRecord::to(TOPIC)
+                    .key(key.as_str())
+                    .payload(val.as_str()),
+            )
+            .map_err(|(e, _)| anyhow::anyhow!("produce failed: {}", e))?;
     }
     producer.flush(Duration::from_secs(10))?;
     producer.commit_transaction(Duration::from_secs(10))?;
@@ -78,9 +82,13 @@ fn run_sync(bootstrap: &str) -> Result<Vec<Observation>> {
     for i in 0..3i32 {
         let key = format!("abort-key-{}", i);
         let val = format!("abort-val-{}", i);
-        producer.send(
-            BaseRecord::to(TOPIC).key(key.as_str()).payload(val.as_str()),
-        ).map_err(|(e, _)| anyhow::anyhow!("produce failed: {}", e))?;
+        producer
+            .send(
+                BaseRecord::to(TOPIC)
+                    .key(key.as_str())
+                    .payload(val.as_str()),
+            )
+            .map_err(|(e, _)| anyhow::anyhow!("produce failed: {}", e))?;
     }
     producer.flush(Duration::from_secs(10))?;
     producer.abort_transaction(Duration::from_secs(10))?;

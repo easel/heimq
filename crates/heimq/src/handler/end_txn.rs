@@ -74,7 +74,8 @@ pub fn handle(
     // If committed, apply pending transactional offsets to offset store
     if committed {
         for ((topic, partition, group_id), (offset, metadata)) in pending_offsets {
-            if let Err(e) = offset_store.commit(&group_id, &topic, partition, offset, -1, metadata) {
+            if let Err(e) = offset_store.commit(&group_id, &topic, partition, offset, -1, metadata)
+            {
                 warn!(
                     error = %e,
                     group_id = %group_id,

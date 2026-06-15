@@ -25,7 +25,7 @@ impl Coordinator {
     #[allow(dead_code)]
     pub fn host(&self) -> &str {
         if self.config.host == "0.0.0.0" {
-            "127.0.0.1"  // Use IPv4 to avoid IPv6 resolution issues
+            "127.0.0.1" // Use IPv4 to avoid IPv6 resolution issues
         } else {
             &self.config.host
         }

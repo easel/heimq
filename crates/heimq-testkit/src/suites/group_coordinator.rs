@@ -23,7 +23,10 @@ fn make_join_req(group_id: &str, member_id: &str) -> JoinRequest {
 /// capabilities() returns a descriptor with a non-empty name.
 pub fn check_capabilities(backend: &dyn GroupCoordinatorBackend) {
     let caps = backend.capabilities();
-    assert!(!caps.name.is_empty(), "capabilities().name must be non-empty");
+    assert!(
+        !caps.name.is_empty(),
+        "capabilities().name must be non-empty"
+    );
 }
 
 /// offset_store() returns an OffsetStore with a non-empty capabilities name.
@@ -43,7 +46,10 @@ pub fn check_join_mints_member_id(backend: &dyn GroupCoordinatorBackend) {
         result.error_code, 79,
         "empty member_id must return MEMBER_ID_REQUIRED (79)"
     );
-    assert!(!result.member_id.is_empty(), "minted member_id must be non-empty");
+    assert!(
+        !result.member_id.is_empty(),
+        "minted member_id must be non-empty"
+    );
 }
 
 /// Full join → sync → heartbeat → leave rebalance trace.
@@ -55,7 +61,11 @@ pub fn check_join_sync_heartbeat_leave_trace(backend: &dyn GroupCoordinatorBacke
 
     // 2. Rejoin with the minted id
     let joined = backend.join_group(make_join_req("suite-grp-trace", &member_id));
-    assert_eq!(joined.error_code, 0, "rejoin must succeed: error_code={}", joined.error_code);
+    assert_eq!(
+        joined.error_code, 0,
+        "rejoin must succeed: error_code={}",
+        joined.error_code
+    );
     let generation_id = joined.generation_id;
 
     // 3. Sync (leader assigns empty assignment to self)
@@ -66,15 +76,27 @@ pub fn check_join_sync_heartbeat_leave_trace(backend: &dyn GroupCoordinatorBacke
         assignments: vec![(member_id.clone(), vec![])],
     };
     let synced = backend.sync_group(sync_req);
-    assert_eq!(synced.error_code, 0, "sync must succeed: error_code={}", synced.error_code);
+    assert_eq!(
+        synced.error_code, 0,
+        "sync must succeed: error_code={}",
+        synced.error_code
+    );
 
     // 4. Heartbeat
     let hb = backend.heartbeat("suite-grp-trace", generation_id, &member_id);
-    assert_eq!(hb.error_code, 0, "heartbeat must succeed: error_code={}", hb.error_code);
+    assert_eq!(
+        hb.error_code, 0,
+        "heartbeat must succeed: error_code={}",
+        hb.error_code
+    );
 
     // 5. Leave
     let leave = backend.leave_group("suite-grp-trace", &[member_id]);
-    assert_eq!(leave.error_code, 0, "leave must succeed: error_code={}", leave.error_code);
+    assert_eq!(
+        leave.error_code, 0,
+        "leave must succeed: error_code={}",
+        leave.error_code
+    );
 }
 
 /// Run all group coordinator conformance checks.

@@ -25,13 +25,14 @@ use std::sync::Arc;
 use tracing::info;
 
 /// Capabilities exposed by the in-memory `ConsumerGroupManager` backend.
-const MEMORY_COORDINATOR_CAPABILITIES: GroupCoordinatorCapabilities = GroupCoordinatorCapabilities {
-    name: "in-memory",
-    version: env!("CARGO_PKG_VERSION"),
-    durability: Durability::None,
-    survives_restart: false,
-    multi_node: false,
-};
+const MEMORY_COORDINATOR_CAPABILITIES: GroupCoordinatorCapabilities =
+    GroupCoordinatorCapabilities {
+        name: "in-memory",
+        version: env!("CARGO_PKG_VERSION"),
+        durability: Durability::None,
+        survives_restart: false,
+        multi_node: false,
+    };
 
 /// Consumer group manager
 pub struct ConsumerGroupManager {
@@ -331,7 +332,10 @@ mod tests {
         let config = Arc::new(Config::parse_from(["heimq"]));
         let store: Arc<dyn OffsetStore> = Arc::new(MemoryOffsetStore::new());
         let manager = ConsumerGroupManager::with_offset_store(config, store.clone());
-        manager.offset_store().commit("g", "t", 0, 42, 0, None).unwrap();
+        manager
+            .offset_store()
+            .commit("g", "t", 0, 42, 0, None)
+            .unwrap();
         assert_eq!(store.fetch("g", "t", 0).unwrap().offset, 42);
     }
 
@@ -368,8 +372,7 @@ mod tests {
     #[test]
     fn join_sync_heartbeat_leave_via_trait() {
         let config = Arc::new(Config::parse_from(["heimq"]));
-        let manager: Arc<dyn GroupCoordinatorBackend> =
-            Arc::new(ConsumerGroupManager::new(config));
+        let manager: Arc<dyn GroupCoordinatorBackend> = Arc::new(ConsumerGroupManager::new(config));
 
         let join = manager.join_group(JoinRequest {
             group_id: "g".to_string(),

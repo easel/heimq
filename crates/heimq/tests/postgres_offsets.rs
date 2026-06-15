@@ -17,9 +17,7 @@ use kafka_protocol::messages::offset_commit_request::{
     OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic,
 };
 use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
-use kafka_protocol::messages::offset_fetch_request::{
-    OffsetFetchRequest, OffsetFetchRequestTopic,
-};
+use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
 use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
 use kafka_protocol::messages::{GroupId, TopicName};
 use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
@@ -87,7 +85,12 @@ impl Drop for PgServer {
     }
 }
 
-fn encode_request<R: Encodable>(api_key: i16, api_version: i16, correlation_id: i32, request: &R) -> Vec<u8> {
+fn encode_request<R: Encodable>(
+    api_key: i16,
+    api_version: i16,
+    correlation_id: i32,
+    request: &R,
+) -> Vec<u8> {
     let mut body = BytesMut::new();
     body.put_i16(api_key);
     body.put_i16(api_version);
@@ -109,8 +112,12 @@ fn send_request<R: Encodable, S: Decodable>(
     let correlation_id = 17;
     let payload = encode_request(api_key, api_version, correlation_id, request);
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
-    stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-    stream.set_write_timeout(Some(Duration::from_secs(5))).unwrap();
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
     stream.write_all(&payload).unwrap();
     let mut len_buf = [0u8; 4];
     stream.read_exact(&mut len_buf).unwrap();
@@ -156,7 +163,11 @@ fn postgres_offset_store_survives_restart() {
     // each run starts from an empty table.
     let schema = format!("heimq_test_{}", unique_suffix());
     let separator = if base_url.contains('?') { "&" } else { "?" };
-    let url = format!("{base}{sep}schema={schema}", base = base_url, sep = separator);
+    let url = format!(
+        "{base}{sep}schema={schema}",
+        base = base_url,
+        sep = separator
+    );
 
     let topic = format!("heimq-pg-{}", unique_suffix());
     let group = format!("heimq-pg-grp-{}", unique_suffix());

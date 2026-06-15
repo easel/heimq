@@ -6,8 +6,7 @@
 
 use heimq_testkit::{
     fixtures::{
-        object_store_shape::ObjectStoreShapePartitionLog,
-        queue_sink_shape::QueueSinkPartitionLog,
+        object_store_shape::ObjectStoreShapePartitionLog, queue_sink_shape::QueueSinkPartitionLog,
         wal_shape::WalShapePartitionLog,
     },
     suites,
@@ -18,9 +17,7 @@ use std::sync::Arc;
 
 #[test]
 fn wal_shape_partition_log_suite() {
-    suites::partition_log::run_all(&|| {
-        Arc::new(WalShapePartitionLog::new(0)) as Arc<_>
-    });
+    suites::partition_log::run_all(&|| Arc::new(WalShapePartitionLog::new(0)) as Arc<_>);
 }
 
 #[test]
@@ -102,9 +99,7 @@ fn queue_sink_delivers_to_channel() {
 
 #[test]
 fn object_store_shape_partition_log_suite() {
-    suites::partition_log::run_all(&|| {
-        Arc::new(ObjectStoreShapePartitionLog::new(0)) as Arc<_>
-    });
+    suites::partition_log::run_all(&|| Arc::new(ObjectStoreShapePartitionLog::new(0)) as Arc<_>);
 }
 
 #[test]
@@ -136,7 +131,14 @@ fn object_store_shape_records_in_manifest() {
     log_arc.append(&view, Some(&raw_bytes)).unwrap();
 
     let entries = manifest.lock().unwrap();
-    assert_eq!(entries.len(), 1, "manifest must have one entry after append");
+    assert_eq!(
+        entries.len(),
+        1,
+        "manifest must have one entry after append"
+    );
     assert_eq!(entries[0].base_offset, 0);
-    assert!(entries[0].batch_len > 0, "manifest entry must record batch length");
+    assert!(
+        entries[0].batch_len > 0,
+        "manifest entry must record batch length"
+    );
 }

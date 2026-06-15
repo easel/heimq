@@ -66,19 +66,35 @@ pub struct Config {
 
     /// Pre-create topics at startup. Format: "name:partitions", repeatable.
     /// Env var: comma-separated list.
-    #[arg(long = "create-topic", env = "HEIMQ_CREATE_TOPICS", value_delimiter = ',')]
+    #[arg(
+        long = "create-topic",
+        env = "HEIMQ_CREATE_TOPICS",
+        value_delimiter = ','
+    )]
     pub create_topics: Vec<String>,
 
     /// URL for the log-storage backend. Currently only `memory://` is supported.
-    #[arg(long = "storage-log", default_value = "memory://", env = "HEIMQ_STORAGE_LOG")]
+    #[arg(
+        long = "storage-log",
+        default_value = "memory://",
+        env = "HEIMQ_STORAGE_LOG"
+    )]
     pub storage_log: String,
 
     /// URL for the consumer-group offset store. Currently only `memory://` is supported.
-    #[arg(long = "storage-offsets", default_value = "memory://", env = "HEIMQ_STORAGE_OFFSETS")]
+    #[arg(
+        long = "storage-offsets",
+        default_value = "memory://",
+        env = "HEIMQ_STORAGE_OFFSETS"
+    )]
     pub storage_offsets: String,
 
     /// URL for the consumer-group coordinator backend. Currently only `memory://` is supported.
-    #[arg(long = "storage-groups", default_value = "memory://", env = "HEIMQ_STORAGE_GROUPS")]
+    #[arg(
+        long = "storage-groups",
+        default_value = "memory://",
+        env = "HEIMQ_STORAGE_GROUPS"
+    )]
     pub storage_groups: String,
 
     /// Advertised hostname returned to Kafka clients in Metadata responses.
@@ -115,7 +131,7 @@ impl Config {
     #[allow(dead_code)]
     pub fn advertised_listener(&self) -> String {
         if self.host == "0.0.0.0" {
-            format!("127.0.0.1:{}", self.port)  // Use IPv4 to avoid IPv6 resolution issues
+            format!("127.0.0.1:{}", self.port) // Use IPv4 to avoid IPv6 resolution issues
         } else {
             format!("{}:{}", self.host, self.port)
         }

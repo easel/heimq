@@ -238,9 +238,7 @@ fn compression_to_codec(c: Compression) -> CompressionCodec {
 mod tests {
     use super::*;
     use bytes::BytesMut;
-    use kafka_protocol::records::{
-        RecordBatchEncoder, RecordEncodeOptions, TimestampType,
-    };
+    use kafka_protocol::records::{RecordBatchEncoder, RecordEncodeOptions, TimestampType};
 
     fn make_record(offset: i64, timestamp: i64, key: &[u8], value: &[u8]) -> Record {
         let mut headers = kafka_protocol::indexmap::IndexMap::new();

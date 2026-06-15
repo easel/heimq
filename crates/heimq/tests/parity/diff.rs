@@ -43,7 +43,9 @@ pub fn diff(
 
     // Per-step field comparison.
     for (h, r) in heimq.iter().zip(oracle_obs.iter()) {
-        diff_events(workload, oracle, h.step, &h.event, &r.event, exemptions, &mut diffs);
+        diff_events(
+            workload, oracle, h.step, &h.event, &r.event, exemptions, &mut diffs,
+        );
     }
 
     diffs
@@ -84,10 +86,46 @@ fn diff_events(
                 ..
             },
         ) => {
-            maybe_diff_bytes(workload, oracle, step, "record.key", hk.as_deref(), rk.as_deref(), exemptions, out);
-            maybe_diff_bytes(workload, oracle, step, "record.value", hv.as_deref(), rv.as_deref(), exemptions, out);
-            maybe_diff(workload, oracle, step, "record.partition", hp, rp, exemptions, out);
-            maybe_diff(workload, oracle, step, "record.offset", ho, ro, exemptions, out);
+            maybe_diff_bytes(
+                workload,
+                oracle,
+                step,
+                "record.key",
+                hk.as_deref(),
+                rk.as_deref(),
+                exemptions,
+                out,
+            );
+            maybe_diff_bytes(
+                workload,
+                oracle,
+                step,
+                "record.value",
+                hv.as_deref(),
+                rv.as_deref(),
+                exemptions,
+                out,
+            );
+            maybe_diff(
+                workload,
+                oracle,
+                step,
+                "record.partition",
+                hp,
+                rp,
+                exemptions,
+                out,
+            );
+            maybe_diff(
+                workload,
+                oracle,
+                step,
+                "record.offset",
+                ho,
+                ro,
+                exemptions,
+                out,
+            );
         }
         (
             ObservationEvent::GroupState {
@@ -101,15 +139,51 @@ fn diff_events(
                 ..
             },
         ) => {
-            maybe_diff(workload, oracle, step, "group_state.state", hs, rs, exemptions, out);
-            maybe_diff(workload, oracle, step, "group_state.member_count", hm, rm, exemptions, out);
+            maybe_diff(
+                workload,
+                oracle,
+                step,
+                "group_state.state",
+                hs,
+                rs,
+                exemptions,
+                out,
+            );
+            maybe_diff(
+                workload,
+                oracle,
+                step,
+                "group_state.member_count",
+                hm,
+                rm,
+                exemptions,
+                out,
+            );
         }
         (
             ObservationEvent::ErrorCode { api: ha, code: hc },
             ObservationEvent::ErrorCode { api: ra, code: rc },
         ) => {
-            maybe_diff(workload, oracle, step, "error_code.api", ha, ra, exemptions, out);
-            maybe_diff(workload, oracle, step, "error_code.code", hc, rc, exemptions, out);
+            maybe_diff(
+                workload,
+                oracle,
+                step,
+                "error_code.api",
+                ha,
+                ra,
+                exemptions,
+                out,
+            );
+            maybe_diff(
+                workload,
+                oracle,
+                step,
+                "error_code.code",
+                hc,
+                rc,
+                exemptions,
+                out,
+            );
         }
         _ => {
             // Event type mismatch.

@@ -49,8 +49,12 @@ impl MemoryPartitionLog {
         // Read record count from the batch header (BE at offset 57..61).
         let record_count = if record_batch_data.len() >= 61 {
             let count_bytes = &record_batch_data[57..61];
-            i32::from_be_bytes([count_bytes[0], count_bytes[1], count_bytes[2], count_bytes[3]])
-                as i64
+            i32::from_be_bytes([
+                count_bytes[0],
+                count_bytes[1],
+                count_bytes[2],
+                count_bytes[3],
+            ]) as i64
         } else {
             1
         };
@@ -136,21 +140,12 @@ impl PartitionLog for MemoryPartitionLog {
         self.id
     }
 
-    fn append(
-        &self,
-        view: &RecordBatchView<'_>,
-        raw_bytes: Option<&[u8]>,
-    ) -> Result<(i64, i64)> {
+    fn append(&self, view: &RecordBatchView<'_>, raw_bytes: Option<&[u8]>) -> Result<(i64, i64)> {
         let bytes = raw_bytes.unwrap_or_else(|| view.raw());
         Ok(self.append_raw(bytes))
     }
 
-    fn read(
-        &self,
-        offset: i64,
-        max_bytes: usize,
-        _wait: FetchWait,
-    ) -> Result<(Vec<u8>, i64)> {
+    fn read(&self, offset: i64, max_bytes: usize, _wait: FetchWait) -> Result<(Vec<u8>, i64)> {
         self.fetch(offset, max_bytes)
     }
 
@@ -220,7 +215,10 @@ mod tests {
         assert_eq!(partition.high_watermark(), 5);
 
         <MemoryPartitionLog as PartitionLog>::truncate_before(&partition, 3).unwrap();
-        assert_eq!(<MemoryPartitionLog as PartitionLog>::log_start_offset(&partition), 3);
+        assert_eq!(
+            <MemoryPartitionLog as PartitionLog>::log_start_offset(&partition),
+            3
+        );
 
         // Past the high watermark is rejected.
         assert!(<MemoryPartitionLog as PartitionLog>::truncate_before(&partition, 999).is_err());

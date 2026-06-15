@@ -13,13 +13,13 @@ pub trait ErrorCode {
 impl ErrorCode for HeimqError {
     fn to_error_code(&self) -> i16 {
         match self {
-            HeimqError::TopicNotFound(_) => 3,  // UNKNOWN_TOPIC_OR_PARTITION
+            HeimqError::TopicNotFound(_) => 3, // UNKNOWN_TOPIC_OR_PARTITION
             HeimqError::PartitionNotFound { .. } => 3,
-            HeimqError::InvalidOffset(_) => 1,  // OFFSET_OUT_OF_RANGE
+            HeimqError::InvalidOffset(_) => 1, // OFFSET_OUT_OF_RANGE
             HeimqError::ConsumerGroup(_) => 16, // NOT_COORDINATOR
-            HeimqError::Protocol(_) => 35,      // UNSUPPORTED_VERSION
-            HeimqError::StorageFull(_) => 56,   // KAFKA_STORAGE_ERROR (retriable backpressure)
-            _ => -1,                                // UNKNOWN_SERVER_ERROR
+            HeimqError::Protocol(_) => 35,     // UNSUPPORTED_VERSION
+            HeimqError::StorageFull(_) => 56,  // KAFKA_STORAGE_ERROR (retriable backpressure)
+            _ => -1,                           // UNKNOWN_SERVER_ERROR
         }
     }
 }

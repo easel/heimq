@@ -31,7 +31,8 @@ pub fn handle(
     for topic in &request.topics {
         let topic_name = topic.name.0.as_str();
         let mut topic_result = DeleteRecordsTopicResult::default();
-        topic_result.name = kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
+        topic_result.name =
+            kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
 
         for partition in &topic.partitions {
             let mut pr = DeleteRecordsPartitionResult::default();

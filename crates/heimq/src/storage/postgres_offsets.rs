@@ -120,10 +120,7 @@ impl OffsetStore for PostgresOffsetStore {
         }
     }
 
-    fn fetch_all_for_group(
-        &self,
-        group_id: &str,
-    ) -> HashMap<(String, i32), CommittedOffset> {
+    fn fetch_all_for_group(&self, group_id: &str) -> HashMap<(String, i32), CommittedOffset> {
         let sql = format!(
             "SELECT topic, partition, committed_offset, metadata, \
                     (EXTRACT(EPOCH FROM updated_at) * 1000)::BIGINT \
@@ -229,8 +226,7 @@ mod tests {
 
     #[test]
     fn parse_url_without_query_uses_public_schema() {
-        let (cleaned, schema) =
-            parse_postgres_url("postgres://u:p@h:5432/db").unwrap();
+        let (cleaned, schema) = parse_postgres_url("postgres://u:p@h:5432/db").unwrap();
         assert_eq!(cleaned, "postgres://u:p@h:5432/db");
         assert_eq!(schema, "public");
     }

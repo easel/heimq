@@ -66,7 +66,9 @@ async fn run_async(bootstrap: &str) -> Result<Vec<Observation>> {
         let val = format!("cg-val-{}", i);
         producer
             .send(
-                rdkafka::producer::FutureRecord::to(TOPIC).key(&key).payload(&val),
+                rdkafka::producer::FutureRecord::to(TOPIC)
+                    .key(&key)
+                    .payload(&val),
                 Duration::from_secs(15),
             )
             .await

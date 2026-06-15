@@ -313,7 +313,8 @@ mod tests {
         use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
 
         let invalid_version = i16::MAX;
-        let err = encode_response(1, 18, invalid_version, &ApiVersionsResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 18, invalid_version, &ApiVersionsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
         let err = encode_response(1, 3, invalid_version, &MetadataResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
@@ -321,25 +322,35 @@ mod tests {
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
         let err = encode_response(1, 1, invalid_version, &FetchResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 2, invalid_version, &ListOffsetsResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 2, invalid_version, &ListOffsetsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 19, invalid_version, &CreateTopicsResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 19, invalid_version, &CreateTopicsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 20, invalid_version, &DeleteTopicsResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 20, invalid_version, &DeleteTopicsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 10, invalid_version, &FindCoordinatorResponse::default()).unwrap_err();
+        let err = encode_response(1, 10, invalid_version, &FindCoordinatorResponse::default())
+            .unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 11, invalid_version, &JoinGroupResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 11, invalid_version, &JoinGroupResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 12, invalid_version, &HeartbeatResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 12, invalid_version, &HeartbeatResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 13, invalid_version, &LeaveGroupResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 13, invalid_version, &LeaveGroupResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 14, invalid_version, &SyncGroupResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 14, invalid_version, &SyncGroupResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 8, invalid_version, &OffsetCommitResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 8, invalid_version, &OffsetCommitResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
-        let err = encode_response(1, 9, invalid_version, &OffsetFetchResponse::default()).unwrap_err();
+        let err =
+            encode_response(1, 9, invalid_version, &OffsetFetchResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
 
@@ -507,20 +518,20 @@ mod flexible_tests {
     fn test_is_flexible_boundary() {
         // (api_key, flexible_from)
         let table: &[(i16, i16)] = &[
-            (0, 9),   // Produce
-            (1, 12),  // Fetch
-            (2, 6),   // ListOffsets
-            (3, 9),   // Metadata
-            (8, 8),   // OffsetCommit
-            (9, 6),   // OffsetFetch
-            (10, 3),  // FindCoordinator
-            (11, 6),  // JoinGroup
-            (12, 4),  // Heartbeat
-            (13, 4),  // LeaveGroup
-            (14, 4),  // SyncGroup
-            (18, 3),  // ApiVersions
-            (19, 5),  // CreateTopics
-            (20, 4),  // DeleteTopics
+            (0, 9),  // Produce
+            (1, 12), // Fetch
+            (2, 6),  // ListOffsets
+            (3, 9),  // Metadata
+            (8, 8),  // OffsetCommit
+            (9, 6),  // OffsetFetch
+            (10, 3), // FindCoordinator
+            (11, 6), // JoinGroup
+            (12, 4), // Heartbeat
+            (13, 4), // LeaveGroup
+            (14, 4), // SyncGroup
+            (18, 3), // ApiVersions
+            (19, 5), // CreateTopics
+            (20, 4), // DeleteTopics
         ];
         for &(api_key, flex_min) in table {
             assert!(
@@ -580,8 +591,8 @@ mod flexible_tests {
         use kafka_protocol::messages::metadata_response::MetadataResponse;
         let response = MetadataResponse::default();
         // Metadata v9 is flexible per CODEC-001.
-        let body_only = encode_response_body(42, 9, &response)
-            .expect("encode_response_body must succeed");
+        let body_only =
+            encode_response_body(42, 9, &response).expect("encode_response_body must succeed");
         let full = encode_response(42, 3, 9, &response).expect("encode_response must succeed");
         // encode_response_body = [corr_id(4)][body...]
         // encode_response with FEAT-006 = [length(4)][corr_id(4)][tagged-fields(1)][body...]
@@ -606,8 +617,8 @@ mod flexible_tests {
     fn test_encode_response_apiversions_no_flexible_header() {
         use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
         let response = ApiVersionsResponse::default();
-        let body_only = encode_response_body(1, 3, &response)
-            .expect("encode_response_body must succeed");
+        let body_only =
+            encode_response_body(1, 3, &response).expect("encode_response_body must succeed");
         let full = encode_response(1, 18, 3, &response).expect("encode_response must succeed");
         assert_eq!(
             full.len(),

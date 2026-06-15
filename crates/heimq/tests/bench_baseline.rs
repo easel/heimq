@@ -20,7 +20,10 @@ use rdkafka::{Offset, TopicPartitionList};
 use std::time::{Duration, Instant};
 
 fn env_usize(key: &str, default: usize) -> usize {
-    std::env::var(key).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 #[test]
@@ -52,9 +55,12 @@ fn bench_baseline_produce_fetch() {
         loop {
             match producer.send(BaseRecord::to(topic).payload(&payload).key(&key[..])) {
                 Ok(()) => break,
-                Err((rdkafka::error::KafkaError::MessageProduction(
-                    rdkafka::types::RDKafkaErrorCode::QueueFull,
-                ), _)) => {
+                Err((
+                    rdkafka::error::KafkaError::MessageProduction(
+                        rdkafka::types::RDKafkaErrorCode::QueueFull,
+                    ),
+                    _,
+                )) => {
                     producer.poll(Duration::from_millis(5));
                 }
                 Err((e, _)) => panic!("produce error: {e}"),
@@ -75,7 +81,8 @@ fn bench_baseline_produce_fetch() {
         .create()
         .expect("consumer");
     let mut tpl = TopicPartitionList::new();
-    tpl.add_partition_offset(topic, 0, Offset::Beginning).unwrap();
+    tpl.add_partition_offset(topic, 0, Offset::Beginning)
+        .unwrap();
     consumer.assign(&tpl).unwrap();
 
     let mut consumed = 0usize;
@@ -125,14 +132,20 @@ fn bench_baseline_produce_fetch() {
     let p99 = lat[(latency_samples * 99 / 100).min(latency_samples - 1)];
 
     eprintln!("=== heimq perf baseline ===");
-    eprintln!("config: records={records} record_size={record_size}B latency_samples={latency_samples}");
+    eprintln!(
+        "config: records={records} record_size={record_size}B latency_samples={latency_samples}"
+    );
     eprintln!(
         "produce_throughput: {:.0} msgs/s  {:.1} MB/s  ({:.2}s)",
-        produce_tps, produce_mbps, produce_elapsed.as_secs_f64()
+        produce_tps,
+        produce_mbps,
+        produce_elapsed.as_secs_f64()
     );
     eprintln!(
         "consume_throughput: {:.0} msgs/s  {:.1} MB/s  ({:.2}s)",
-        consume_tps, consume_mbps, consume_elapsed.as_secs_f64()
+        consume_tps,
+        consume_mbps,
+        consume_elapsed.as_secs_f64()
     );
     eprintln!(
         "produce_ack_latency: p50={:.3}ms  p99={:.3}ms",

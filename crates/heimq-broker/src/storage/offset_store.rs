@@ -72,10 +72,7 @@ pub trait OffsetStore: Send + Sync {
     fn fetch(&self, group_id: &str, topic: &str, partition: i32) -> Option<CommittedOffset>;
 
     /// Fetch every committed offset for a group, keyed by `(topic, partition)`.
-    fn fetch_all_for_group(
-        &self,
-        group_id: &str,
-    ) -> HashMap<(String, i32), CommittedOffset>;
+    fn fetch_all_for_group(&self, group_id: &str) -> HashMap<(String, i32), CommittedOffset>;
 
     /// Drop all committed offsets for a group.
     fn delete_group(&self, group_id: &str);

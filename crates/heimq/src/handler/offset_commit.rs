@@ -32,10 +32,7 @@ pub fn handle(
         topic_response.name = TopicName(StrBytes::from_string(topic_name.clone()));
 
         for partition in &topic.partitions {
-            let metadata = partition
-                .committed_metadata
-                .as_ref()
-                .map(|s| s.to_string());
+            let metadata = partition.committed_metadata.as_ref().map(|s| s.to_string());
             let commit_error = offset_store
                 .commit(
                     &group_id,

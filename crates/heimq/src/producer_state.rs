@@ -82,7 +82,12 @@ impl ProducerStateManager {
         match states.get_mut(&key) {
             None => {
                 if base_sequence == 0 {
-                    states.insert(key, PartitionState { next_sequence: record_count });
+                    states.insert(
+                        key,
+                        PartitionState {
+                            next_sequence: record_count,
+                        },
+                    );
                     SequenceCheck::Accept
                 } else {
                     // First batch from this producer on this partition must start at 0.

@@ -47,10 +47,7 @@ pub fn handle(
         topic_result.name = TopicName(StrBytes::from_string(topic_name.clone()));
 
         for partition in &topic.partitions {
-            let metadata = partition
-                .committed_metadata
-                .as_ref()
-                .map(|m| m.to_string());
+            let metadata = partition.committed_metadata.as_ref().map(|m| m.to_string());
 
             let error_code = transaction_manager.commit_offset(
                 &txn_id,

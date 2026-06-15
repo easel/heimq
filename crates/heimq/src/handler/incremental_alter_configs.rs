@@ -33,7 +33,11 @@ pub fn handle(
         rr.resource_name = resource.resource_name.clone();
 
         if resource.resource_type == RESOURCE_TYPE_TOPIC {
-            let names: Vec<String> = resource.configs.iter().map(|c| c.name.to_string()).collect();
+            let names: Vec<String> = resource
+                .configs
+                .iter()
+                .map(|c| c.name.to_string())
+                .collect();
             let values: Vec<Option<String>> = resource
                 .configs
                 .iter()

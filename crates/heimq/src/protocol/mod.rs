@@ -7,8 +7,8 @@ mod codec;
 mod router;
 
 pub use codec::{decode_request, encode_response, RequestHeader};
-pub use router::Router;
 pub use flexible::is_flexible;
+pub use router::Router;
 
 mod flexible;
 
@@ -24,41 +24,41 @@ use crate::storage::{BackendCapabilities, OffsetStoreCapabilities};
 /// in the parking lot.
 pub const SUPPORTED_APIS: &[(i16, i16, i16)] = &[
     // (api_key, min_version, max_version)
-    (0, 0, 11),  // Produce
-    (1, 0, 12),  // Fetch (v13+ uses topic_id UUID instead of name; name-based handler supports ≤12)
-    (2, 0, 9),   // ListOffsets
-    (3, 0, 12),  // Metadata
-    (8, 0, 9),   // OffsetCommit
-    (9, 0, 9),   // OffsetFetch
-    (10, 0, 6),  // FindCoordinator
-    (11, 0, 9),  // JoinGroup
-    (12, 0, 4),  // Heartbeat
-    (13, 0, 5),  // LeaveGroup
-    (14, 0, 5),  // SyncGroup
-    (15, 0, 5),  // DescribeGroups
-    (16, 0, 4),  // ListGroups
-    (18, 0, 3),  // ApiVersions
-    (32, 0, 4),  // DescribeConfigs
-    (35, 0, 4),  // DescribeLogDirs
-    (33, 0, 2),  // AlterConfigs
-    (42, 0, 2),  // DeleteGroups
-    (43, 0, 2),  // ElectLeaders
-    (44, 0, 1),  // IncrementalAlterConfigs
-    (60, 0, 1),  // DescribeCluster
-    (66, 0, 1),  // ListTransactions
-    (75, 0, 0),  // DescribeTopicPartitions
-    (47, 0, 0),  // OffsetDelete
-    (19, 0, 7),  // CreateTopics
-    (37, 0, 3),  // CreatePartitions
-    (20, 0, 6),  // DeleteTopics
-    (21, 0, 2),  // DeleteRecords
-    (23, 0, 4),  // OffsetForLeaderEpoch
-    (22, 0, 5),  // InitProducerId
-    (24, 0, 5),  // AddPartitionsToTxn
-    (25, 0, 4),  // AddOffsetsToTxn
-    (26, 0, 4),  // EndTxn
-    (27, 0, 1),  // WriteTxnMarkers
-    (28, 0, 4),  // TxnOffsetCommit
+    (0, 0, 11), // Produce
+    (1, 0, 12), // Fetch (v13+ uses topic_id UUID instead of name; name-based handler supports ≤12)
+    (2, 0, 9),  // ListOffsets
+    (3, 0, 12), // Metadata
+    (8, 0, 9),  // OffsetCommit
+    (9, 0, 9),  // OffsetFetch
+    (10, 0, 6), // FindCoordinator
+    (11, 0, 9), // JoinGroup
+    (12, 0, 4), // Heartbeat
+    (13, 0, 5), // LeaveGroup
+    (14, 0, 5), // SyncGroup
+    (15, 0, 5), // DescribeGroups
+    (16, 0, 4), // ListGroups
+    (18, 0, 3), // ApiVersions
+    (32, 0, 4), // DescribeConfigs
+    (35, 0, 4), // DescribeLogDirs
+    (33, 0, 2), // AlterConfigs
+    (42, 0, 2), // DeleteGroups
+    (43, 0, 2), // ElectLeaders
+    (44, 0, 1), // IncrementalAlterConfigs
+    (60, 0, 1), // DescribeCluster
+    (66, 0, 1), // ListTransactions
+    (75, 0, 0), // DescribeTopicPartitions
+    (47, 0, 0), // OffsetDelete
+    (19, 0, 7), // CreateTopics
+    (37, 0, 3), // CreatePartitions
+    (20, 0, 6), // DeleteTopics
+    (21, 0, 2), // DeleteRecords
+    (23, 0, 4), // OffsetForLeaderEpoch
+    (22, 0, 5), // InitProducerId
+    (24, 0, 5), // AddPartitionsToTxn
+    (25, 0, 4), // AddOffsetsToTxn
+    (26, 0, 4), // EndTxn
+    (27, 0, 1), // WriteTxnMarkers
+    (28, 0, 4), // TxnOffsetCommit
 ];
 
 /// Check if an API version is supported
@@ -179,8 +179,11 @@ mod tests {
 
     #[test]
     fn memory_default_advertises_full_supported_set() {
-        let apis =
-            compute_supported_apis(&memory_log_caps(), &memory_offset_caps(), &memory_group_caps());
+        let apis = compute_supported_apis(
+            &memory_log_caps(),
+            &memory_offset_caps(),
+            &memory_group_caps(),
+        );
         assert_eq!(apis, SUPPORTED_APIS.to_vec());
     }
 
@@ -264,7 +267,9 @@ mod tests {
         assert!(offset_store_present(&memory_offset_caps()));
         assert!(!offset_store_present(&OffsetStoreCapabilities::minimal()));
         assert!(group_coordinator_present(&memory_group_caps()));
-        assert!(!group_coordinator_present(&GroupCoordinatorCapabilities::minimal()));
+        assert!(!group_coordinator_present(
+            &GroupCoordinatorCapabilities::minimal()
+        ));
         // Durability has no effect on presence — presence is name-based.
         let _ = Durability::None;
     }

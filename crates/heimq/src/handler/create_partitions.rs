@@ -32,7 +32,8 @@ pub fn handle(
     for topic in &request.topics {
         let topic_name = topic.name.0.as_str();
         let mut result = CreatePartitionsTopicResult::default();
-        result.name = kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
+        result.name =
+            kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
 
         // Reject an absurd target count before allocating per-partition state.
         if topic.count > MAX_PARTITIONS {

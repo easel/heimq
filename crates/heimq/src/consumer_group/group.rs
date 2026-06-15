@@ -280,7 +280,10 @@ impl ConsumerGroup {
 
     /// Get member assignment
     pub fn get_assignment(&self, member_id: &str) -> Option<Vec<u8>> {
-        self.members.read().get(member_id).map(|m| m.assignment.clone())
+        self.members
+            .read()
+            .get(member_id)
+            .map(|m| m.assignment.clone())
     }
 
     /// Select a protocol that all members support
@@ -480,7 +483,10 @@ mod tests {
             30000,
             300000,
             "consumer".to_string(),
-            vec![("range".to_string(), vec![]), ("roundrobin".to_string(), vec![])],
+            vec![
+                ("range".to_string(), vec![]),
+                ("roundrobin".to_string(), vec![]),
+            ],
         );
         group.add_member(member);
         assert_eq!(group.select_protocol(), Some("range".to_string()));

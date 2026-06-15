@@ -113,7 +113,9 @@ fn test_franz_go_produce_consume_consumer_group() {
         return;
     }
 
-    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
+    let _oracle_guard = COMPAT_ORACLE_LOCK
+        .lock()
+        .expect("compat oracle lock poisoned");
     let dir = franz_go_dir();
     let bin = build_go_oracle(&dir, "franz-compat");
     let server = TestServer::start();
@@ -150,7 +152,9 @@ fn test_sarama_produce_consume_consumer_group() {
         return;
     }
 
-    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
+    let _oracle_guard = COMPAT_ORACLE_LOCK
+        .lock()
+        .expect("compat oracle lock poisoned");
     let topic = "sarama-compat-topic";
     let dir = sarama_oracle_dir();
     let bin = build_go_oracle(&dir, "sarama-oracle");
@@ -191,7 +195,9 @@ fn test_java_kafka_clients_produce_consume() {
         return;
     }
 
-    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
+    let _oracle_guard = COMPAT_ORACLE_LOCK
+        .lock()
+        .expect("compat oracle lock poisoned");
     let jar = java_oracle_jar();
 
     // Build (or rebuild) the JAR. We always invoke mvn so that source changes
@@ -204,7 +210,12 @@ fn test_java_kafka_clients_produce_consume() {
         }
         // JAR exists but mvn is absent — run with the stale JAR and hope it's close enough.
     } else {
-        let jar_dir = java_oracle_jar().parent().unwrap().parent().unwrap().to_path_buf();
+        let jar_dir = java_oracle_jar()
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf();
         let build_out = Command::new("mvn")
             .args(["-q", "package", "-DskipTests"])
             .current_dir(&jar_dir)
@@ -266,7 +277,9 @@ fn test_kcat_produce_consume_roundtrip() {
         return;
     }
 
-    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
+    let _oracle_guard = COMPAT_ORACLE_LOCK
+        .lock()
+        .expect("compat oracle lock poisoned");
     let server = TestServer::start();
     let bootstrap = server.bootstrap_servers();
     let ts = std::time::SystemTime::now()
@@ -289,7 +302,12 @@ fn test_kcat_produce_consume_roundtrip() {
         .spawn()
         .and_then(|mut child| {
             use std::io::Write as _;
-            child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(input.as_bytes())
+                .unwrap();
             child.wait_with_output()
         })
         .expect("failed to spawn kcat -P");
@@ -303,11 +321,15 @@ fn test_kcat_produce_consume_roundtrip() {
     // --- 2. Offset-based consume (no consumer group) ---
     let consume_out = Command::new("kcat")
         .args([
-            "-b", &bootstrap,
-            "-t", &topic,
+            "-b",
+            &bootstrap,
+            "-t",
+            &topic,
             "-C",
-            "-o", "beginning",
-            "-c", &messages.len().to_string(),
+            "-o",
+            "beginning",
+            "-c",
+            &messages.len().to_string(),
             "-e",
             "-q",
         ])
@@ -339,21 +361,31 @@ fn test_kcat_produce_consume_roundtrip() {
         .spawn()
         .and_then(|mut child| {
             use std::io::Write as _;
-            child.stdin.take().unwrap().write_all(kv_input.as_bytes()).unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(kv_input.as_bytes())
+                .unwrap();
             child.wait_with_output()
         })
         .expect("failed to spawn kcat -P -K:");
 
     let kv_consume = Command::new("kcat")
         .args([
-            "-b", &bootstrap,
-            "-t", &kv_topic,
+            "-b",
+            &bootstrap,
+            "-t",
+            &kv_topic,
             "-C",
-            "-o", "beginning",
-            "-c", &kv_messages.len().to_string(),
+            "-o",
+            "beginning",
+            "-c",
+            &kv_messages.len().to_string(),
             "-e",
             "-q",
-            "-f", "%k:%s\n",
+            "-f",
+            "%k:%s\n",
         ])
         .output()
         .expect("failed to spawn kcat -C -f %k:%s");
@@ -403,20 +435,29 @@ fn test_kcat_produce_consume_roundtrip() {
         .spawn()
         .and_then(|mut child| {
             use std::io::Write as _;
-            child.stdin.take().unwrap().write_all(cg_input.as_bytes()).unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(cg_input.as_bytes())
+                .unwrap();
             child.wait_with_output()
         })
         .expect("failed to spawn kcat -P for cg topic");
 
     let cg_out = Command::new("kcat")
         .args([
-            "-b", &bootstrap,
-            "-G", &cg_group,
+            "-b",
+            &bootstrap,
+            "-G",
+            &cg_group,
             &cg_topic,
-            "-c", &cg_messages.len().to_string(),
+            "-c",
+            &cg_messages.len().to_string(),
             "-e",
             "-q",
-            "-X", "auto.offset.reset=earliest",
+            "-X",
+            "auto.offset.reset=earliest",
         ])
         .output()
         .expect("failed to spawn kcat -G");
@@ -458,7 +499,12 @@ fn test_kcat_produce_consume_roundtrip() {
         .spawn()
         .and_then(|mut child| {
             use std::io::Write as _;
-            child.stdin.take().unwrap().write_all(resume_input.as_bytes()).unwrap();
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(resume_input.as_bytes())
+                .unwrap();
             child.wait_with_output()
         })
         .expect("failed to spawn kcat -P for resume topic");
@@ -466,13 +512,17 @@ fn test_kcat_produce_consume_roundtrip() {
     // Session A: consume exactly 3, then exit (kcat auto-commits on clean exit).
     let session_a = Command::new("kcat")
         .args([
-            "-b", &bootstrap,
-            "-G", &resume_group,
+            "-b",
+            &bootstrap,
+            "-G",
+            &resume_group,
             &resume_topic,
-            "-c", "3",
+            "-c",
+            "3",
             "-e",
             "-q",
-            "-X", "auto.offset.reset=earliest",
+            "-X",
+            "auto.offset.reset=earliest",
         ])
         .output()
         .expect("failed to spawn kcat -G session A");
@@ -488,18 +538,26 @@ fn test_kcat_produce_consume_roundtrip() {
         .split('\n')
         .filter(|l| !l.is_empty())
         .collect();
-    assert_eq!(session_a_lines.len(), 3, "kcat session A: expected 3 messages");
+    assert_eq!(
+        session_a_lines.len(),
+        3,
+        "kcat session A: expected 3 messages"
+    );
 
     // Session B: same group — should resume from committed offset and get only the remaining 3.
     let session_b = Command::new("kcat")
         .args([
-            "-b", &bootstrap,
-            "-G", &resume_group,
+            "-b",
+            &bootstrap,
+            "-G",
+            &resume_group,
             &resume_topic,
-            "-c", "3",
+            "-c",
+            "3",
             "-e",
             "-q",
-            "-X", "auto.offset.reset=earliest",
+            "-X",
+            "auto.offset.reset=earliest",
         ])
         .output()
         .expect("failed to spawn kcat -G session B");
@@ -516,7 +574,8 @@ fn test_kcat_produce_consume_roundtrip() {
         .filter(|l| !l.is_empty())
         .collect();
     assert_eq!(
-        session_b_lines.len(), 3,
+        session_b_lines.len(),
+        3,
         "kcat session B: expected 3 messages after offset resume, got: {session_b_out:?}"
     );
     // The resumed messages must be the SECOND half, not the first.
@@ -566,11 +625,15 @@ fn test_kafkajs_produce_consume_consumer_group() {
         return;
     }
     if !kafkajs_installed() {
-        eprintln!("SKIP: kafkajs not installed (run `npm install` in tests/compat/kafkajs_oracle/)");
+        eprintln!(
+            "SKIP: kafkajs not installed (run `npm install` in tests/compat/kafkajs_oracle/)"
+        );
         return;
     }
 
-    let _oracle_guard = COMPAT_ORACLE_LOCK.lock().expect("compat oracle lock poisoned");
+    let _oracle_guard = COMPAT_ORACLE_LOCK
+        .lock()
+        .expect("compat oracle lock poisoned");
     let server = TestServer::start();
     let dir = kafkajs_oracle_dir();
 

@@ -62,12 +62,10 @@ fn run_sync(bootstrap: &str) -> Result<Vec<Observation>> {
     for i in 0..N {
         let key = format!("key-{}", i);
         let val = format!("val-{}", i);
-        rt.block_on(
-            producer.send(
-                FutureRecord::to(TOPIC).key(&key).payload(&val),
-                Duration::from_secs(15),
-            ),
-        )
+        rt.block_on(producer.send(
+            FutureRecord::to(TOPIC).key(&key).payload(&val),
+            Duration::from_secs(15),
+        ))
         .map_err(|(e, _)| anyhow::anyhow!("produce failed: {}", e))?;
     }
 

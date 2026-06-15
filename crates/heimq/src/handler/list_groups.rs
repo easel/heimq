@@ -21,12 +21,9 @@ pub fn handle(
     let mut response = ListGroupsResponse::default();
     for group_id in group_ids {
         let desc = coordinator.describe_group(&group_id);
-        let protocol_type = desc
-            .map(|d| d.protocol_type)
-            .unwrap_or_default();
+        let protocol_type = desc.map(|d| d.protocol_type).unwrap_or_default();
         let mut listed = ListedGroup::default();
-        listed.group_id =
-            kafka_protocol::messages::GroupId(StrBytes::from_string(group_id));
+        listed.group_id = kafka_protocol::messages::GroupId(StrBytes::from_string(group_id));
         listed.protocol_type = StrBytes::from_string(protocol_type);
         response.groups.push(listed);
     }

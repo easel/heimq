@@ -31,7 +31,12 @@ pub fn handle(
             let group_id = group.group_id.0.to_string();
             let mut resp_group = OffsetFetchResponseGroup::default();
             resp_group.group_id = GroupId(StrBytes::from_string(group_id.clone()));
-            build_group_topics_v8(&group_id, group.topics.as_deref(), offset_store, &mut resp_group);
+            build_group_topics_v8(
+                &group_id,
+                group.topics.as_deref(),
+                offset_store,
+                &mut resp_group,
+            );
             response.groups.push(resp_group);
         }
     } else {
@@ -42,7 +47,12 @@ pub fn handle(
                 .map(|t| (t.name.0.to_string(), t.partition_indexes.as_slice()))
                 .collect()
         });
-        build_group_topics_v0_7(&group_id, topics_slice.as_deref(), offset_store, &mut response);
+        build_group_topics_v0_7(
+            &group_id,
+            topics_slice.as_deref(),
+            offset_store,
+            &mut response,
+        );
         response.error_code = 0;
     }
 
@@ -63,7 +73,12 @@ fn build_group_topics_v8(
                 let mut topic_resp = OffsetFetchResponseTopics::default();
                 topic_resp.name = TopicName(StrBytes::from_string(topic_name.clone()));
                 for &pi in &topic.partition_indexes {
-                    topic_resp.partitions.push(build_partition_v8(group_id, &topic_name, pi, offset_store));
+                    topic_resp.partitions.push(build_partition_v8(
+                        group_id,
+                        &topic_name,
+                        pi,
+                        offset_store,
+                    ));
                 }
                 resp_group.topics.push(topic_resp);
             }
@@ -80,7 +95,10 @@ fn fetch_all_v8(
     let mut topic_map: std::collections::HashMap<String, Vec<(i32, i64, Option<String>)>> =
         std::collections::HashMap::new();
     for ((topic, partition), committed) in all_offsets {
-        topic_map.entry(topic).or_default().push((partition, committed.offset, committed.metadata));
+        topic_map
+            .entry(topic)
+            .or_default()
+            .push((partition, committed.offset, committed.metadata));
     }
     for (topic_name, partitions) in topic_map {
         let mut topic_resp = OffsetFetchResponseTopics::default();
@@ -129,7 +147,12 @@ fn build_group_topics_v0_7(
                 let mut topic_response = OffsetFetchResponseTopic::default();
                 topic_response.name = TopicName(StrBytes::from_string(topic_name.clone()));
                 for &pi in *partition_indexes {
-                    topic_response.partitions.push(build_partition_v0_7(group_id, topic_name, pi, offset_store));
+                    topic_response.partitions.push(build_partition_v0_7(
+                        group_id,
+                        topic_name,
+                        pi,
+                        offset_store,
+                    ));
                 }
                 response.topics.push(topic_response);
             }
@@ -146,7 +169,10 @@ fn fetch_all_v0_7(
     let mut topic_map: std::collections::HashMap<String, Vec<(i32, i64, Option<String>)>> =
         std::collections::HashMap::new();
     for ((topic, partition), committed) in all_offsets {
-        topic_map.entry(topic).or_default().push((partition, committed.offset, committed.metadata));
+        topic_map
+            .entry(topic)
+            .or_default()
+            .push((partition, committed.offset, committed.metadata));
     }
     for (topic_name, partitions) in topic_map {
         let mut topic_response = OffsetFetchResponseTopic::default();

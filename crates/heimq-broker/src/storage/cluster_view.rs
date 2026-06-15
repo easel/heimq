@@ -18,7 +18,8 @@ pub trait ClusterView: Send + Sync {
     fn brokers(&self) -> Vec<BrokerInfo>;
     fn cluster_id(&self) -> String;
     /// Leader for (topic, partition); Err on stale/unknown.
-    fn partition_leader(&self, topic: &str, partition: i32) -> Result<BrokerInfo, ClusterViewError>;
+    fn partition_leader(&self, topic: &str, partition: i32)
+        -> Result<BrokerInfo, ClusterViewError>;
     /// Coordinator broker for group_id.
     fn find_coordinator(&self, group_id: &str) -> Result<BrokerInfo, ClusterViewError>;
 }

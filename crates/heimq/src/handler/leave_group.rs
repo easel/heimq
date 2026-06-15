@@ -23,7 +23,11 @@ pub fn handle(
 
     // v0-2: single member_id field; v3+: members array
     let member_ids: Vec<String> = if api_version >= 3 {
-        request.members.iter().map(|m| m.member_id.to_string()).collect()
+        request
+            .members
+            .iter()
+            .map(|m| m.member_id.to_string())
+            .collect()
     } else {
         vec![request.member_id.to_string()]
     };

@@ -144,19 +144,10 @@ pub trait PartitionLog: Send + Sync {
     /// `raw_bytes` — when provided — is the verbatim wire-format encoding of
     /// the batch. Backends that pass through raw bytes (like the in-memory
     /// backend) should prefer `raw_bytes` over re-encoding the view.
-    fn append(
-        &self,
-        view: &RecordBatchView<'_>,
-        raw_bytes: Option<&[u8]>,
-    ) -> Result<(i64, i64)>;
+    fn append(&self, view: &RecordBatchView<'_>, raw_bytes: Option<&[u8]>) -> Result<(i64, i64)>;
 
     /// Read records starting at `offset`, up to `max_bytes`.
-    fn read(
-        &self,
-        offset: i64,
-        max_bytes: usize,
-        wait: FetchWait,
-    ) -> Result<(Vec<u8>, i64)>;
+    fn read(&self, offset: i64, max_bytes: usize, wait: FetchWait) -> Result<(Vec<u8>, i64)>;
 
     fn log_start_offset(&self) -> i64;
     fn high_watermark(&self) -> i64;

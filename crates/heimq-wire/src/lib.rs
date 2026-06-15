@@ -13,7 +13,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tracing::{debug, error, info, warn};
 
 /// Maximum accepted frame size (100 MiB).
@@ -122,7 +122,7 @@ impl<H: FrameHandler> WireServer<H> {
                     let handler = self.handler.clone();
                     debug!(peer = %peer, "accepted connection");
                     tokio::spawn(async move {
-                        if let Err(e) = handle_connection(socket, peer, handler).await {
+                        if let Err(e) = serve_connection(socket, peer, handler).await {
                             debug!(peer = %peer, error = %e, "connection closed");
                         }
                     });
@@ -180,7 +180,7 @@ impl<F: FrameHandlerFactory> WireServerWithFactory<F> {
                     let handler = Arc::new(self.factory.create(peer));
                     debug!(peer = %peer, "accepted connection");
                     tokio::spawn(async move {
-                        if let Err(e) = handle_connection(socket, peer, handler).await {
+                        if let Err(e) = serve_connection(socket, peer, handler).await {
                             debug!(peer = %peer, error = %e, "connection closed");
                         }
                     });
@@ -198,11 +198,20 @@ impl<F: FrameHandlerFactory> WireServerWithFactory<F> {
     }
 }
 
-async fn handle_connection<H: FrameHandler>(
-    stream: TcpStream,
+/// Serve one already-accepted stream with the shared Kafka frame pipeline.
+///
+/// This is useful for embedders that wrap TCP before Kafka framing, such as
+/// TLS acceptors. The stream is split into a reader task and writer loop with
+/// the same bounded reader-to-writer queue used by [`WireServer`].
+pub async fn serve_connection<S, H>(
+    stream: S,
     _peer: SocketAddr,
     handler: Arc<H>,
-) -> Result<(), WireError> {
+) -> Result<(), WireError>
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    H: FrameHandler,
+{
     let (read_half, write_half) = tokio::io::split(stream);
     let (tx, rx) = tokio::sync::mpsc::channel::<Bytes>(CHANNEL_DEPTH);
     let reader_handle = tokio::spawn(run_reader(read_half, tx));
@@ -261,11 +270,12 @@ async fn run_writer<W: AsyncWrite + Unpin, H: FrameHandler>(
             }
             Err(e) => {
                 warn!(error = %e, "frame handler error");
+                let close_after_response = matches!(e, FrameError::Protocol(_));
                 if let Some(corr_id) = peek_correlation_id(&frame) {
                     let error_frame = make_error_frame(corr_id, 10);
                     let _ = stream.write_all(&error_frame).await;
                     consecutive_errors += 1;
-                    if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
+                    if close_after_response || consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
                         return Err(WireError::from(e));
                     }
                 } else {

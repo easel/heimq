@@ -90,7 +90,10 @@ impl TestServer {
             .ok()
             .or_else(|| {
                 let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
-                let workspace_root = std::path::Path::new(&manifest_dir).join("../..").canonicalize().ok()?;
+                let workspace_root = std::path::Path::new(&manifest_dir)
+                    .join("../..")
+                    .canonicalize()
+                    .ok()?;
                 let debug = workspace_root.join("target/debug/heimq");
                 let release = workspace_root.join("target/release/heimq");
                 if debug.exists() {
@@ -156,10 +159,10 @@ impl TestServer {
         // ApiVersions v0: header only (body is empty for v0).
         // Frame: [length(4)] [api_key=18(2)] [api_version=0(2)] [correlation_id=1(4)] [client_id=null(-1 as i16)(2)]
         let body: [u8; 10] = [
-            0, 18,       // api_key = 18
-            0, 0,        // api_version = 0
-            0, 0, 0, 1,  // correlation_id = 1
-            0xFF, 0xFF,  // client_id = null
+            0, 18, // api_key = 18
+            0, 0, // api_version = 0
+            0, 0, 0, 1, // correlation_id = 1
+            0xFF, 0xFF, // client_id = null
         ];
         let len_prefix = (body.len() as i32).to_be_bytes();
         if stream.write_all(&len_prefix).is_err() {
@@ -176,7 +179,7 @@ impl TestServer {
 
     /// Get the bootstrap servers string for Kafka clients
     pub fn bootstrap_servers(&self) -> String {
-        format!("127.0.0.1:{}", self.port)  // Use IPv4 to avoid IPv6 resolution issues
+        format!("127.0.0.1:{}", self.port) // Use IPv4 to avoid IPv6 resolution issues
     }
 
     /// Get the hosts list for legacy Kafka clients
@@ -225,7 +228,9 @@ pub fn test_consumer_groups(config: Arc<Config>) -> Arc<ConsumerGroupManager> {
 
 pub fn encode_body<R: Encodable>(request: &R, api_version: i16) -> Vec<u8> {
     let mut buf = BytesMut::new();
-    request.encode(&mut buf, api_version).expect("encode request body");
+    request
+        .encode(&mut buf, api_version)
+        .expect("encode request body");
     buf.to_vec()
 }
 
@@ -284,8 +289,7 @@ fn diff_record_round_trips_through_json() {
         exemption: None,
     };
     let s = serde_json::to_string(&d).expect("DiffRecord must be JSON-serializable");
-    let back: DiffRecord =
-        serde_json::from_str(&s).expect("DiffRecord must round-trip from JSON");
+    let back: DiffRecord = serde_json::from_str(&s).expect("DiffRecord must round-trip from JSON");
     assert_eq!(back.divergence, "value_mismatch");
     assert_eq!(back.field, "record.value");
 }

@@ -103,9 +103,24 @@ pub fn run_compare(heimq: &str, kafka: &str, redpanda: &str) -> Result<()> {
         .build()?;
 
     let targets = [
-        ("heimq", BrokerTarget { bootstrap_servers: heimq.to_string() }),
-        ("kafka", BrokerTarget { bootstrap_servers: kafka.to_string() }),
-        ("redpanda", BrokerTarget { bootstrap_servers: redpanda.to_string() }),
+        (
+            "heimq",
+            BrokerTarget {
+                bootstrap_servers: heimq.to_string(),
+            },
+        ),
+        (
+            "kafka",
+            BrokerTarget {
+                bootstrap_servers: kafka.to_string(),
+            },
+        ),
+        (
+            "redpanda",
+            BrokerTarget {
+                bootstrap_servers: redpanda.to_string(),
+            },
+        ),
     ];
 
     let mut results = Vec::new();

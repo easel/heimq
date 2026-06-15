@@ -20,7 +20,11 @@ impl SingleNodeClusterView {
             config.host.clone()
         };
         Self {
-            broker: BrokerInfo { node_id: config.broker_id, host, port: config.port as u16 },
+            broker: BrokerInfo {
+                node_id: config.broker_id,
+                host,
+                port: config.port as u16,
+            },
             cluster_id: config.cluster_id.clone(),
         }
     }
@@ -31,10 +35,20 @@ impl SingleNodeClusterView {
 }
 
 impl ClusterView for SingleNodeClusterView {
-    fn self_broker(&self) -> BrokerInfo { self.broker.clone() }
-    fn brokers(&self) -> Vec<BrokerInfo> { vec![self.broker.clone()] }
-    fn cluster_id(&self) -> String { self.cluster_id.clone() }
-    fn partition_leader(&self, _topic: &str, _partition: i32) -> Result<BrokerInfo, ClusterViewError> {
+    fn self_broker(&self) -> BrokerInfo {
+        self.broker.clone()
+    }
+    fn brokers(&self) -> Vec<BrokerInfo> {
+        vec![self.broker.clone()]
+    }
+    fn cluster_id(&self) -> String {
+        self.cluster_id.clone()
+    }
+    fn partition_leader(
+        &self,
+        _topic: &str,
+        _partition: i32,
+    ) -> Result<BrokerInfo, ClusterViewError> {
         Ok(self.broker.clone())
     }
     fn find_coordinator(&self, _group_id: &str) -> Result<BrokerInfo, ClusterViewError> {

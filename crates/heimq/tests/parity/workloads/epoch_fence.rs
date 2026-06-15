@@ -73,7 +73,9 @@ fn run_sync(bootstrap: &str) -> Result<Vec<Observation>> {
     producer_b.init_transactions(Duration::from_secs(10))?;
 
     // Producer A is now a zombie; its commit must be rejected on every broker.
-    let fenced = producer_a.commit_transaction(Duration::from_secs(10)).is_err();
+    let fenced = producer_a
+        .commit_transaction(Duration::from_secs(10))
+        .is_err();
 
     Ok(vec![Observation {
         workload: "epoch_fence",

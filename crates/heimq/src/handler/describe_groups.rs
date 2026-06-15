@@ -29,9 +29,8 @@ pub fn handle(
         let described = match coordinator.describe_group(group_id) {
             Some(d) => {
                 let mut dg = DescribedGroup::default();
-                dg.group_id = kafka_protocol::messages::GroupId(StrBytes::from_string(
-                    d.group_id.clone(),
-                ));
+                dg.group_id =
+                    kafka_protocol::messages::GroupId(StrBytes::from_string(d.group_id.clone()));
                 dg.group_state = StrBytes::from_string(d.group_state);
                 dg.protocol_type = StrBytes::from_string(d.protocol_type);
                 dg.protocol_data = StrBytes::from_string(d.protocol_name);
@@ -56,7 +55,6 @@ pub fn handle(
 fn error_group(group_id: &str, error_code: i16) -> DescribedGroup {
     let mut dg = DescribedGroup::default();
     dg.error_code = error_code;
-    dg.group_id =
-        kafka_protocol::messages::GroupId(StrBytes::from_string(group_id.to_string()));
+    dg.group_id = kafka_protocol::messages::GroupId(StrBytes::from_string(group_id.to_string()));
     dg
 }

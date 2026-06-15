@@ -70,7 +70,11 @@ fn test_metadata_fetch() {
     client.set_client_id("test-client".into());
 
     let result = client.load_metadata_all();
-    assert!(result.is_ok(), "Should connect and fetch metadata: {:?}", result);
+    assert!(
+        result.is_ok(),
+        "Should connect and fetch metadata: {:?}",
+        result
+    );
 
     let topics = client.topics();
     println!("Found {} topics", topics.names().count());
@@ -118,11 +122,15 @@ fn test_legacy_empty_message() {
 fn test_legacy_multiple_topics() {
     let server = TestServer::start();
 
-    let topic_names: Vec<String> = (0..5).map(|i| format!("legacy-multi-topic-{}", i)).collect();
+    let topic_names: Vec<String> = (0..5)
+        .map(|i| format!("legacy-multi-topic-{}", i))
+        .collect();
     let topic_refs: Vec<&str> = topic_names.iter().map(|s| s.as_str()).collect();
 
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&topic_refs).expect("Failed to load metadata");
+    client
+        .load_metadata(&topic_refs)
+        .expect("Failed to load metadata");
 
     let mut producer = Producer::from_client(client)
         .with_ack_timeout(Duration::from_secs(5))
@@ -133,7 +141,12 @@ fn test_legacy_multiple_topics() {
     for topic in &topic_names {
         let payload = format!("msg-to-{}", topic);
         let result = producer.send(&Record::from_value(topic, payload.as_bytes()));
-        assert!(result.is_ok(), "Should produce to topic {}: {:?}", topic, result);
+        assert!(
+            result.is_ok(),
+            "Should produce to topic {}: {:?}",
+            topic,
+            result
+        );
     }
 
     let mut client = KafkaClient::new(server.hosts());
@@ -142,7 +155,11 @@ fn test_legacy_multiple_topics() {
     let topics = client.topics();
     let fetched_topics: Vec<_> = topics.names().collect();
     for expected in &topic_names {
-        assert!(fetched_topics.contains(&expected.as_str()), "Should have topic {}", expected);
+        assert!(
+            fetched_topics.contains(&expected.as_str()),
+            "Should have topic {}",
+            expected
+        );
     }
 }
 
@@ -161,9 +178,7 @@ async fn test_rdkafka_simple_produce() {
     for i in 0..10 {
         let payload = format!("message-{}", i);
         let key = format!("key-{}", i);
-        let record = FutureRecord::to(topic)
-            .payload(&payload)
-            .key(&key);
+        let record = FutureRecord::to(topic).payload(&payload).key(&key);
 
         let result = producer.send(record, Duration::from_secs(5)).await;
         assert!(result.is_ok(), "Should produce message {}: {:?}", i, result);
@@ -177,9 +192,7 @@ async fn test_rdkafka_produce_with_key() {
     let topic = "rdkafka-keyed-produce";
     let producer = server.rdkafka_producer();
 
-    let record = FutureRecord::to(topic)
-        .payload("my-value")
-        .key("my-key");
+    let record = FutureRecord::to(topic).payload("my-value").key("my-key");
 
     let result = producer.send(record, Duration::from_secs(5)).await;
     assert!(result.is_ok(), "Should produce keyed message: {:?}", result);
@@ -192,8 +205,7 @@ async fn test_rdkafka_produce_no_key() {
     let topic = "rdkafka-no-key";
     let producer = server.rdkafka_producer();
 
-    let record: FutureRecord<'_, (), _> = FutureRecord::to(topic)
-        .payload("value-with-null-key");
+    let record: FutureRecord<'_, (), _> = FutureRecord::to(topic).payload("value-with-null-key");
 
     let result = producer.send(record, Duration::from_secs(5)).await;
     assert!(result.is_ok(), "Should produce with null key: {:?}", result);
@@ -206,9 +218,7 @@ async fn test_rdkafka_produce_empty_value() {
     let topic = "rdkafka-empty-value";
     let producer = server.rdkafka_producer();
 
-    let record = FutureRecord::to(topic)
-        .payload("")
-        .key("key");
+    let record = FutureRecord::to(topic).payload("").key("key");
 
     let result = producer.send(record, Duration::from_secs(5)).await;
     assert!(result.is_ok(), "Should produce empty value: {:?}", result);
@@ -223,9 +233,7 @@ async fn test_rdkafka_produce_large_message() {
 
     // 512KB message (rdkafka default limit is 1MB, so stay under it)
     let large_value = "x".repeat(512 * 1024);
-    let record = FutureRecord::to(topic)
-        .payload(&large_value)
-        .key("large");
+    let record = FutureRecord::to(topic).payload(&large_value).key("large");
 
     let result = producer.send(record, Duration::from_secs(10)).await;
     assert!(result.is_ok(), "Should produce large message: {:?}", result);
@@ -242,9 +250,7 @@ async fn test_rdkafka_rapid_produce() {
     for i in 0..message_count {
         let payload = format!("rapid-{}", i);
         let key = format!("k-{}", i);
-        let record = FutureRecord::to(topic)
-            .payload(&payload)
-            .key(&key);
+        let record = FutureRecord::to(topic).payload(&payload).key(&key);
 
         let result = producer.send(record, Duration::from_secs(5)).await;
         assert!(result.is_ok(), "Should produce message {}: {:?}", i, result);
@@ -263,11 +269,11 @@ async fn test_rdkafka_produce_consume_roundtrip() {
     for i in 0..5 {
         let payload = format!("roundtrip-{}", i);
         let key = format!("key-{}", i);
-        let record = FutureRecord::to(topic)
-            .payload(&payload)
-            .key(&key);
+        let record = FutureRecord::to(topic).payload(&payload).key(&key);
 
-        producer.send(record, Duration::from_secs(5)).await
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -286,7 +292,9 @@ async fn test_rdkafka_produce_consume_roundtrip() {
         if let Some(result) = consumer.poll(Duration::from_millis(100)) {
             match result {
                 Ok(msg) => {
-                    let payload = msg.payload().map(|p| String::from_utf8_lossy(p).to_string());
+                    let payload = msg
+                        .payload()
+                        .map(|p| String::from_utf8_lossy(p).to_string());
                     assert!(payload.is_some(), "Message should have payload");
                     received += 1;
                 }
@@ -295,7 +303,11 @@ async fn test_rdkafka_produce_consume_roundtrip() {
         }
     }
 
-    assert_eq!(received, 5, "Should have received 5 messages, got {}", received);
+    assert_eq!(
+        received, 5,
+        "Should have received 5 messages, got {}",
+        received
+    );
 }
 
 #[tokio::test]
@@ -377,12 +389,15 @@ async fn test_rdkafka_multiple_topics() {
     let topics: Vec<String> = (0..3).map(|i| format!("rdkafka-multi-{}", i)).collect();
 
     for topic in &topics {
-        let record = FutureRecord::to(topic)
-            .payload("test-message")
-            .key("key");
+        let record = FutureRecord::to(topic).payload("test-message").key("key");
 
         let result = producer.send(record, Duration::from_secs(5)).await;
-        assert!(result.is_ok(), "Should produce to topic {}: {:?}", topic, result);
+        assert!(
+            result.is_ok(),
+            "Should produce to topic {}: {:?}",
+            topic,
+            result
+        );
     }
 }
 
@@ -395,7 +410,11 @@ use rdkafka::consumer::CommitMode;
 use rdkafka::TopicPartitionList;
 
 /// Helper to create a consumer with specific settings for group tests
-fn create_group_consumer(server: &TestServer, group_id: &str, session_timeout_ms: &str) -> BaseConsumer {
+fn create_group_consumer(
+    server: &TestServer,
+    group_id: &str,
+    session_timeout_ms: &str,
+) -> BaseConsumer {
     ClientConfig::new()
         .set("bootstrap.servers", &server.bootstrap_servers())
         .set("group.id", group_id)
@@ -419,10 +438,10 @@ async fn test_rdkafka_consumer_group_join() {
     // Produce some messages first
     for i in 0..5 {
         let payload = format!("join-test-{}", i);
-        let record = FutureRecord::to(&topic)
-            .payload(&payload)
-            .key("key");
-        producer.send(record, Duration::from_secs(5)).await
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -446,7 +465,10 @@ async fn test_rdkafka_consumer_group_join() {
         }
     }
 
-    assert_eq!(received, 5, "Consumer should have joined group and received all messages");
+    assert_eq!(
+        received, 5,
+        "Consumer should have joined group and received all messages"
+    );
 }
 
 // @covers US-002-AC4
@@ -461,10 +483,10 @@ async fn test_rdkafka_consumer_group_offset_commit() {
     // Produce messages
     for i in 0..10 {
         let payload = format!("offset-test-{}", i);
-        let record = FutureRecord::to(&topic)
-            .payload(&payload)
-            .key("key");
-        producer.send(record, Duration::from_secs(5)).await
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -486,7 +508,8 @@ async fn test_rdkafka_consumer_group_offset_commit() {
                         received += 1;
                         if received == 5 {
                             // Commit sync after 5 messages
-                            consumer.commit_message(&msg, CommitMode::Sync)
+                            consumer
+                                .commit_message(&msg, CommitMode::Sync)
                                 .expect("Failed to commit offset");
                         }
                     }
@@ -524,9 +547,15 @@ async fn test_rdkafka_consumer_group_offset_commit() {
             }
         }
 
-        assert_eq!(received, 5, "Second consumer should receive remaining 5 messages");
-        assert!(first_offset.unwrap_or(0) >= 5,
-            "Second consumer should start at offset 5 or later, got {:?}", first_offset);
+        assert_eq!(
+            received, 5,
+            "Second consumer should receive remaining 5 messages"
+        );
+        assert!(
+            first_offset.unwrap_or(0) >= 5,
+            "Second consumer should start at offset 5 or later, got {:?}",
+            first_offset
+        );
     }
 }
 
@@ -542,10 +571,10 @@ async fn test_rdkafka_consumer_group_manual_offset_fetch() {
     // Produce messages
     for i in 0..5 {
         let payload = format!("fetch-test-{}", i);
-        let record = FutureRecord::to(&topic)
-            .payload(&payload)
-            .key("key");
-        producer.send(record, Duration::from_secs(5)).await
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -579,16 +608,23 @@ async fn test_rdkafka_consumer_group_manual_offset_fetch() {
         let mut tpl = TopicPartitionList::new();
         tpl.add_partition_offset(&topic_name, partition, rdkafka::Offset::Offset(offset + 1))
             .expect("Failed to add partition offset");
-        consumer.commit(&tpl, CommitMode::Sync).expect("Failed to commit");
+        consumer
+            .commit(&tpl, CommitMode::Sync)
+            .expect("Failed to commit");
 
         // Fetch committed offsets
-        let committed = consumer.committed(Duration::from_secs(5))
+        let committed = consumer
+            .committed(Duration::from_secs(5))
             .expect("Failed to fetch committed offsets");
 
-        let committed_offset = committed.find_partition(&topic_name, partition)
+        let committed_offset = committed
+            .find_partition(&topic_name, partition)
             .map(|e| e.offset());
 
-        assert!(committed_offset.is_some(), "Should have committed offset for partition");
+        assert!(
+            committed_offset.is_some(),
+            "Should have committed offset for partition"
+        );
     }
 }
 
@@ -605,10 +641,10 @@ async fn test_rdkafka_multiple_consumers_same_group() {
     for i in 0..message_count {
         let payload = format!("multi-consumer-{}", i);
         let key = format!("key-{}", i);
-        let record = FutureRecord::to(&topic)
-            .payload(&payload)
-            .key(&key);
-        producer.send(record, Duration::from_secs(5)).await
+        let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -618,8 +654,12 @@ async fn test_rdkafka_multiple_consumers_same_group() {
     let consumer1 = create_group_consumer(&server, &group, "30000");
     let consumer2 = create_group_consumer(&server, &group, "30000");
 
-    consumer1.subscribe(&[&topic]).expect("Consumer 1 failed to subscribe");
-    consumer2.subscribe(&[&topic]).expect("Consumer 2 failed to subscribe");
+    consumer1
+        .subscribe(&[&topic])
+        .expect("Consumer 1 failed to subscribe");
+    consumer2
+        .subscribe(&[&topic])
+        .expect("Consumer 2 failed to subscribe");
 
     // Both consumers poll - messages should be distributed
     let mut total_received = 0;
@@ -646,12 +686,18 @@ async fn test_rdkafka_multiple_consumers_same_group() {
         }
     }
 
-    assert_eq!(total_received, message_count,
-        "Should receive all {} messages between both consumers, got {}", message_count, total_received);
+    assert_eq!(
+        total_received, message_count,
+        "Should receive all {} messages between both consumers, got {}",
+        message_count, total_received
+    );
 
     // With a single partition topic, one consumer should get all messages
     // But we verify total delivery is correct
-    println!("Consumer 1 received: {}, Consumer 2 received: {}", c1_received, c2_received);
+    println!(
+        "Consumer 1 received: {}, Consumer 2 received: {}",
+        c1_received, c2_received
+    );
 }
 
 // @covers US-002-AC1
@@ -666,10 +712,10 @@ async fn test_rdkafka_consumer_group_lifecycle() {
     // Step 1: Produce initial messages
     for i in 0..5 {
         let payload = format!("lifecycle-batch1-{}", i);
-        let record = FutureRecord::to(&topic)
-            .payload(&payload)
-            .key("key");
-        producer.send(record, Duration::from_secs(5)).await
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -690,7 +736,8 @@ async fn test_rdkafka_consumer_group_lifecycle() {
                     Ok(msg) => {
                         received += 1;
                         // Commit each message
-                        consumer.commit_message(&msg, CommitMode::Sync)
+                        consumer
+                            .commit_message(&msg, CommitMode::Sync)
                             .expect("Failed to commit");
                     }
                     Err(e) => panic!("Error consuming: {:?}", e),
@@ -706,10 +753,10 @@ async fn test_rdkafka_consumer_group_lifecycle() {
     // Step 3: Produce more messages
     for i in 0..5 {
         let payload = format!("lifecycle-batch2-{}", i);
-        let record = FutureRecord::to(&topic)
-            .payload(&payload)
-            .key("key");
-        producer.send(record, Duration::from_secs(5)).await
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -739,12 +786,18 @@ async fn test_rdkafka_consumer_group_lifecycle() {
             }
         }
 
-        assert_eq!(received, 5, "Lifecycle step 4: should consume 5 new messages");
+        assert_eq!(
+            received, 5,
+            "Lifecycle step 4: should consume 5 new messages"
+        );
 
         // Verify we got batch2 messages (not batch1 again)
         for payload in &payloads {
-            assert!(payload.contains("batch2"),
-                "Should receive batch2 messages, got: {}", payload);
+            assert!(
+                payload.contains("batch2"),
+                "Should receive batch2 messages, got: {}",
+                payload
+            );
         }
     }
 }
@@ -762,10 +815,10 @@ async fn test_rdkafka_consumer_rebalance_on_new_member() {
     for i in 0..10 {
         let payload = format!("rebalance-{}", i);
         let key = format!("key-{}", i);
-        let record = FutureRecord::to(&topic)
-            .payload(&payload)
-            .key(&key);
-        producer.send(record, Duration::from_secs(5)).await
+        let record = FutureRecord::to(&topic).payload(&payload).key(&key);
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -773,7 +826,9 @@ async fn test_rdkafka_consumer_rebalance_on_new_member() {
 
     // First consumer joins and starts consuming
     let consumer1 = create_group_consumer(&server, &group, "30000");
-    consumer1.subscribe(&[&topic]).expect("Consumer 1 failed to subscribe");
+    consumer1
+        .subscribe(&[&topic])
+        .expect("Consumer 1 failed to subscribe");
 
     // Consume a few messages with consumer1
     let mut c1_count = 0;
@@ -785,7 +840,9 @@ async fn test_rdkafka_consumer_rebalance_on_new_member() {
 
     // Second consumer joins - triggers rebalance
     let consumer2 = create_group_consumer(&server, &group, "30000");
-    consumer2.subscribe(&[&topic]).expect("Consumer 2 failed to subscribe");
+    consumer2
+        .subscribe(&[&topic])
+        .expect("Consumer 2 failed to subscribe");
 
     // Both consumers continue polling
     let mut total = c1_count;
@@ -802,7 +859,11 @@ async fn test_rdkafka_consumer_rebalance_on_new_member() {
     }
 
     // Both consumers should be able to receive messages after rebalance
-    assert!(total >= 10, "Should receive all messages even after rebalance, got {}", total);
+    assert!(
+        total >= 10,
+        "Should receive all messages even after rebalance, got {}",
+        total
+    );
 }
 
 #[tokio::test]
@@ -827,10 +888,11 @@ async fn test_rdkafka_consumer_group_empty_topic() {
             // Some errors are acceptable for empty/new topic
             let err_str = format!("{:?}", e);
             assert!(
-                err_str.contains("UnknownTopicOrPartition") ||
-                err_str.contains("NoPartitionsAssigned") ||
-                err_str.contains("BrokerTransportFailure"),
-                "Unexpected error for empty topic: {:?}", e
+                err_str.contains("UnknownTopicOrPartition")
+                    || err_str.contains("NoPartitionsAssigned")
+                    || err_str.contains("BrokerTransportFailure"),
+                "Unexpected error for empty topic: {:?}",
+                e
             );
         }
     }
@@ -847,10 +909,10 @@ async fn test_rdkafka_consumer_seek_to_beginning() {
     // Produce messages
     for i in 0..10 {
         let payload = format!("seek-{}", i);
-        let record = FutureRecord::to(&topic)
-            .payload(&payload)
-            .key("key");
-        producer.send(record, Duration::from_secs(5)).await
+        let record = FutureRecord::to(&topic).payload(&payload).key("key");
+        producer
+            .send(record, Duration::from_secs(5))
+            .await
             .expect("Failed to produce");
     }
 
@@ -878,7 +940,13 @@ async fn test_rdkafka_consumer_seek_to_beginning() {
     let assignment = consumer.assignment().expect("Failed to get assignment");
     if !assignment.elements().is_empty() {
         for elem in assignment.elements() {
-            consumer.seek(elem.topic(), elem.partition(), rdkafka::Offset::Beginning, Duration::from_secs(5))
+            consumer
+                .seek(
+                    elem.topic(),
+                    elem.partition(),
+                    rdkafka::Offset::Beginning,
+                    Duration::from_secs(5),
+                )
                 .expect("Failed to seek to beginning");
         }
 
@@ -892,7 +960,10 @@ async fn test_rdkafka_consumer_seek_to_beginning() {
             }
         }
 
-        assert_eq!(re_received, 10, "Should re-receive all 10 messages after seek to beginning");
+        assert_eq!(
+            re_received, 10,
+            "Should re-receive all 10 messages after seek to beginning"
+        );
     }
 }
 
@@ -995,7 +1066,11 @@ async fn test_rdkafka_seek_to_end() {
             None => {}
         }
     }
-    assert_eq!(got.len(), 5, "Should receive exactly the 5 post-seek messages");
+    assert_eq!(
+        got.len(),
+        5,
+        "Should receive exactly the 5 post-seek messages"
+    );
 }
 
 #[tokio::test]
@@ -1032,13 +1107,19 @@ async fn test_rdkafka_seek_to_offset() {
             received += 1;
         }
     }
-    assert_eq!(received, produced.len(), "Should receive all initial messages");
+    assert_eq!(
+        received,
+        produced.len(),
+        "Should receive all initial messages"
+    );
 
     // Pick a mid-range offset (the 5th produced message).
     let target_idx = 5;
     let target_offset = produced[target_idx].0;
-    let expected_payloads: Vec<String> =
-        produced[target_idx..].iter().map(|(_, p)| p.clone()).collect();
+    let expected_payloads: Vec<String> = produced[target_idx..]
+        .iter()
+        .map(|(_, p)| p.clone())
+        .collect();
 
     let assignment = consumer.assignment().expect("Failed to get assignment");
     assert!(
@@ -1402,7 +1483,9 @@ fn test_legacy_large_batch_produce() {
 
     // Verify via metadata that topic exists and has messages
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&[topic]).expect("Failed to load metadata");
+    client
+        .load_metadata(&[topic])
+        .expect("Failed to load metadata");
     let topics = client.topics();
     assert!(
         topics.names().any(|n| n == topic),
@@ -1418,13 +1501,13 @@ fn test_legacy_binary_payload_produce() {
 
     // Binary data with non-UTF8 bytes, null bytes, and control characters
     let binary_payloads: Vec<Vec<u8>> = vec![
-        vec![0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD],                    // Raw bytes
-        vec![0x00, 0x00, 0x00, 0x00],                                 // All nulls
-        (0u8..=255u8).collect(),                                      // All byte values
-        vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],        // PNG header
-        vec![0x1F, 0x8B, 0x08, 0x00],                                 // gzip header
-        vec![0xEF, 0xBB, 0xBF, 0x68, 0x65, 0x6C, 0x6C, 0x6F],        // UTF-8 BOM + hello
-        vec![0x80, 0x81, 0x82, 0x83],                                 // Invalid UTF-8
+        vec![0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD], // Raw bytes
+        vec![0x00, 0x00, 0x00, 0x00],             // All nulls
+        (0u8..=255u8).collect(),                  // All byte values
+        vec![0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A], // PNG header
+        vec![0x1F, 0x8B, 0x08, 0x00],             // gzip header
+        vec![0xEF, 0xBB, 0xBF, 0x68, 0x65, 0x6C, 0x6C, 0x6F], // UTF-8 BOM + hello
+        vec![0x80, 0x81, 0x82, 0x83],             // Invalid UTF-8
     ];
 
     for (i, payload) in binary_payloads.iter().enumerate() {
@@ -1439,7 +1522,9 @@ fn test_legacy_binary_payload_produce() {
 
     // Verify topic was created
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&[topic]).expect("Failed to load metadata");
+    client
+        .load_metadata(&[topic])
+        .expect("Failed to load metadata");
     let topics = client.topics();
     assert!(topics.names().any(|n| n == topic), "Topic should exist");
 }
@@ -1465,7 +1550,9 @@ fn test_legacy_metadata_refresh_after_topic_creation() {
     let mut client = KafkaClient::new(server.hosts());
 
     // Initial metadata fetch - no topics yet
-    client.load_metadata_all().expect("Failed to load initial metadata");
+    client
+        .load_metadata_all()
+        .expect("Failed to load initial metadata");
     {
         let topics = client.topics();
         let initial_topics: Vec<_> = topics.names().collect();
@@ -1480,7 +1567,9 @@ fn test_legacy_metadata_refresh_after_topic_creation() {
     for topic in &new_topics {
         let topic_refs = [topic.as_str()];
         let mut temp_client = KafkaClient::new(server.hosts());
-        temp_client.load_metadata(&topic_refs).expect("Failed to load metadata");
+        temp_client
+            .load_metadata(&topic_refs)
+            .expect("Failed to load metadata");
 
         let mut producer = Producer::from_client(temp_client)
             .with_ack_timeout(Duration::from_secs(5))
@@ -1494,7 +1583,9 @@ fn test_legacy_metadata_refresh_after_topic_creation() {
     }
 
     // Refresh metadata on original client
-    client.load_metadata_all().expect("Failed to refresh metadata");
+    client
+        .load_metadata_all()
+        .expect("Failed to refresh metadata");
     let topics = client.topics();
     let refreshed_topics: Vec<_> = topics.names().collect();
     println!("Refreshed topics: {:?}", refreshed_topics);
@@ -1520,10 +1611,10 @@ fn test_legacy_various_message_formats() {
     // Keyed messages
     let keyed_messages: Vec<(&str, &[u8])> = vec![
         ("key1", b"value1"),
-        ("key2", b""),                           // Empty value
-        ("key3", b"value-for-key3"),             // Normal
-        ("key-with-unicode", b"val"),            // Normal key
-        ("k", b"large-value-placeholder"),       // Keyed message
+        ("key2", b""),                     // Empty value
+        ("key3", b"value-for-key3"),       // Normal
+        ("key-with-unicode", b"val"),      // Normal key
+        ("k", b"large-value-placeholder"), // Keyed message
     ];
 
     for (key, value) in &keyed_messages {
@@ -1537,7 +1628,9 @@ fn test_legacy_various_message_formats() {
 
     // Verify topic was created
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&[topic]).expect("Failed to load metadata");
+    client
+        .load_metadata(&[topic])
+        .expect("Failed to load metadata");
     let topics = client.topics();
     assert!(topics.names().any(|n| n == topic), "Topic should exist");
 }
@@ -1552,12 +1645,19 @@ fn test_legacy_produce_many_small_messages() {
     for i in 0..100 {
         let payload = format!("small-{}", i);
         let result = producer.send(&Record::from_value(topic, payload.as_bytes()));
-        assert!(result.is_ok(), "Should produce small message {}: {:?}", i, result);
+        assert!(
+            result.is_ok(),
+            "Should produce small message {}: {:?}",
+            i,
+            result
+        );
     }
 
     // Verify topic exists
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&[topic]).expect("Failed to load metadata");
+    client
+        .load_metadata(&[topic])
+        .expect("Failed to load metadata");
     let topics = client.topics();
     assert!(topics.names().any(|n| n == topic), "Topic should exist");
 }
@@ -1584,7 +1684,9 @@ fn test_legacy_produce_varying_sizes() {
 
     // Verify topic exists
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&[topic]).expect("Failed to load metadata");
+    client
+        .load_metadata(&[topic])
+        .expect("Failed to load metadata");
     let topics = client.topics();
     assert!(topics.names().any(|n| n == topic), "Topic should exist");
 }
@@ -1610,7 +1712,9 @@ fn test_legacy_sequential_produce() {
 
     // Verify topic exists
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&[topic]).expect("Failed to load metadata");
+    client
+        .load_metadata(&[topic])
+        .expect("Failed to load metadata");
     let topics = client.topics();
     assert!(topics.names().any(|n| n == topic), "Topic should exist");
 }
@@ -1626,7 +1730,9 @@ fn test_legacy_concurrent_producers() {
             let hosts = server.hosts();
             std::thread::spawn(move || {
                 let mut client = KafkaClient::new(hosts);
-                client.load_metadata(&[topic]).expect("Failed to load metadata");
+                client
+                    .load_metadata(&[topic])
+                    .expect("Failed to load metadata");
 
                 let mut producer = Producer::from_client(client)
                     .with_ack_timeout(Duration::from_secs(5))
@@ -1651,7 +1757,9 @@ fn test_legacy_concurrent_producers() {
 
     // Verify topic exists after concurrent production
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&[topic]).expect("Failed to load metadata");
+    client
+        .load_metadata(&[topic])
+        .expect("Failed to load metadata");
     let topics = client.topics();
     assert!(
         topics.names().any(|n| n == topic),
@@ -1756,7 +1864,9 @@ fn test_legacy_keyed_messages_produce() {
 
     // Verify topic exists
     let mut client = KafkaClient::new(server.hosts());
-    client.load_metadata(&[topic]).expect("Failed to load metadata");
+    client
+        .load_metadata(&[topic])
+        .expect("Failed to load metadata");
     let topics = client.topics();
     assert!(topics.names().any(|n| n == topic), "Topic should exist");
 }
@@ -1793,7 +1903,9 @@ async fn test_rdkafka_group_resume_from_committed() {
     // Consumer A: consume COMMIT_AFTER messages, commit the last one, then drop.
     {
         let consumer = server.rdkafka_consumer(&group);
-        consumer.subscribe(&[&topic]).expect("A failed to subscribe");
+        consumer
+            .subscribe(&[&topic])
+            .expect("A failed to subscribe");
 
         let mut received = 0;
         let timeout = Duration::from_secs(10);
@@ -1923,10 +2035,7 @@ async fn test_rdkafka_independent_consumer_groups() {
     tokio::time::sleep(Duration::from_millis(200)).await;
 
     // Helper: consume exactly `n` messages from a fresh consumer in `group`.
-    fn consume_n(
-        consumer: &BaseConsumer,
-        n: usize,
-    ) -> Vec<(String, i32, i64)> {
+    fn consume_n(consumer: &BaseConsumer, n: usize) -> Vec<(String, i32, i64)> {
         let mut out: Vec<(String, i32, i64)> = Vec::with_capacity(n);
         let timeout = Duration::from_secs(10);
         let start = std::time::Instant::now();
@@ -1949,7 +2058,9 @@ async fn test_rdkafka_independent_consumer_groups() {
 
     // Group 1: consume all N messages.
     let consumer_g1 = server.rdkafka_consumer(&group1);
-    consumer_g1.subscribe(&[&topic]).expect("G1 failed to subscribe");
+    consumer_g1
+        .subscribe(&[&topic])
+        .expect("G1 failed to subscribe");
     let g1_msgs = consume_n(&consumer_g1, N);
     assert_eq!(
         g1_msgs.len(),
@@ -1960,7 +2071,10 @@ async fn test_rdkafka_independent_consumer_groups() {
         g1_msgs
     );
     let g1_payloads: Vec<String> = g1_msgs.iter().map(|(p, _, _)| p.clone()).collect();
-    assert_eq!(g1_payloads, produced, "G1 should see full produced set in order");
+    assert_eq!(
+        g1_payloads, produced,
+        "G1 should see full produced set in order"
+    );
 
     // G1 commits a partial offset (commit after 4th message).
     const G1_COMMIT_AFTER: usize = 4;
@@ -1976,7 +2090,9 @@ async fn test_rdkafka_independent_consumer_groups() {
     // Group 2: subscribe independently and verify it still sees all N messages,
     // unaffected by G1's commit.
     let consumer_g2 = server.rdkafka_consumer(&group2);
-    consumer_g2.subscribe(&[&topic]).expect("G2 failed to subscribe");
+    consumer_g2
+        .subscribe(&[&topic])
+        .expect("G2 failed to subscribe");
     let g2_msgs = consume_n(&consumer_g2, N);
     assert_eq!(
         g2_msgs.len(),
@@ -1987,7 +2103,10 @@ async fn test_rdkafka_independent_consumer_groups() {
         g2_msgs
     );
     let g2_payloads: Vec<String> = g2_msgs.iter().map(|(p, _, _)| p.clone()).collect();
-    assert_eq!(g2_payloads, produced, "G2 should see full produced set in order");
+    assert_eq!(
+        g2_payloads, produced,
+        "G2 should see full produced set in order"
+    );
 
     // Verify committed offsets are group-scoped: G2's committed offset for the
     // same topic/partition must NOT reflect G1's commit.
@@ -2048,7 +2167,9 @@ async fn test_rdkafka_auto_offset_reset_earliest_vs_latest() {
 
     // Consumer C1: auto.offset.reset=earliest (via rdkafka_consumer helper).
     let consumer_c1 = server.rdkafka_consumer(&group1);
-    consumer_c1.subscribe(&[&topic]).expect("C1 failed to subscribe");
+    consumer_c1
+        .subscribe(&[&topic])
+        .expect("C1 failed to subscribe");
 
     let mut c1_payloads: Vec<String> = Vec::with_capacity(M);
     let timeout = Duration::from_secs(10);
@@ -2088,7 +2209,9 @@ async fn test_rdkafka_auto_offset_reset_earliest_vs_latest() {
         .set("enable.auto.commit", "false")
         .create()
         .expect("Failed to create consumer C2");
-    consumer_c2.subscribe(&[&topic]).expect("C2 failed to subscribe");
+    consumer_c2
+        .subscribe(&[&topic])
+        .expect("C2 failed to subscribe");
 
     // Let C2 join the group and have its position set to latest before any
     // new produces happen. Poll briefly — must not see any pre-existing messages.
@@ -2216,7 +2339,11 @@ async fn test_rdkafka_manual_commit_offset_roundtrip() {
             }
         }
 
-        assert_eq!(received, K, "Consumer A should consume exactly {} messages", K);
+        assert_eq!(
+            received, K,
+            "Consumer A should consume exactly {} messages",
+            K
+        );
 
         let p = last_partition.expect("must have seen a partition");
         let o = last_offset.expect("must have seen an offset");
@@ -2364,8 +2491,7 @@ async fn test_rdkafka_auto_commit_interval() {
         // poll so librdkafka can service callbacks, but any further messages
         // returned here are NOT stored (enable.auto.offset.store=false), so the
         // committed offset remains pinned to the K'th message.
-        let wait_deadline =
-            std::time::Instant::now() + Duration::from_millis(INTERVAL_MS * 10);
+        let wait_deadline = std::time::Instant::now() + Duration::from_millis(INTERVAL_MS * 10);
         while std::time::Instant::now() < wait_deadline {
             let _ = consumer_a.poll(Duration::from_millis(50));
         }
@@ -2648,7 +2774,8 @@ async fn test_rdkafka_per_partition_ordering() {
 
     // Consume total_msgs + 1 (the warmup).
     let expected_total = total_msgs + 1;
-    let mut consumed: Vec<(i32, i64, Option<(usize, usize, usize)>)> = Vec::with_capacity(expected_total);
+    let mut consumed: Vec<(i32, i64, Option<(usize, usize, usize)>)> =
+        Vec::with_capacity(expected_total);
     let timeout = Duration::from_secs(60);
     let start = std::time::Instant::now();
 
@@ -2933,7 +3060,9 @@ async fn test_rdkafka_fetch_long_poll() {
         .set("fetch.queue.backoff.ms", "50")
         .create()
         .expect("Case A: failed to create consumer");
-    consumer_a.subscribe(&[&topic_a]).expect("Case A: failed to subscribe");
+    consumer_a
+        .subscribe(&[&topic_a])
+        .expect("Case A: failed to subscribe");
 
     // Drain the init message so the consumer position is at end-of-log.
     let drain_deadline = Instant::now() + Duration::from_secs(5);
@@ -2943,7 +3072,10 @@ async fn test_rdkafka_fetch_long_poll() {
             drained = true;
         }
     }
-    assert!(drained, "Case A: failed to drain init message before measurement");
+    assert!(
+        drained,
+        "Case A: failed to drain init message before measurement"
+    );
 
     // Measure: empty topic, single poll up to 500ms.
     let start = Instant::now();
@@ -2990,7 +3122,9 @@ async fn test_rdkafka_fetch_long_poll() {
         .set("fetch.queue.backoff.ms", "50")
         .create()
         .expect("Case B: failed to create consumer");
-    consumer_b.subscribe(&[&topic_b]).expect("Case B: failed to subscribe");
+    consumer_b
+        .subscribe(&[&topic_b])
+        .expect("Case B: failed to subscribe");
 
     let drain_deadline = Instant::now() + Duration::from_secs(5);
     let mut drained = false;
@@ -2999,7 +3133,10 @@ async fn test_rdkafka_fetch_long_poll() {
             drained = true;
         }
     }
-    assert!(drained, "Case B: failed to drain init message before measurement");
+    assert!(
+        drained,
+        "Case B: failed to drain init message before measurement"
+    );
 
     // Pump the consumer briefly so it is actively long-polling, then produce
     // a >=1024-byte message inline and measure end-to-end receipt latency.
@@ -3038,7 +3175,10 @@ async fn test_rdkafka_fetch_long_poll() {
         poll_b
     );
 
-    println!("test_rdkafka_fetch_long_poll: poll_a={:?}, poll_b={:?}", poll_a, poll_b);
+    println!(
+        "test_rdkafka_fetch_long_poll: poll_a={:?}, poll_b={:?}",
+        poll_a, poll_b
+    );
 }
 
 #[tokio::test]
@@ -3436,7 +3576,10 @@ async fn test_rdkafka_concurrent_producers() {
                     .send(record, Duration::from_secs(10))
                     .await
                     .unwrap_or_else(|e| {
-                        panic!("producer {} failed to produce msg {}: {:?}", producer_id, i, e)
+                        panic!(
+                            "producer {} failed to produce msg {}: {:?}",
+                            producer_id, i, e
+                        )
                     });
             }
         }));
@@ -3566,7 +3709,11 @@ async fn test_rdkafka_produce_consume_soak() {
         while received.len() < total && start.elapsed() < budget {
             if let Some(result) = consumer.poll(Duration::from_millis(100)) {
                 let msg = result.expect("consumer poll error during soak");
-                assert_eq!(msg.topic(), topic_for_consumer.as_str(), "unexpected topic in soak");
+                assert_eq!(
+                    msg.topic(),
+                    topic_for_consumer.as_str(),
+                    "unexpected topic in soak"
+                );
                 let payload = msg
                     .payload()
                     .map(|p| String::from_utf8_lossy(p).to_string())
@@ -3787,7 +3934,12 @@ async fn test_rdkafka_compression_codecs() {
 
         let message_count: usize = 25;
         let expected: Vec<(String, String)> = (0..message_count)
-            .map(|i| (format!("key-{}-{}", codec, i), format!("payload-{}-{:08}", codec, i)))
+            .map(|i| {
+                (
+                    format!("key-{}-{}", codec, i),
+                    format!("payload-{}-{:08}", codec, i),
+                )
+            })
             .collect();
 
         let mut send_results = Vec::with_capacity(message_count);
@@ -3820,8 +3972,8 @@ async fn test_rdkafka_compression_codecs() {
 
         while received.len() < message_count && start.elapsed() < timeout {
             if let Some(result) = consumer.poll(Duration::from_millis(100)) {
-                let msg = result
-                    .unwrap_or_else(|e| panic!("codec {} consume error: {:?}", codec, e));
+                let msg =
+                    result.unwrap_or_else(|e| panic!("codec {} consume error: {:?}", codec, e));
                 let payload = msg
                     .payload()
                     .unwrap_or_else(|| panic!("codec {} message had no payload", codec))
@@ -3917,7 +4069,9 @@ async fn test_rdkafka_pause_resume_partitions() {
     paused
         .add_partition_offset(&topic, 0, rdkafka::Offset::Invalid)
         .expect("Failed to add partition 0 to pause TPL");
-    consumer.pause(&paused).expect("Failed to pause partition 0");
+    consumer
+        .pause(&paused)
+        .expect("Failed to pause partition 0");
 
     // Produce 5 messages to each partition.
     const PER_PARTITION: usize = 5;
@@ -3925,10 +4079,7 @@ async fn test_rdkafka_pause_resume_partitions() {
     let mut p1_payloads: Vec<String> = Vec::new();
     for i in 0..PER_PARTITION {
         let p0 = format!("p0-{}", i);
-        let rec0 = FutureRecord::to(&topic)
-            .payload(&p0)
-            .key("k0")
-            .partition(0);
+        let rec0 = FutureRecord::to(&topic).payload(&p0).key("k0").partition(0);
         let (delivered_p, _) = producer
             .send(rec0, Duration::from_secs(5))
             .await
@@ -3937,10 +4088,7 @@ async fn test_rdkafka_pause_resume_partitions() {
         p0_payloads.push(p0);
 
         let p1 = format!("p1-{}", i);
-        let rec1 = FutureRecord::to(&topic)
-            .payload(&p1)
-            .key("k1")
-            .partition(1);
+        let rec1 = FutureRecord::to(&topic).payload(&p1).key("k1").partition(1);
         let (delivered_p, _) = producer
             .send(rec1, Duration::from_secs(5))
             .await
@@ -3959,7 +4107,8 @@ async fn test_rdkafka_pause_resume_partitions() {
                 0,
                 "Paused partition 0 must not deliver messages, got offset {} payload {:?}",
                 msg.offset(),
-                msg.payload().map(|p| String::from_utf8_lossy(p).to_string())
+                msg.payload()
+                    .map(|p| String::from_utf8_lossy(p).to_string())
             );
             assert_eq!(
                 msg.partition(),
@@ -4007,7 +4156,9 @@ async fn test_rdkafka_pause_resume_partitions() {
     resume
         .add_partition_offset(&topic, 0, rdkafka::Offset::Invalid)
         .expect("Failed to add partition 0 to resume TPL");
-    consumer.resume(&resume).expect("Failed to resume partition 0");
+    consumer
+        .resume(&resume)
+        .expect("Failed to resume partition 0");
 
     // Poll: partition 0 backlog should now drain.
     let mut got_p0: Vec<String> = Vec::new();
@@ -4072,7 +4223,9 @@ async fn test_rdkafka_transactional_produce_commit() {
             producer
                 .init_transactions(Duration::from_secs(10))
                 .expect("init_transactions failed");
-            producer.begin_transaction().expect("begin_transaction failed");
+            producer
+                .begin_transaction()
+                .expect("begin_transaction failed");
 
             for i in 0usize..3 {
                 producer
@@ -4167,7 +4320,9 @@ async fn test_rdkafka_transactional_produce_abort() {
             producer
                 .init_transactions(Duration::from_secs(10))
                 .expect("init_transactions failed");
-            producer.begin_transaction().expect("begin_transaction failed");
+            producer
+                .begin_transaction()
+                .expect("begin_transaction failed");
 
             for i in 0usize..3 {
                 producer
@@ -4252,7 +4407,10 @@ async fn test_rdkafka_batched_producer_mid_batch_seek() {
     for (i, payload) in payloads.iter().enumerate() {
         let record = FutureRecord::to(&topic).payload(payload.as_str()).key("k");
         let result = producer.send(record, Duration::from_secs(10)).await;
-        assert!(result.is_ok(), "batched produce failed for record {i}: {result:?}");
+        assert!(
+            result.is_ok(),
+            "batched produce failed for record {i}: {result:?}"
+        );
     }
 
     // Flush so all records are in the broker before the consumer joins.
@@ -4275,7 +4433,10 @@ async fn test_rdkafka_batched_producer_mid_batch_seek() {
                 }
             }
         }
-        assert_eq!(received, COMMIT_AFTER, "Consumer A must receive {COMMIT_AFTER} messages");
+        assert_eq!(
+            received, COMMIT_AFTER,
+            "Consumer A must receive {COMMIT_AFTER} messages"
+        );
     }
 
     tokio::time::sleep(Duration::from_millis(500)).await;
@@ -4298,9 +4459,7 @@ async fn test_rdkafka_batched_producer_mid_batch_seek() {
 
     while payloads.len() < expected_tail && std::time::Instant::now() < deadline {
         if let Some(Ok(msg)) = consumer_b.poll(Duration::from_millis(100)) {
-            payloads.push(
-                String::from_utf8_lossy(msg.payload().unwrap_or_default()).into_owned(),
-            );
+            payloads.push(String::from_utf8_lossy(msg.payload().unwrap_or_default()).into_owned());
         }
     }
 
@@ -4308,9 +4467,7 @@ async fn test_rdkafka_batched_producer_mid_batch_seek() {
     let drain_end = std::time::Instant::now() + Duration::from_millis(500);
     while std::time::Instant::now() < drain_end {
         if let Some(Ok(msg)) = consumer_b.poll(Duration::from_millis(50)) {
-            payloads.push(
-                String::from_utf8_lossy(msg.payload().unwrap_or_default()).into_owned(),
-            );
+            payloads.push(String::from_utf8_lossy(msg.payload().unwrap_or_default()).into_owned());
         }
     }
 

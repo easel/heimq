@@ -39,7 +39,8 @@ pub fn handle(
             response_partitions.push(rp);
         }
         let mut rt = OffsetDeleteResponseTopic::default();
-        rt.name = kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
+        rt.name =
+            kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
         rt.partitions = response_partitions;
         response.topics.push(rt);
     }
