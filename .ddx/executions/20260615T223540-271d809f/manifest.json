@@ -1,0 +1,43 @@
+{
+  "attempt_id": "20260615T223540-271d809f",
+  "bead_id": "heimq-7f32471a",
+  "base_rev": "1d591290d56b28344b696ea50ce698d8236e80f6",
+  "created_at": "2026-06-15T22:35:41.495539861Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-7f32471a",
+    "title": "Harden the required GitHub test workflow",
+    "description": "The repo has .github/workflows/test.yml, but heimq needs an explicit required CI workflow suitable for branch protection. Make the test workflow clearly named `test`, triggered on pull_request, push to main, and workflow_dispatch. It should run on ubuntu-latest, use Rust stable or the repository-pinned toolchain if one exists, cache Cargo/build artifacts, and run formatting, clippy, and workspace tests for all heimq workspace crates. Preserve existing specialized workflows (parity, ecosystem, benchmark, postgres) rather than folding them into this job.\n\nIn-scope files:\n- .github/workflows/test.yml\n- crates/heimq/docs/helix/02-design/adr/ADR-002-bead-close-test-gate.md only if the documented gate needs a small update\n\nOut-of-scope:\n- Docker image publication.\n- Release binary artifacts.\n- Helm chart work.\n- Changing Rust source code except to fix CI-only lint fallout explicitly caused by the workflow.",
+    "acceptance": "1. `cargo fmt --all -- --check` passes.\n2. `cargo clippy --workspace --all-targets -- -D warnings` passes, or the workflow documents and justifies any existing warning exceptions without hiding new warnings.\n3. `cargo test --workspace --all-targets` passes.\n4. `.github/workflows/test.yml` contains pull_request, push, and workflow_dispatch triggers and a job named `test`.",
+    "parent": "heimq-970e8aeb",
+    "labels": [
+      "area:ci",
+      "kind:test",
+      "github-actions"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead heimq-7f32471a\",\"fingerprint\":\"73a30237512dc4f273c29282033d1f334a9110bb3c9712c5f6dca4c1f1336ec6\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"73a30237512dc4f273c29282033d1f334a9110bb3c9712c5f6dca4c1f1336ec6\"}",
+          "created_at": "2026-06-15T22:34:01.601825719Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260615T223540-271d809f",
+    "prompt": ".ddx/executions/20260615T223540-271d809f/prompt.md",
+    "manifest": ".ddx/executions/20260615T223540-271d809f/manifest.json",
+    "result": ".ddx/executions/20260615T223540-271d809f/result.json",
+    "checks": ".ddx/executions/20260615T223540-271d809f/checks.json",
+    "usage": ".ddx/executions/20260615T223540-271d809f/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-7f32471a-20260615T223540-271d809f"
+  },
+  "prompt_sha": "49e94ac260ee52286ebfad3c76544e8eabd35a4fba2226683cb4549fb96db5ed"
+}
