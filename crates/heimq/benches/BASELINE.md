@@ -12,8 +12,25 @@ cargo test -p heimq --release --test bench_baseline -- --ignored --nocapture
 ```
 
 Knobs (env): `BENCH_RECORDS` (default 100000), `BENCH_RECORD_SIZE` (default 256),
-`BENCH_LATENCY_SAMPLES` (default 2000). The bench source is
-`crates/heimq/tests/bench_baseline.rs`.
+`BENCH_LATENCY_SAMPLES` (default 2000). Set `BENCH_DIAGNOSTICS=1` to print
+consumer polling counters and the consumer fetch settings used for the run. The
+bench source is `crates/heimq/tests/bench_baseline.rs`.
+
+Diagnostic consumer knobs:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `BENCH_DIAGNOSTICS` | unset | When `1`/`true`, prints `consume_diagnostics` and `consumer_fetch_settings` lines |
+| `BENCH_CONSUMER_FETCH_MIN_BYTES` | `1` | Sets librdkafka `fetch.min.bytes` |
+| `BENCH_CONSUMER_FETCH_WAIT_MAX_MS` | `500` | Sets librdkafka `fetch.wait.max.ms` |
+| `BENCH_CONSUMER_MAX_PARTITION_FETCH_BYTES` | `1048576` | Sets librdkafka `max.partition.fetch.bytes` |
+
+Example diagnostic run:
+
+```sh
+BENCH_RECORDS=1000 BENCH_LATENCY_SAMPLES=10 BENCH_DIAGNOSTICS=1 \
+  cargo test -p heimq --release --test bench_baseline -- --ignored --nocapture
+```
 
 ## Recorded baseline
 
