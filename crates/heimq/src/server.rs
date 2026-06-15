@@ -51,7 +51,23 @@ impl Server {
         offset_store: Arc<dyn OffsetStore>,
     ) -> Result<Self> {
         let config = Arc::new(config);
-        Self::build_with_offsets(config, storage, offset_store)
+        Self::build_with_offsets(config, storage, offset_store, None)
+    }
+
+    /// Like [`with_backends`], but with an externally provided [`ClusterView`].
+    ///
+    /// This is the seam multi-node embeddings (e.g. fjord) use to present a
+    /// multi-broker topology: the injected view drives Metadata, the partition
+    /// leader hints, and group-coordinator routing instead of the default
+    /// single-node view derived from config.
+    pub fn with_backends_and_cluster_view(
+        config: Config,
+        storage: Arc<dyn LogBackend>,
+        offset_store: Arc<dyn OffsetStore>,
+        cluster_view: Arc<dyn ClusterView>,
+    ) -> Result<Self> {
+        let config = Arc::new(config);
+        Self::build_with_offsets(config, storage, offset_store, Some(cluster_view))
     }
 
     /// Create a new server with an externally provided log backend.
@@ -75,6 +91,7 @@ impl Server {
         config: Arc<Config>,
         storage: Arc<dyn LogBackend>,
         offset_store: Arc<dyn OffsetStore>,
+        cluster_view: Option<Arc<dyn ClusterView>>,
     ) -> Result<Self> {
         let consumer_groups = Arc::new(ConsumerGroupManager::with_offset_store(
             config.clone(),
@@ -89,7 +106,8 @@ impl Server {
             consumer_groups.offset_store().capabilities(),
             coordinator.capabilities(),
         ));
-        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let cluster_view =
+            cluster_view.unwrap_or_else(|| SingleNodeClusterView::arc_from_config(&config));
         let max_memory_bytes = config.max_memory_bytes;
 
         for spec in &config.create_topics {
@@ -416,6 +434,8 @@ async fn run_writer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consumer_group::MemoryOffsetStore;
+    use crate::storage::{BrokerInfo, ClusterViewError};
     use crate::test_support::{init_tracing, test_config, test_consumer_groups, test_storage};
     use bytes::BufMut;
     use clap::Parser;
@@ -425,6 +445,65 @@ mod tests {
     use std::task::{Context, Poll};
     use tokio::io::AsyncWriteExt;
     use tokio::io::ReadBuf;
+
+    struct FixedClusterView {
+        broker: BrokerInfo,
+        cluster_id: String,
+    }
+
+    impl ClusterView for FixedClusterView {
+        fn self_broker(&self) -> BrokerInfo {
+            self.broker.clone()
+        }
+
+        fn brokers(&self) -> Vec<BrokerInfo> {
+            vec![self.broker.clone()]
+        }
+
+        fn cluster_id(&self) -> String {
+            self.cluster_id.clone()
+        }
+
+        fn partition_leader(
+            &self,
+            _topic: &str,
+            _partition: i32,
+        ) -> std::result::Result<BrokerInfo, ClusterViewError> {
+            Ok(self.broker.clone())
+        }
+
+        fn find_coordinator(
+            &self,
+            _group_id: &str,
+        ) -> std::result::Result<BrokerInfo, ClusterViewError> {
+            Ok(self.broker.clone())
+        }
+    }
+
+    #[test]
+    fn with_backends_and_cluster_view_uses_injected_view() {
+        let config = Config::parse_from(["heimq"]);
+        let storage = test_storage(true);
+        let offset_store: Arc<dyn OffsetStore> = Arc::new(MemoryOffsetStore::new());
+        let injected: Arc<dyn ClusterView> = Arc::new(FixedClusterView {
+            broker: BrokerInfo {
+                node_id: 42,
+                host: "broker.example.test".to_string(),
+                port: 19_092,
+            },
+            cluster_id: "external-cluster".to_string(),
+        });
+
+        let server =
+            Server::with_backends_and_cluster_view(config, storage, offset_store, injected)
+                .unwrap();
+
+        let broker = server.cluster_view.self_broker();
+        assert_eq!(server.cluster_view.cluster_id(), "external-cluster");
+        assert_eq!(broker.node_id, 42);
+        assert_eq!(broker.host, "broker.example.test");
+        assert_eq!(broker.port, 19_092);
+    }
 
     struct ScriptedStream {
         data: Vec<u8>,
