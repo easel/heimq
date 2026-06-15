@@ -193,12 +193,18 @@ impl Server {
         max_connections: Option<usize>,
     ) -> Result<()> {
         let groups = self.consumer_groups.clone();
+        let storage = self.storage.clone();
+        let retention_ms = self.config.retention_ms;
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(std::time::Duration::from_millis(500));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 interval.tick().await;
                 groups.evict_expired_members();
+                // Drop record batches past their retention.ms TTL (always on),
+                // keeping in-memory usage bounded in steady state.
+                let now_ms = chrono::Utc::now().timestamp_millis();
+                storage.reclaim_expired(now_ms, retention_ms);
             }
         });
 
@@ -506,6 +512,7 @@ mod tests {
             memory_only: true,
             segment_size: 1024 * 1024,
             retention_ms: 60000,
+            max_memory_bytes: 0,
             default_partitions: 1,
             auto_create_topics: true,
             broker_id: 0,

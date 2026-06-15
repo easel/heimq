@@ -18,6 +18,7 @@ impl ErrorCode for HeimqError {
             HeimqError::InvalidOffset(_) => 1,  // OFFSET_OUT_OF_RANGE
             HeimqError::ConsumerGroup(_) => 16, // NOT_COORDINATOR
             HeimqError::Protocol(_) => 35,      // UNSUPPORTED_VERSION
+            HeimqError::StorageFull(_) => 56,   // KAFKA_STORAGE_ERROR (retriable backpressure)
             _ => -1,                                // UNKNOWN_SERVER_ERROR
         }
     }

@@ -96,6 +96,12 @@ pub trait LogBackend: Send + Sync {
     /// and auto-creates the topic when `auto_create_topics()` is set.
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
 
+    /// Drop records older than `retention_ms` across all partitions, returning the
+    /// bytes freed. Backends without time-based retention keep the no-op default.
+    fn reclaim_expired(&self, _now_ms: i64, _retention_ms: u64) -> usize {
+        0
+    }
+
     /// Fetch records starting at `offset`, up to `max_bytes`.
     fn fetch(
         &self,

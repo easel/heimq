@@ -21,6 +21,9 @@ pub struct MemoryLog {
     config: Arc<Config>,
     /// Global message counter (for debugging/diagnostics).
     total_messages: AtomicI64,
+    /// Total bytes of stored record batches across all partitions. Bounds the
+    /// memory cap and feeds backpressure.
+    total_bytes: AtomicI64,
     /// Backend capabilities descriptor.
     capabilities: BackendCapabilities,
 }
@@ -52,6 +55,7 @@ impl MemoryLog {
             topics: DashMap::new(),
             config,
             total_messages: AtomicI64::new(0),
+            total_bytes: AtomicI64::new(0),
             capabilities,
         }
     }
@@ -60,6 +64,11 @@ impl MemoryLog {
     #[allow(dead_code)]
     pub fn total_messages(&self) -> i64 {
         self.total_messages.load(Ordering::Relaxed)
+    }
+
+    /// Total bytes of stored record batches across all partitions.
+    pub fn total_bytes(&self) -> i64 {
+        self.total_bytes.load(Ordering::Relaxed)
     }
 
     fn resolve_topic_for_append(&self, name: &str) -> Result<Arc<MemoryTopicLog>> {
@@ -166,10 +175,27 @@ impl LogBackend for MemoryLog {
     }
 
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)> {
+        // Memory cap + backpressure: if accepting this batch would exceed the cap,
+        // first drop expired data; if it is still over, reject with a retriable
+        // storage error so the producer backs off. This keeps memory bounded
+        // without evicting un-expired data (preserving the retention.ms contract).
+        let cap = self.config.max_memory_bytes;
+        if cap > 0 && self.total_bytes.load(Ordering::Relaxed) as u64 + records.len() as u64 > cap {
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            self.reclaim_expired(now_ms, self.config.retention_ms);
+            if self.total_bytes.load(Ordering::Relaxed) as u64 + records.len() as u64 > cap {
+                return Err(HeimqError::StorageFull(format!(
+                    "in-memory cap {} bytes reached and no expired data to reclaim",
+                    cap
+                )));
+            }
+        }
+
         let topic = self.resolve_topic_for_append(topic_name)?;
         let partition_log = topic.get_memory_partition(partition)?;
         let (base_offset, count) = partition_log.append_raw(records);
         self.total_messages.fetch_add(count, Ordering::Relaxed);
+        self.total_bytes.fetch_add(records.len() as i64, Ordering::Relaxed);
 
         debug!(
             topic = topic_name,
@@ -180,6 +206,22 @@ impl LogBackend for MemoryLog {
         );
 
         Ok((base_offset, count))
+    }
+
+    fn reclaim_expired(&self, now_ms: i64, retention_ms: u64) -> usize {
+        let cutoff = now_ms.saturating_sub(retention_ms as i64);
+        let mut freed = 0usize;
+        for topic in self.topics.iter() {
+            for p in 0..topic.num_partitions() {
+                if let Ok(part) = topic.get_memory_partition(p) {
+                    freed += part.reclaim_expired(cutoff);
+                }
+            }
+        }
+        if freed > 0 {
+            self.total_bytes.fetch_sub(freed as i64, Ordering::Relaxed);
+        }
+        freed
     }
 
     fn fetch(
@@ -225,6 +267,7 @@ mod tests {
             memory_only: true,
             segment_size: 1024 * 1024,
             retention_ms: 60000,
+            max_memory_bytes: 0,
             default_partitions: 1,
             auto_create_topics: true,
             broker_id: 0,

@@ -28,9 +28,17 @@ pub struct Config {
     #[arg(long, default_value_t = 1024 * 1024 * 1024, env = "HEIMQ_SEGMENT_SIZE")]
     pub segment_size: u64,
 
-    /// Message retention in milliseconds (default: 7 days)
+    /// Message retention in milliseconds (default: 7 days). A background sweeper
+    /// drops record batches older than this from the in-memory log.
     #[arg(long, default_value_t = 7 * 24 * 60 * 60 * 1000, env = "HEIMQ_RETENTION_MS")]
     pub retention_ms: u64,
+
+    /// Hard cap on total in-memory record bytes (0 = unlimited). When reached, the
+    /// broker first drops expired data, then backpressures produce (retriable
+    /// KAFKA_STORAGE_ERROR) rather than evicting un-expired data or growing without
+    /// bound. Honors the retention.ms TTL contract under memory pressure.
+    #[arg(long, default_value_t = 0, env = "HEIMQ_MAX_MEMORY_BYTES")]
+    pub max_memory_bytes: u64,
 
     /// Number of partitions for auto-created topics
     #[arg(long, default_value_t = 1, env = "HEIMQ_DEFAULT_PARTITIONS")]

@@ -184,6 +184,7 @@ pub fn test_config(auto_create: bool) -> Arc<Config> {
         memory_only: true,
         segment_size: 1024 * 1024,
         retention_ms: 60_000,
+        max_memory_bytes: 0,
         default_partitions: 1,
         auto_create_topics: auto_create,
         broker_id: 0,

@@ -30,6 +30,9 @@ pub enum HeimqError {
     #[error("Storage error: {0}")]
     Storage(String),
 
+    #[error("storage full (memory cap reached): {0}")]
+    StorageFull(String),
+
     #[error("Compression error: {0}")]
     Compression(String),
 }

@@ -2,6 +2,15 @@
 
 use std::collections::BTreeMap;
 
+/// Read the `max_timestamp` field from a Kafka v2 record batch header
+/// (constant offset 35..43), if the slice is long enough.
+fn batch_max_timestamp(batch: &[u8]) -> Option<i64> {
+    if batch.len() < 43 {
+        return None;
+    }
+    batch[35..43].try_into().ok().map(i64::from_be_bytes)
+}
+
 /// A segment is a portion of the partition log
 ///
 /// For simplicity and speed, we store raw record batches in memory
@@ -42,6 +51,33 @@ impl Segment {
     pub fn append(&mut self, offset: i64, data: Vec<u8>) {
         self.size += data.len();
         self.batches.insert(offset, data);
+    }
+
+    /// Lowest batch base-offset still present, if any.
+    pub fn first_offset(&self) -> Option<i64> {
+        self.batches.keys().next().copied()
+    }
+
+    /// Drop the leading (oldest) batches whose `max_timestamp` is older than
+    /// `cutoff_ms`, returning the number of bytes freed. Batches are stored in
+    /// ascending offset order, which is also produce-time order, so dropping from
+    /// the front retires exactly the expired prefix. A batch with no usable
+    /// timestamp (header too short, or <= 0) is treated as not-yet-expired.
+    pub fn reclaim_expired(&mut self, cutoff_ms: i64) -> usize {
+        let expired: Vec<i64> = self
+            .batches
+            .iter()
+            .take_while(|(_, b)| batch_max_timestamp(b).map_or(false, |ts| ts > 0 && ts < cutoff_ms))
+            .map(|(&k, _)| k)
+            .collect();
+        let mut freed = 0;
+        for k in expired {
+            if let Some(b) = self.batches.remove(&k) {
+                freed += b.len();
+            }
+        }
+        self.size -= freed;
+        freed
     }
 
     /// Read record batches starting from the given offset
