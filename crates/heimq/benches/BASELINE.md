@@ -19,12 +19,12 @@ Knobs (env): `BENCH_RECORDS` (default 100000), `BENCH_RECORD_SIZE` (default 256)
 
 | Metric | Value |
 |--------|-------|
-| Produce throughput | **543,851 msgs/s** · 132.8 MB/s |
-| Consume throughput | **177,790 msgs/s** · 43.4 MB/s |
-| Produce-ack latency p50 | **6.52 ms** |
-| Produce-ack latency p99 | **8.57 ms** |
+| Produce throughput | **2,002,703 msgs/s** · 488.9 MB/s |
+| Consume throughput | **185,235 msgs/s** · 45.2 MB/s |
+| Produce-ack latency p50 | **5.50 ms** |
+| Produce-ack latency p99 | **6.75 ms** |
 
-- **heimq commit:** `934a894` (broker state benchmarked)
+- **heimq commit:** `32d19f9` (broker state benchmarked)
 - **Workload:** 100,000 records × 256 B, single topic / single partition, `acks=1`
 - **Produce:** pipelined `BaseProducer` (batch 10k, linger 5ms) to flush
 - **Consume:** `BaseConsumer` with direct partition assign (no group rebalance)
