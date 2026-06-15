@@ -1,0 +1,51 @@
+# Number of heimq broker pods. heimq is currently single-node; use one replica
+# unless you are running independent brokers behind separate client routing.
+replicaCount: 1
+
+image:
+  # Docker image repository published by the docker-image workflow.
+  repository: ghcr.io/easel/heimq
+  # Defaults to the chart appVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+service:
+  # ClusterIP is the development-safe default. Use LoadBalancer or NodePort only
+  # when exposing the Kafka listener outside the cluster.
+  type: ClusterIP
+  port: 9092
+  annotations: {}
+
+heimq:
+  # Defaults are intentionally development-oriented: a memory-only single broker.
+  host: 0.0.0.0
+  memoryOnly: true
+  retentionMs: 604800000
+  maxMemoryBytes: 0
+  defaultPartitions: 1
+  autoCreateTopics: true
+  brokerId: 0
+  clusterId: heimq-cluster
+  advertisedHost: ""
+  createTopics: []
+  metrics:
+    enabled: false
+    port: 9093
+
+resources: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

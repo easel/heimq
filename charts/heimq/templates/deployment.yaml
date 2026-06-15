@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "heimq.fullname" . }}
+  labels:
+    {{- include "heimq.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "heimq.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "heimq.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "heimq.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: heimq
+          image: "{{ .Values.image.repository }}:{{ default .Chart.AppVersion .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: kafka
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+            {{- if .Values.heimq.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.heimq.metrics.port }}
+              protocol: TCP
+            {{- end }}
+          env:
+            - name: HEIMQ_HOST
+              value: {{ .Values.heimq.host | quote }}
+            - name: HEIMQ_PORT
+              value: {{ .Values.service.port | int64 | quote }}
+            - name: HEIMQ_MEMORY_ONLY
+              value: {{ .Values.heimq.memoryOnly | quote }}
+            - name: HEIMQ_RETENTION_MS
+              value: {{ .Values.heimq.retentionMs | int64 | quote }}
+            - name: HEIMQ_MAX_MEMORY_BYTES
+              value: {{ .Values.heimq.maxMemoryBytes | int64 | quote }}
+            - name: HEIMQ_DEFAULT_PARTITIONS
+              value: {{ .Values.heimq.defaultPartitions | int64 | quote }}
+            - name: HEIMQ_AUTO_CREATE_TOPICS
+              value: {{ .Values.heimq.autoCreateTopics | quote }}
+            - name: HEIMQ_BROKER_ID
+              value: {{ .Values.heimq.brokerId | int64 | quote }}
+            - name: HEIMQ_CLUSTER_ID
+              value: {{ .Values.heimq.clusterId | quote }}
+            - name: HEIMQ_METRICS
+              value: {{ .Values.heimq.metrics.enabled | quote }}
+            - name: HEIMQ_METRICS_PORT
+              value: {{ .Values.heimq.metrics.port | int64 | quote }}
+            {{- if .Values.heimq.advertisedHost }}
+            - name: HEIMQ_ADVERTISED_HOST
+              value: {{ .Values.heimq.advertisedHost | quote }}
+            {{- end }}
+            {{- if .Values.heimq.createTopics }}
+            - name: HEIMQ_CREATE_TOPICS
+              value: {{ join "," .Values.heimq.createTopics | quote }}
+            {{- end }}
+          readinessProbe:
+            tcpSocket:
+              port: kafka
+          livenessProbe:
+            tcpSocket:
+              port: kafka
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
