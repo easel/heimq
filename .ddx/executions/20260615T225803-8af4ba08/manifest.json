@@ -1,0 +1,61 @@
+{
+  "attempt_id": "20260615T225803-8af4ba08",
+  "bead_id": "heimq-bfcad6eb",
+  "base_rev": "ea884d45f26c0691f53c92c2739891a005800c1a",
+  "created_at": "2026-06-15T22:58:03.755955157Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-bfcad6eb",
+    "title": "Add GitHub Actions binary release artifacts",
+    "description": "Add a GitHub Actions workflow that builds distributable heimq binaries. The workflow should support workflow_dispatch and tag pushes (for example v*), build the heimq binary in release mode, upload artifacts with clear names, and produce SHA256 checksums. Prefer a small matrix that at least covers Linux x86_64; add macOS/aarch64 only if the repo already has an established cross-build pattern or the implementation can validate it cleanly. Keep this focused on binaries, not containers.\n\nIn-scope files:\n- .github/workflows/release-binaries.yml (new)\n- scripts/release/* or packaging/* only if needed for reusable checksum/archive steps\n- crates/heimq/README.md only if it needs a short artifact download note\n\nOut-of-scope:\n- Docker image build/publish.\n- Helm chart work.\n- Publishing a GitHub Release unless this can be done with a standard action and is fully documented.",
+    "acceptance": "1. `cargo build -p heimq --release` passes.\n2. `test -x target/release/heimq \u0026\u0026 sh -c 'if command -v sha256sum \u003e/dev/null 2\u003e\u00261; then sha256sum target/release/heimq; else shasum -a 256 target/release/heimq; fi'` prints a checksum for the built binary.\n3. `test -f .github/workflows/release-binaries.yml \u0026\u0026 rg -n \"workflow_dispatch|tags:|upload-artifact|sha256|cargo build -p heimq --release|target/release/heimq\" .github/workflows/release-binaries.yml` confirms dispatch/tag triggers, artifact upload, checksum handling, and the release build command are present.",
+    "parent": "heimq-970e8aeb",
+    "labels": [
+      "area:ci",
+      "area:release",
+      "kind:packaging",
+      "github-actions",
+      "ac-quality:needs-refinement"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "",
+          "body": "[{\"ac\":1,\"text\":\"`cargo build -p heimq --release` passes.\",\"kind\":\"command\",\"verifiable\":true},{\"ac\":2,\"text\":\"A local checksum command equivalent to the workflow step works for target/release/heimq, for example `shasum -a 256 target/release/heimq` on macOS or `sha256sum target/release/heimq` on Linux.\",\"kind\":\"prose\",\"verifiable\":false},{\"ac\":3,\"text\":\"`.github/workflows/release-binaries.yml` has workflow_dispatch and tag-push triggers, uploads a binary artifact, and uploads or prints SHA256 checksums.\",\"kind\":\"prose\",\"verifiable\":false}]",
+          "created_at": "2026-06-15T22:50:21.49306474Z",
+          "kind": "ac-quality-low",
+          "source": "preclaim-ac-quality",
+          "summary": "score=0.33 threshold=0.50 verifiable=1/3"
+        },
+        {
+          "actor": "",
+          "body": "[{\"ac\":1,\"text\":\"`cargo build -p heimq --release` passes.\",\"kind\":\"command\",\"verifiable\":true},{\"ac\":2,\"text\":\"`test -x target/release/heimq \\u0026\\u0026 sh -c 'if command -v sha256sum \\u003e/dev/null 2\\u003e\\u00261; then sha256sum target/release/heimq; else shasum -a 256 target/release/heimq; fi'` prints a checksum for the built binary.\",\"kind\":\"prose\",\"verifiable\":false},{\"ac\":3,\"text\":\"`test -f .github/workflows/release-binaries.yml \\u0026\\u0026 rg -n \\\"workflow_dispatch|tags:|upload-artifact|sha256|cargo build -p heimq --release|target/release/heimq\\\" .github/workflows/release-binaries.yml` confirms dispatch/tag triggers, artifact upload, checksum handling, and the release build command are present.\",\"kind\":\"prose\",\"verifiable\":false}]",
+          "created_at": "2026-06-15T22:53:04.667149684Z",
+          "kind": "ac-quality-low",
+          "source": "preclaim-ac-quality",
+          "summary": "score=0.33 threshold=0.50 verifiable=1/3"
+        },
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead heimq-bfcad6eb\",\"fingerprint\":\"e67a4ad6ffeb80f7af8cce6a9c011bb62d5b21a043aa6b0fd1f684bc73150ff4\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"e67a4ad6ffeb80f7af8cce6a9c011bb62d5b21a043aa6b0fd1f684bc73150ff4\"}",
+          "created_at": "2026-06-15T22:56:07.642156026Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260615T225803-8af4ba08",
+    "prompt": ".ddx/executions/20260615T225803-8af4ba08/prompt.md",
+    "manifest": ".ddx/executions/20260615T225803-8af4ba08/manifest.json",
+    "result": ".ddx/executions/20260615T225803-8af4ba08/result.json",
+    "checks": ".ddx/executions/20260615T225803-8af4ba08/checks.json",
+    "usage": ".ddx/executions/20260615T225803-8af4ba08/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-bfcad6eb-20260615T225803-8af4ba08"
+  },
+  "prompt_sha": "ba002bc2e5c6a1ec9583433fda91db7517ed14e418ef79c637806464444407d9"
+}
