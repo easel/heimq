@@ -31,11 +31,26 @@ pub fn handle(
     let self_broker = cluster_view.self_broker();
     let mut response = MetadataResponse::default();
 
-    let mut broker = MetadataResponseBroker::default();
-    broker.node_id = BrokerId(self_broker.node_id);
-    broker.host = StrBytes::from_string(self_broker.host.clone());
-    broker.port = self_broker.port as i32;
-    response.brokers.push(broker);
+    // Advertise the full cluster topology from the ClusterView. For a
+    // single-node view this is just self; for a multi-node embedding (fjord)
+    // this is every broker, so clients can spread connections across them.
+    for b in cluster_view.brokers() {
+        let mut broker = MetadataResponseBroker::default();
+        broker.node_id = BrokerId(b.node_id);
+        broker.host = StrBytes::from_string(b.host.clone());
+        broker.port = b.port as i32;
+        response.brokers.push(broker);
+    }
+
+    // Presented leader for a partition, from the ClusterView's (balanced)
+    // assignment. Falls back to self if the view cannot resolve one — any
+    // broker can serve, so self is always a safe answer.
+    let leader_for = |topic: &str, partition: i32| -> i32 {
+        cluster_view
+            .partition_leader(topic, partition)
+            .map(|b| b.node_id)
+            .unwrap_or(self_broker.node_id)
+    };
 
     if api_version >= 2 {
         response.cluster_id = Some(StrBytes::from_string(cluster_view.cluster_id()));
@@ -78,9 +93,10 @@ pub fn handle(
             let mut partition = MetadataResponsePartition::default();
             partition.partition_index = partition_id;
             partition.error_code = 0;
-            partition.leader_id = BrokerId(self_broker.node_id);
-            partition.replica_nodes = vec![BrokerId(self_broker.node_id)];
-            partition.isr_nodes = vec![BrokerId(self_broker.node_id)];
+            let leader = leader_for(topic_name, partition_id);
+            partition.leader_id = BrokerId(leader);
+            partition.replica_nodes = vec![BrokerId(leader)];
+            partition.isr_nodes = vec![BrokerId(leader)];
             topic.partitions.push(partition);
         }
         response.topics.push(topic);
@@ -96,15 +112,16 @@ pub fn handle(
                         let topic =
                             storage.get_or_create_topic(&s, storage.default_num_partitions());
                         let mut topic_meta = MetadataResponseTopic::default();
-                        topic_meta.name = Some(TopicName(StrBytes::from_string(s)));
+                        topic_meta.name = Some(TopicName(StrBytes::from_string(s.clone())));
                         topic_meta.error_code = 0;
                         for partition_id in 0..topic.num_partitions() {
                             let mut partition = MetadataResponsePartition::default();
                             partition.partition_index = partition_id;
                             partition.error_code = 0;
-                            partition.leader_id = BrokerId(self_broker.node_id);
-                            partition.replica_nodes = vec![BrokerId(self_broker.node_id)];
-                            partition.isr_nodes = vec![BrokerId(self_broker.node_id)];
+                            let leader = leader_for(&s, partition_id);
+                            partition.leader_id = BrokerId(leader);
+                            partition.replica_nodes = vec![BrokerId(leader)];
+                            partition.isr_nodes = vec![BrokerId(leader)];
                             topic_meta.partitions.push(partition);
                         }
                         response.topics.push(topic_meta);
