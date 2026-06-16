@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260616T222516-2a9c0237",
+  "bead_id": "heimq-9928e555",
+  "base_rev": "936111e8cf84f567f15b8de94923d0d6e5e5d480",
+  "created_at": "2026-06-16T22:25:17.366945588Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-9928e555",
+    "title": "Harden Docker image release workflow and smoke test",
+    "description": "Harden Docker release behavior from docs/release/release-infrastructure-plan.md. Current state: .github/workflows/docker-image.yml publishes a GHCR image for v* tags and manual dispatch, but does not publish the normalized semver tag set, smoke-test Kafka usability, or document digest/provenance. In-scope files: .github/workflows/docker-image.yml, Dockerfile if needed, scripts/* if a smoke helper is added, docs/release/* if needed. Out of scope: GitHub binary release, Helm chart publishing, microsite content.",
+    "acceptance": "1. `.github/workflows/docker-image.yml` publishes tags `vX.Y.Z`, `X.Y.Z`, `X.Y`, `X`, and `latest` only for stable release tags.\n2. `grep -q \"ghcr.io/easel/heimq\" .github/workflows/docker-image.yml README.md charts/heimq/values.yaml` passes after this bead or a documented dynamic equivalent is used in workflow code.\n3. The Docker workflow includes a built-image smoke test that verifies Kafka metadata or produce/fetch behavior, not just TCP readiness.\n4. `docker build -t heimq:local .` passes.\n5. `cargo fmt --all -- --check` passes.",
+    "parent": "heimq-46fe0670",
+    "labels": [
+      "area:ci",
+      "area:docker",
+      "kind:task",
+      "release-infra"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260616T222516-2a9c0237",
+    "prompt": ".ddx/executions/20260616T222516-2a9c0237/prompt.md",
+    "manifest": ".ddx/executions/20260616T222516-2a9c0237/manifest.json",
+    "result": ".ddx/executions/20260616T222516-2a9c0237/result.json",
+    "checks": ".ddx/executions/20260616T222516-2a9c0237/checks.json",
+    "usage": ".ddx/executions/20260616T222516-2a9c0237/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-9928e555-20260616T222516-2a9c0237"
+  },
+  "prompt_sha": "995304424350b75d97ca4aee2f0d2b1fbb35016b159e35f8efd645b3b3e06cbf"
+}
