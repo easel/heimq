@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
-FROM rust:1.85-bookworm AS builder
+# Keep the builder image aligned with rust-toolchain.toml.
+FROM rust:1.85.1-bookworm AS builder
 
 WORKDIR /app
 

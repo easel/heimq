@@ -117,13 +117,11 @@ impl Segment {
         // Pre-compute total bytes so we can allocate once instead of reallocating
         // as extend_from_slice grows the Vec.
         let mut capacity = 0usize;
-        let mut selected = 0usize;
         for (_, batch) in self.batches.range(first_key..) {
-            if capacity + batch.len() > max_bytes && selected > 0 {
+            if capacity + batch.len() > max_bytes && capacity > 0 {
                 break;
             }
             capacity += batch.len();
-            selected += 1;
         }
 
         let mut result = Vec::with_capacity(capacity);

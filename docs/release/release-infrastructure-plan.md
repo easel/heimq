@@ -42,8 +42,22 @@ Evidence from the repository on 2026-06-16:
   is no chart lint/package/publish workflow.
 - No `site/`, `website/`, `mkdocs.yml`, `docusaurus.config.*`, `astro.config.*`,
   or `package.json` exists for a microsite.
-- `Cargo.lock` exists. No `rust-toolchain.toml`, `Makefile`, `justfile`,
-  `compose.yml`, or `.devcontainer` exists at the repository root.
+- `Cargo.lock` exists. `rust-toolchain.toml` and `justfile` now exist; there
+  is still no `Makefile`, `compose.yml`, or `.devcontainer` at the repository
+  root.
+
+## Base Contract
+
+This repository treats the following as the baseline for release work:
+
+- canonical repository: `easel/heimq`;
+- Rust toolchain: `1.85.1` with `clippy` and `rustfmt`;
+- Docker builder image: `rust:1.85.1-bookworm`;
+- local command surface: `fmt`, `clippy`, `test`, `ci`, `docker-build`,
+  `helm-check`, `bench-smoke`, and `parity`;
+- release tag mapping: `vX.Y.Z` -> binary `X.Y.Z` -> Docker
+  `vX.Y.Z` / `X.Y.Z` / `X.Y` / `X` -> Helm chart `version = X.Y.Z` and
+  `appVersion = X.Y.Z`.
 
 ## Scope
 

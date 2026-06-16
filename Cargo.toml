@@ -12,7 +12,7 @@ edition = "2021"
 rust-version = "1.85"
 authors = ["heimq contributors"]
 license = "MIT"
-repository = "https://github.com/heimq/heimq"
+repository = "https://github.com/easel/heimq"
 
 # Pinned fork of kafka-protocol 0.15.1 that bounds Array/CompactArray decode
 # pre-allocation to the remaining buffer (fixes a remotely-triggerable OOM DoS:
