@@ -1,0 +1,51 @@
+{
+  "attempt_id": "20260616T043919-0e1318c2",
+  "bead_id": "heimq-1684b32e",
+  "base_rev": "d2b59e6602e9b47fc3a24947bdbb59c14a36fad4",
+  "created_at": "2026-06-16T04:39:20.219502047Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-1684b32e",
+    "title": "Avoid double decoding Fetch requests on the hot path",
+    "description": "Fetch requests currently take an avoidable double-decode path. Router::route_async decodes the request header and then handle_fetch_long_poll decodes the FetchRequest to inspect max_wait_ms and requested offsets. When data is available it calls route(data), which decodes the header again and fetch::handle decodes the FetchRequest again. This is cheap per request but visible when consume issues many fetches. Refactor the fetch route so the decoded header/body and, where possible, decoded FetchRequest metadata are reused instead of decoding the same frame multiple times. Preserve max_wait_ms long-poll behavior and existing wire compatibility.\n\nIn-scope files:\n- crates/heimq/src/protocol/router.rs\n- crates/heimq/src/handler/fetch.rs\n- crates/heimq/src/handler/tests.rs or existing focused tests, if needed\n- crates/heimq/tests/bench_baseline.rs only if needed to keep diagnostics compiling\n\nOut-of-scope:\n- Changing Kafka Fetch response semantics.\n- Storage layout or copy-reduction work.\n- Consumer group rebalance behavior.",
+    "acceptance": "1. `cargo test -p heimq fetch --lib` passes.\n2. `cargo test -p heimq --test integration test_rdkafka_produce_consume_roundtrip -- --ignored --nocapture` passes.\n3. `BENCH_RECORDS=1000 BENCH_LATENCY_SAMPLES=10 BENCH_DIAGNOSTICS=1 cargo test -p heimq --release --test bench_baseline -- --ignored --nocapture` passes and still reports consume diagnostics.",
+    "parent": "heimq-c06bb2b9",
+    "labels": [
+      "area:protocol",
+      "area:performance",
+      "kind:optimization"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "worker-20260616T043521-7139",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead heimq-1684b32e\",\"fingerprint\":\"fc2983fc4700685f935579aa963c73d6ca54bd3cf7ca3b0b85e646d950230efc\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"fc2983fc4700685f935579aa963c73d6ca54bd3cf7ca3b0b85e646d950230efc\"}",
+          "created_at": "2026-06-16T04:37:19.064196717Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "crates/heimq/docs/helix/01-frame/features/FEAT-004-benchmark-conformance.md",
+      "title": "Feature Specification: FEAT-004 — Standard Kafka Benchmark Conformance"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260616T043919-0e1318c2",
+    "prompt": ".ddx/executions/20260616T043919-0e1318c2/prompt.md",
+    "manifest": ".ddx/executions/20260616T043919-0e1318c2/manifest.json",
+    "result": ".ddx/executions/20260616T043919-0e1318c2/result.json",
+    "checks": ".ddx/executions/20260616T043919-0e1318c2/checks.json",
+    "usage": ".ddx/executions/20260616T043919-0e1318c2/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-1684b32e-20260616T043919-0e1318c2"
+  },
+  "prompt_sha": "0490bed749d5fd926afdde70f7d16b32dd4b364a281a37a1fca3259e3855f621"
+}
