@@ -1,0 +1,44 @@
+{
+  "attempt_id": "20260616T221737-c6ba36d7",
+  "bead_id": "heimq-0b91e9b2",
+  "base_rev": "53b6c1762bf824a76f05b2c43ebf7ed3dc24a0d6",
+  "created_at": "2026-06-16T22:17:38.953308731Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-0b91e9b2",
+    "title": "Publish release binaries as GitHub Releases",
+    "description": "Upgrade .github/workflows/release-binaries.yml according to docs/release/release-infrastructure-plan.md. Current state: release-binaries.yml runs on v* tags and workflow_dispatch but only uploads a Linux x86_64 Actions artifact, with permissions contents: read. test.yml does not run on tags. Implement tag-triggered validation before publishing and create a real GitHub Release with binary, SHA256 checksum, and release notes. In-scope files: .github/workflows/release-binaries.yml, docs/release/* if needed, README links only if needed for release URLs. Out of scope: Docker image publishing, Helm chart publishing, microsite.",
+    "acceptance": "1. `grep -q \"softprops/action-gh-release\" .github/workflows/release-binaries.yml` or equivalent GitHub Release creation action/API usage exists.\n2. `grep -q \"contents: write\" .github/workflows/release-binaries.yml` passes.\n3. The workflow contains a validation job that runs `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace --all-targets` before release artifact publication.\n4. The workflow packages `target/release/heimq` as `heimq-linux-x86_64` and writes a SHA256 checksum.\n5. `cargo fmt --all -- --check` passes.\n6. `cargo test --workspace --all-targets` passes.",
+    "parent": "heimq-46fe0670",
+    "labels": [
+      "area:ci",
+      "area:release",
+      "kind:task",
+      "release-infra"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness check timed out after 1s (heimq-0b91e9b2)\",\"fingerprint\":\"14ddd73d6ead94996dc031f7a0fbdd043550f716bfc8d50722424a8bf835d983\",\"policy_mode\":\"warn-only\",\"reason\":\"timeout\",\"rule_id\":\"pre_claim_intake.timeout\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"14ddd73d6ead94996dc031f7a0fbdd043550f716bfc8d50722424a8bf835d983\"}",
+          "created_at": "2026-06-16T22:15:37.211120504Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "timeout"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260616T221737-c6ba36d7",
+    "prompt": ".ddx/executions/20260616T221737-c6ba36d7/prompt.md",
+    "manifest": ".ddx/executions/20260616T221737-c6ba36d7/manifest.json",
+    "result": ".ddx/executions/20260616T221737-c6ba36d7/result.json",
+    "checks": ".ddx/executions/20260616T221737-c6ba36d7/checks.json",
+    "usage": ".ddx/executions/20260616T221737-c6ba36d7/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-0b91e9b2-20260616T221737-c6ba36d7"
+  },
+  "prompt_sha": "e10690decf4b45f6121f02a39948d1eeffa325208a0b51a3baaa4409ee686d3f"
+}
