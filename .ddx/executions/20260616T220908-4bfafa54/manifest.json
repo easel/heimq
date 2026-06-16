@@ -1,0 +1,60 @@
+{
+  "attempt_id": "20260616T220908-4bfafa54",
+  "bead_id": "heimq-4a2aaee2",
+  "base_rev": "d786d5c402d022d64cad9f7c3f30ce80428241d3",
+  "created_at": "2026-06-16T22:09:09.266592741Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-4a2aaee2",
+    "title": "Define release contract and reproducible local command surface",
+    "description": "Implement the base contract from docs/release/release-infrastructure-plan.md before release publishing work. Current repo evidence: Cargo.toml repository is https://github.com/heimq/heimq but origin is https://github.com/easel/heimq; there is no rust-toolchain.toml; there is no justfile or Makefile; Dockerfile uses rust:1.85-bookworm; workflows use dtolnay/rust-toolchain@stable. In-scope files: Cargo.toml, rust-toolchain.toml, Dockerfile, justfile or Makefile, docs/release/release-infrastructure-plan.md. Required decisions: canonical repository is easel/heimq; Rust toolchain pin is 1.85.1 with clippy/rustfmt; release tag mapping is vX.Y.Z -\u003e binary X.Y.Z -\u003e Docker vX.Y.Z/X.Y.Z/X.Y/X -\u003e Helm chart version X.Y.Z and appVersion X.Y.Z. Out of scope: GitHub Release creation, Docker publishing workflow, Helm publishing workflow, README, microsite.",
+    "acceptance": "1. `grep -Fq 'channel = \"1.85.1\"' rust-toolchain.toml` passes and rust-toolchain.toml includes clippy and rustfmt.\n2. `grep -Fq 'repository = \"https://github.com/easel/heimq\"' Cargo.toml` passes.\n3. `grep -Fq 'rust:1.85.1-bookworm' Dockerfile` passes or Dockerfile documents an equivalent digest-pinned builder image.\n4. `just --list` or `make -n ci` shows fmt, clippy, test, ci, docker-build, helm-check, bench-smoke, and parity targets.\n5. `cargo fmt --all -- --check` passes.\n6. `cargo clippy --workspace --all-targets -- -D warnings` passes.\n7. `cargo test --workspace --all-targets` passes.\n8. `helm lint charts/heimq` and `helm template heimq charts/heimq` pass.",
+    "parent": "heimq-46fe0670",
+    "labels": [
+      "area:release",
+      "area:test-infra",
+      "kind:task",
+      "release-infra"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "",
+          "body": "[{\"ac\":1,\"text\":\"rust-toolchain.toml pins Rust 1.85.1 with clippy and rustfmt. 2. Cargo.toml repository metadata uses https://github.com/easel/heimq. 3. Dockerfile builder image aligns with the pinned Rust version or documents an equivalent digest-pinned choice. 4. A justfile or Makefile exposes fmt, clippy, test, ci, docker-build, helm-check, bench-smoke, and parity targets. 5. cargo fmt --all -- --check passes. 6. cargo clippy --workspace --all-targets -- -D warnings passes. 7. cargo test --workspace --all-targets passes. 8. helm lint charts/heimq and helm template heimq charts/heimq pass.\",\"kind\":\"prose\",\"verifiable\":false}]",
+          "created_at": "2026-06-16T21:56:26.562397707Z",
+          "kind": "ac-quality-low",
+          "source": "preclaim-ac-quality",
+          "summary": "score=0.00 threshold=0.50 verifiable=0/1"
+        },
+        {
+          "actor": "worker-20260616T215626-e8f3",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead heimq-4a2aaee2\",\"fingerprint\":\"e1e094cc4468f666e00fd41760ad8fb8285896ebfa98b10ee8b83e87838f30db\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"e1e094cc4468f666e00fd41760ad8fb8285896ebfa98b10ee8b83e87838f30db\"}",
+          "created_at": "2026-06-16T21:57:08.485029289Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "worker-20260616T220000-22ed",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead heimq-4a2aaee2\",\"fingerprint\":\"e1e094cc4468f666e00fd41760ad8fb8285896ebfa98b10ee8b83e87838f30db\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"e1e094cc4468f666e00fd41760ad8fb8285896ebfa98b10ee8b83e87838f30db\"}",
+          "created_at": "2026-06-16T22:03:53.79469694Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260616T220908-4bfafa54",
+    "prompt": ".ddx/executions/20260616T220908-4bfafa54/prompt.md",
+    "manifest": ".ddx/executions/20260616T220908-4bfafa54/manifest.json",
+    "result": ".ddx/executions/20260616T220908-4bfafa54/result.json",
+    "checks": ".ddx/executions/20260616T220908-4bfafa54/checks.json",
+    "usage": ".ddx/executions/20260616T220908-4bfafa54/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-4a2aaee2-20260616T220908-4bfafa54"
+  },
+  "prompt_sha": "248bd74cb42e7e5d4e258cb07182d0ebed3ee295a08bf1dbe42d16023a22a9cb"
+}
