@@ -103,9 +103,6 @@ impl Segment {
 
     /// Read record batches starting from the given offset
     pub fn read(&self, start_offset: i64, max_bytes: usize) -> Vec<u8> {
-        let mut result = Vec::new();
-        let mut bytes_read = 0;
-
         // Step back one entry so we include the batch that contains start_offset
         // when start_offset falls mid-batch (base_offset < start_offset but the
         // batch spans records up to or past start_offset).  The consumer is
@@ -116,6 +113,21 @@ impl Segment {
             .next_back()
             .map(|(&k, _)| k)
             .unwrap_or(start_offset);
+
+        // Pre-compute total bytes so we can allocate once instead of reallocating
+        // as extend_from_slice grows the Vec.
+        let mut capacity = 0usize;
+        let mut selected = 0usize;
+        for (_, batch) in self.batches.range(first_key..) {
+            if capacity + batch.len() > max_bytes && selected > 0 {
+                break;
+            }
+            capacity += batch.len();
+            selected += 1;
+        }
+
+        let mut result = Vec::with_capacity(capacity);
+        let mut bytes_read = 0;
 
         for (_offset, batch) in self.batches.range(first_key..) {
             if bytes_read + batch.len() > max_bytes && !result.is_empty() {
