@@ -1,0 +1,57 @@
+{
+  "bead_id": "heimq-ea88c9d3",
+  "attempt_id": "20260616T045032-2a2803f1",
+  "base_rev": "d80271ec367ab2ad8e0483265a0449fb89dd973d",
+  "result_rev": "d11dc0eee5b464f2bb5949ac89222602a9a493c1",
+  "implementation_rev": "d11dc0eee5b464f2bb5949ac89222602a9a493c1",
+  "outcome": "task_succeeded",
+  "status": "success",
+  "detail": "success",
+  "candidate_ref": "refs/ddx/iterations/20260616T045032-2a2803f1/0",
+  "cycle_trace": [
+    {
+      "cycle_index": 0,
+      "attempt_id": "20260616T045032-2a2803f1",
+      "result_rev": "d11dc0eee5b464f2bb5949ac89222602a9a493c1",
+      "implementer_route": {
+        "harness": "claude-tui",
+        "model": "sonnet-4.6"
+      },
+      "requested_route": {
+        "harness": "claude-tui",
+        "model": "sonnet-4.6"
+      },
+      "actual_route": {
+        "harness": "claude-tui",
+        "model": "sonnet-4.6"
+      },
+      "review_result": {},
+      "final_decision": "success",
+      "failure_class": "none",
+      "retry_action": "close",
+      "escalation_count": 0,
+      "review_status": "skipped",
+      "review_skip_reason": "review_not_configured",
+      "review_classification": "review_skipped",
+      "land_status": "landed",
+      "reconcile_status": "not_applicable"
+    }
+  ],
+  "harness": "claude-tui",
+  "model": "sonnet-4.6",
+  "predicted_power": 8,
+  "predicted_cost_usd_per_1k_tokens": 0.009,
+  "predicted_cost_source": "subscription",
+  "session_id": "eb-3851f9fb",
+  "duration_ms": 148735,
+  "exit_code": 0,
+  "project_root": "/Users/erik/Projects/heimq",
+  "execution_dir": ".ddx/executions/20260616T045032-2a2803f1",
+  "prompt_file": ".ddx/executions/20260616T045032-2a2803f1/prompt.md",
+  "manifest_file": ".ddx/executions/20260616T045032-2a2803f1/manifest.json",
+  "result_file": ".ddx/executions/20260616T045032-2a2803f1/result.json",
+  "usage_file": ".ddx/executions/20260616T045032-2a2803f1/usage.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-06-16T04:50:33.057749838Z",
+  "finished_at": "2026-06-16T04:53:01.793534072Z"
+}
