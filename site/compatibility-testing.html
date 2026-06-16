@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>heimq | Compatibility and testing</title>
+    <meta name="description" content="Compatibility scope, test commands, and known limits for heimq." />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="shell topbar">
+        <header class="masthead">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            heimq
+          </div>
+          <nav class="nav" aria-label="Primary">
+            <a href="index.html">Overview</a>
+            <a href="quickstart.html">Quick start</a>
+            <a href="deployment.html">Deployment</a>
+            <a href="compatibility-testing.html" aria-current="page">Compatibility / testing</a>
+            <a href="architecture.html">Architecture</a>
+          </nav>
+        </header>
+      </div>
+
+      <main class="shell">
+        <section class="hero">
+          <div class="eyebrow">Compatibility and testing</div>
+          <h1>Compatibility is proven by tests, not by wishful claims.</h1>
+          <p class="lede">
+            heimq is aimed at the protocol flows used by the checked-in suites and
+            smoke tests. The project keeps the compatibility surface explicit so the
+            limits stay visible.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="two-col">
+            <div>
+              <div class="tag">Coverage</div>
+              <h2>What is validated</h2>
+              <ul>
+                <li>Format, clippy, and workspace tests in CI.</li>
+                <li>Producer/consumer smoke flows against the local broker.</li>
+                <li>Container smoke validation for the release image.</li>
+                <li>Helm rendering and linting for the chart.</li>
+              </ul>
+            </div>
+            <aside class="panel">
+              <h2>Useful commands</h2>
+              <pre><code>cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace --all-targets
+just bench-smoke
+just parity</code></pre>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="tag">Limits</div>
+          <h2>Known constraints</h2>
+          <ul>
+            <li>Single-node only; no replication or controller quorum.</li>
+            <li>Memory-first operation; persistence is intentionally narrow.</li>
+            <li>Security protocols such as SASL and TLS are not enabled by default.</li>
+            <li>Kafka compatibility is bounded by the suites and fixtures in this repository.</li>
+          </ul>
+          <div class="callout alt" style="margin-top: 18px;">
+            The README and this site are aligned on the same install commands, so a
+            command that works here should work in the repository root as well.
+          </div>
+        </section>
+      </main>
+
+      <div class="shell footer">
+        <div>Compatibility guidance mirrors <a href="https://github.com/easel/heimq/blob/main/README.md">README.md</a>.</div>
+        <div>Validation plan: <a href="https://github.com/easel/heimq/blob/main/docs/release/release-infrastructure-plan.md">release infrastructure plan</a>.</div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>heimq | Deployment</title>
+    <meta name="description" content="Where heimq binaries, images, charts, and pages are published." />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="shell topbar">
+        <header class="masthead">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            heimq
+          </div>
+          <nav class="nav" aria-label="Primary">
+            <a href="index.html">Overview</a>
+            <a href="quickstart.html">Quick start</a>
+            <a href="deployment.html" aria-current="page">Deployment</a>
+            <a href="compatibility-testing.html">Compatibility / testing</a>
+            <a href="architecture.html">Architecture</a>
+          </nav>
+        </header>
+      </div>
+
+      <main class="shell">
+        <section class="hero">
+          <div class="eyebrow">Deployment</div>
+          <h1>Release artifacts land in GitHub Releases, GHCR, OCI, and Pages.</h1>
+          <p class="lede">
+            The repository uses a small number of predictable publish targets so the
+            release story stays easy to verify and explain.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="two-col">
+            <div>
+              <div class="tag">Artifacts</div>
+              <h2>What publishes where</h2>
+              <ul>
+                <li><strong>Binary release:</strong> <code>.github/workflows/release-binaries.yml</code> attaches the Linux x86_64 binary and checksum to a GitHub Release.</li>
+                <li><strong>Docker image:</strong> <code>.github/workflows/docker-image.yml</code> publishes tagged images to <code>ghcr.io/easel/heimq</code>.</li>
+                <li><strong>Helm chart:</strong> <code>.github/workflows/helm-chart.yml</code> packages and pushes <code>oci://ghcr.io/easel/charts/heimq</code>.</li>
+                <li><strong>Docs site:</strong> <code>.github/workflows/pages.yml</code> publishes the checked-in <code>site/</code> directory on pushes to <code>main</code>.</li>
+              </ul>
+            </div>
+            <aside class="panel">
+              <h2>Release tags</h2>
+              <p>
+                The plan maps <code>vX.Y.Z</code> tags to binary, Docker, and chart
+                versions with the same semantic version, so operators can trace a
+                deployment back to one release point.
+              </p>
+              <div class="callout alt">
+                Stable tags also receive the floating Docker aliases <code>X.Y</code>,
+                <code>X</code>, and <code>latest</code>.
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="tag">Workflow</div>
+          <h2>Pages publication path</h2>
+          <p>
+            The Pages workflow is intentionally narrow: checkout, confirm the site
+            exists, upload <code>site/</code> as the Pages artifact, then deploy it to
+            the <code>github-pages</code> environment.
+          </p>
+          <pre><code>on:
+  push:
+    branches:
+      - main</code></pre>
+          <p>
+            That keeps the site published from the branch that carries the release
+            infrastructure plan and the README links.
+          </p>
+        </section>
+      </main>
+
+      <div class="shell footer">
+        <div>Quick start commands are mirrored on <a href="quickstart.html">the quick start page</a>.</div>
+        <div>Workflow references: <a href="https://github.com/easel/heimq/tree/main/.github/workflows">.github/workflows</a></div>
+      </div>
+    </div>
+  </body>
+</html>

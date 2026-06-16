@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>heimq | Overview</title>
+    <meta
+      name="description"
+      content="Static release documentation for heimq: overview, quick start, deployment, compatibility, and architecture."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="shell topbar">
+        <header class="masthead">
+          <div class="brand" aria-label="heimq">
+            <span class="brand-mark" aria-hidden="true"></span>
+            heimq
+          </div>
+          <nav class="nav" aria-label="Primary">
+            <a href="index.html" aria-current="page">Overview</a>
+            <a href="quickstart.html">Quick start</a>
+            <a href="deployment.html">Deployment</a>
+            <a href="compatibility-testing.html">Compatibility / testing</a>
+            <a href="architecture.html">Architecture</a>
+          </nav>
+        </header>
+      </div>
+
+      <main class="shell">
+        <section class="hero">
+          <div class="eyebrow">Static Pages release docs</div>
+          <div class="hero-grid">
+            <div class="stack">
+              <h1>heimq is a single-node Kafka-compatible broker with release-ready docs.</h1>
+              <p class="lede">
+                This microsite is intentionally plain HTML and CSS. It mirrors the
+                checked-in README commands, the release workflows, and the repository's
+                release-infrastructure plan without adding a package manager or build
+                chain.
+              </p>
+            </div>
+            <aside class="panel">
+              <h2>What ships here</h2>
+              <p>
+                Source, Docker, and Helm entry points are documented from one place so
+                operators can move from first read to first run without hidden context.
+              </p>
+              <div class="callout alt">
+                Published pages come from <strong>.github/workflows/pages.yml</strong> on
+                pushes to <strong>main</strong>.
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="tag">Overview</div>
+          <h2>Project shape</h2>
+          <div class="metrics">
+            <div class="metric">
+              <span class="label">Runtime</span>
+              <span class="value">Single-node, memory-first broker</span>
+            </div>
+            <div class="metric">
+              <span class="label">Packaging</span>
+              <span class="value">Rust binary, GHCR image, OCI chart</span>
+            </div>
+            <div class="metric">
+              <span class="label">Docs</span>
+              <span class="value">Static site published from GitHub Pages</span>
+            </div>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <h3><a href="quickstart.html">Quick start</a></h3>
+              <p>Build from source, run the binary, or launch the release image with copy-pasteable commands.</p>
+            </div>
+            <div class="card">
+              <h3><a href="deployment.html">Deployment</a></h3>
+              <p>See where releases land: GitHub Releases, GHCR images, OCI charts, and Pages docs.</p>
+            </div>
+            <div class="card">
+              <h3><a href="compatibility-testing.html">Compatibility and testing</a></h3>
+              <p>Understand the supported protocol surface and the commands that validate it.</p>
+            </div>
+            <div class="card">
+              <h3><a href="architecture.html">Architecture</a></h3>
+              <p>Review the runtime, packaging, and release layers that shape the project.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="two-col">
+            <div>
+              <div class="tag">Non-goals</div>
+              <h2>What heimq is not</h2>
+              <ul>
+                <li>A Kafka cluster replacement.</li>
+                <li>A replication or quorum system.</li>
+                <li>A new JavaScript site or documentation framework.</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h2>Where to go next</h2>
+              <p>Use the quick start page for the exact source, Docker, and Helm commands already reflected in the README.</p>
+              <p>
+                The deployment page ties those commands back to release artifacts and
+                the Pages workflow, so the docs stay aligned with shipped assets.
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="shell footer">
+        <div>Release docs are tracked in <a href="https://github.com/easel/heimq/blob/main/docs/release/release-infrastructure-plan.md">the infrastructure plan</a>.</div>
+        <div>
+          Source README: <a href="https://github.com/easel/heimq/blob/main/README.md">README.md</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

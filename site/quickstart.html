@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>heimq | Quick start</title>
+    <meta name="description" content="Build, run, and smoke-test heimq from source, Docker, or Helm." />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="shell topbar">
+        <header class="masthead">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            heimq
+          </div>
+          <nav class="nav" aria-label="Primary">
+            <a href="index.html">Overview</a>
+            <a href="quickstart.html" aria-current="page">Quick start</a>
+            <a href="deployment.html">Deployment</a>
+            <a href="compatibility-testing.html">Compatibility / testing</a>
+            <a href="architecture.html">Architecture</a>
+          </nav>
+        </header>
+      </div>
+
+      <main class="shell">
+        <section class="hero">
+          <div class="eyebrow">Quick start</div>
+          <h1>Get a broker running from source, Docker, or Helm.</h1>
+          <p class="lede">
+            The commands below are copied from the root README so the site and the
+            repository instructions stay in sync.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="tag">Source</div>
+          <h2>Build and run from source</h2>
+          <p>Use the release profile for a local binary, then point clients at port 9092.</p>
+          <pre><code>cargo build -p heimq --release
+./target/release/heimq --memory-only --host 0.0.0.0 --port 9092</code></pre>
+
+          <div class="callout">
+            Smoke test with standard Kafka CLI tools by producing to and consuming from a
+            topic on <code>localhost:9092</code>.
+          </div>
+          <pre><code>printf 'hello heimq\n' | kafka-console-producer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic heimq-smoke
+
+kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 \
+  --topic heimq-smoke \
+  --from-beginning \
+  --max-messages 1</code></pre>
+        </section>
+
+        <section class="section">
+          <div class="tag">Docker</div>
+          <h2>Run the release image</h2>
+          <p>
+            The published image lives at <code>ghcr.io/easel/heimq</code> and uses the
+            same host settings shown in the README.
+          </p>
+          <pre><code>docker run --rm -p 9092:9092 \
+  -e HEIMQ_HOST=0.0.0.0 \
+  -e HEIMQ_MEMORY_ONLY=true \
+  ghcr.io/easel/heimq:v0.1.0</code></pre>
+
+          <p>Build and smoke-test the image locally before pushing tags.</p>
+          <pre><code>just docker-build
+./scripts/docker-image-smoke.sh heimq:local</code></pre>
+        </section>
+
+        <section class="section">
+          <div class="tag">Helm</div>
+          <h2>Install the chart</h2>
+          <p>
+            The chart defaults are written so the image tag follows the release version
+            published by the Docker workflow.
+          </p>
+          <pre><code>helm install heimq charts/heimq \
+  --set image.repository=ghcr.io/easel/heimq \
+  --set image.tag=v0.1.0</code></pre>
+
+          <p>Install the OCI chart published to GHCR.</p>
+          <pre><code>helm install heimq oci://ghcr.io/easel/charts/heimq \
+  --version 0.1.0</code></pre>
+        </section>
+      </main>
+
+      <div class="shell footer">
+        <div>See also: <a href="deployment.html">Deployment</a> and <a href="compatibility-testing.html">Compatibility and testing</a>.</div>
+        <div>README mirror: <a href="https://github.com/easel/heimq/blob/main/README.md">root README</a></div>
+      </div>
+    </div>
+  </body>
+</html>
