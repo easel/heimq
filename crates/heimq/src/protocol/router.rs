@@ -9,6 +9,7 @@ use crate::protocol::{decode_request, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend};
 use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
+use kafka_protocol::messages::fetch_request::FetchRequest;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use std::sync::Arc;
 use tracing::{debug, warn};
@@ -91,10 +92,11 @@ impl Router {
     ///
     /// For all other API keys this behaves identically to [`route`].
     pub async fn route_async(&self, data: &[u8]) -> Result<Bytes> {
-        // Fast path: non-Fetch requests are always synchronous.
-        if let Ok((ref header, _)) = decode_request(data) {
+        // Decode once; pass decoded header+body to handle_fetch_long_poll to avoid
+        // re-decoding the same frame in the long-poll path.
+        if let Ok((header, body)) = decode_request(data) {
             if header.api_key == 1 {
-                return self.handle_fetch_long_poll(data).await;
+                return self.handle_fetch_long_poll(header, body).await;
             }
         }
         self.route(data)
@@ -102,73 +104,69 @@ impl Router {
 
     /// Long-poll implementation for Fetch (API 1).
     ///
-    /// Decodes `max_wait_ms` and the requested (topic, partition, fetch_offset)
-    /// tuples from the request. If no partition has data available at the
-    /// requested offset and `max_wait_ms > 0`, polls in 50 ms increments up to
-    /// `max_wait_ms` (capped at 500 ms) checking the storage high watermark
-    /// directly. Only executes the Fetch once data is confirmed available,
-    /// avoiding partial-batch races.
-    async fn handle_fetch_long_poll(&self, data: &[u8]) -> Result<Bytes> {
-        use bytes::Bytes as RawBytes;
-        use kafka_protocol::messages::fetch_request::FetchRequest;
-        use kafka_protocol::protocol::Decodable;
-
-        let (max_wait_ms, topics) = match decode_request(data) {
-            Ok((header, body)) => {
-                match FetchRequest::decode(
-                    &mut RawBytes::copy_from_slice(&body),
-                    header.api_version,
-                ) {
-                    Ok(req) => {
-                        let mw = req.max_wait_ms.max(0) as u32;
-                        let topics: Vec<(String, i32, i64)> = req
-                            .topics
-                            .iter()
-                            .flat_map(|t| {
-                                let name = t.topic.0.to_string();
-                                t.partitions
-                                    .iter()
-                                    .map(move |p| (name.clone(), p.partition, p.fetch_offset))
-                            })
-                            .collect();
-                        (mw, topics)
-                    }
-                    Err(_) => return self.route(data),
-                }
-            }
-            Err(_) => return self.route(data),
+    /// Accepts a pre-decoded header and body (decoded once by `route_async`) and
+    /// decodes the FetchRequest exactly once. Reuses that decoded request for both
+    /// the long-poll offset checks and the final Fetch execution, eliminating the
+    /// redundant re-decodes that occurred when `route(data)` was called at the end.
+    async fn handle_fetch_long_poll(&self, header: RequestHeader, body: Bytes) -> Result<Bytes> {
+        let fetch_req = match FetchRequest::decode(&mut body.clone(), header.api_version) {
+            Ok(r) => r,
+            Err(_) => return self.handle_fetch(&header, body.as_ref()),
         };
 
-        if max_wait_ms == 0 || self.storage_has_data(&topics) {
-            return self.route(data);
-        }
+        let max_wait_ms = fetch_req.max_wait_ms.max(0) as u32;
+        let topics: Vec<(String, i32, i64)> = fetch_req
+            .topics
+            .iter()
+            .flat_map(|t| {
+                let name = t.topic.0.to_string();
+                t.partitions
+                    .iter()
+                    .map(move |p| (name.clone(), p.partition, p.fetch_offset))
+            })
+            .collect();
 
-        let deadline = tokio::time::Instant::now()
-            + std::time::Duration::from_millis(max_wait_ms.min(30_000) as u64);
+        if max_wait_ms > 0 && !self.storage_has_data(&topics) {
+            let deadline = tokio::time::Instant::now()
+                + std::time::Duration::from_millis(max_wait_ms.min(30_000) as u64);
 
-        if let Some(ref notify) = self.append_notify {
-            // Notify path: register the waiter BEFORE the data check to avoid the
-            // race where a produce arrives between the check and the await.
-            loop {
-                let notified = notify.notified();
-                if self.storage_has_data(&topics) {
-                    return self.route(data);
+            if let Some(ref notify) = self.append_notify {
+                // Notify path: register the waiter BEFORE the data check to avoid the
+                // race where a produce arrives between the check and the await.
+                loop {
+                    let notified = notify.notified();
+                    if self.storage_has_data(&topics) {
+                        break;
+                    }
+                    tokio::select! {
+                        _ = notified => {}
+                        _ = tokio::time::sleep_until(deadline) => break,
+                    }
                 }
-                tokio::select! {
-                    _ = notified => {}
-                    _ = tokio::time::sleep_until(deadline) => { return self.route(data); }
+            } else {
+                // Fallback: poll every 10 ms up to max_wait_ms.
+                const POLL_INTERVAL_MS: u64 = 10;
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
+                    if self.storage_has_data(&topics) || tokio::time::Instant::now() >= deadline {
+                        break;
+                    }
                 }
             }
-        } else {
-            // Fallback: poll every 10 ms up to max_wait_ms.
-            const POLL_INTERVAL_MS: u64 = 10;
-            loop {
-                tokio::time::sleep(std::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
-                if self.storage_has_data(&topics) || tokio::time::Instant::now() >= deadline {
-                    return self.route(data);
-                }
-            }
         }
+
+        self.handle_fetch_with_request(&header, fetch_req)
+    }
+
+    /// Execute a Fetch using an already-decoded [`FetchRequest`], bypassing the
+    /// per-request body decode that `handle_fetch` would otherwise perform.
+    fn handle_fetch_with_request(&self, header: &RequestHeader, request: FetchRequest) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
+        let api_version = header.api_version;
+        self.handle_and_encode(
+            header,
+            Box::new(move || fetch::handle_request(api_version, request, &self.storage, &tm)),
+        )
     }
 
     /// Returns `true` if any of the requested (topic, partition, fetch_offset)
