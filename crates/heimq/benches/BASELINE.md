@@ -36,18 +36,33 @@ BENCH_RECORDS=1000 BENCH_LATENCY_SAMPLES=10 BENCH_DIAGNOSTICS=1 \
 
 | Metric | Value |
 |--------|-------|
-| Produce throughput | **2,002,703 msgs/s** · 488.9 MB/s |
-| Consume throughput | **185,235 msgs/s** · 45.2 MB/s |
-| Produce-ack latency p50 | **5.50 ms** |
-| Produce-ack latency p99 | **6.75 ms** |
+| Produce throughput | **2,050,448 msgs/s** · 500.6 MB/s |
+| Consume throughput | **188,531 msgs/s** · 46.0 MB/s |
+| Produce-ack latency p50 | **5.48 ms** |
+| Produce-ack latency p99 | **7.26 ms** |
 
-- **heimq commit:** `32d19f9` (broker state benchmarked)
+- **heimq commit:** `b771b71` (baseline refreshed post-fetch-path diagnostics)
 - **Workload:** 100,000 records × 256 B, single topic / single partition, `acks=1`
 - **Produce:** pipelined `BaseProducer` (batch 10k, linger 5ms) to flush
 - **Consume:** `BaseConsumer` with direct partition assign (no group rebalance)
 - **Latency:** single in-flight message, 2,000 samples, `FutureProducer` send→ack
 - **Environment:** aarch64 Linux under OrbStack; in-process broker over loopback;
   release build
+
+### Diagnostic consume output (default fetch settings)
+
+```
+consume_diagnostics: poll_count=100000 non_empty_polls=100000 records_per_non_empty_poll=1.00 approx_payload_MBps=46.0
+consumer_fetch_settings: fetch.min.bytes=1 fetch.wait.max.ms=500 max.partition.fetch.bytes=1048576
+```
+
+Every poll returns exactly 1 record (`records_per_non_empty_poll=1.00`), meaning the consumer
+issues 100,000 individual `poll()` calls for 100,000 records. The broker fetch path is fast; the
+~10.9× produce/consume gap is primarily client-side polling overhead, not broker throughput.
+
+No tuned consumer-fetch profile numbers are recorded for this run; the default settings above
+are the baseline. A follow-up bead investigating `StreamConsumer` or higher `fetch.wait.max.ms`
+to batch multiple records per poll would clarify how much of the gap is recoverable.
 
 ## Head-to-head vs Apache Kafka and Redpanda
 
