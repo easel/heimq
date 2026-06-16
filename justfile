@@ -31,3 +31,11 @@ bench-smoke:
     PATH="$tmpdir/kafka_2.13-4.3.0/bin:$PATH" BOOTSTRAP=localhost:9094 bash scripts/bench/run-smoke.sh
 
 ci: fmt clippy test helm-check
+
+release-check:
+    cargo build -p heimq --release
+    cargo fmt --all -- --check
+    cargo clippy --workspace --all-targets -- -D warnings
+    cargo test --workspace --all-targets
+    helm lint charts/heimq
+    helm template heimq charts/heimq >/dev/null

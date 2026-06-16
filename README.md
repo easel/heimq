@@ -109,6 +109,9 @@ and attached to GitHub Releases as `heimq-linux-x86_64` plus
 Docker images are published to `ghcr.io/easel/heimq`. Helm charts are published
 to `oci://ghcr.io/easel/charts/heimq`.
 
+Operational release notes and recovery steps are in
+[docs/release/runbook.md](docs/release/runbook.md).
+
 ## Development
 
 The repository pins the Rust toolchain in [rust-toolchain.toml](rust-toolchain.toml).
@@ -139,6 +142,9 @@ Additional compatibility and performance workflows include:
 - [.github/workflows/consumer-matrix.yml](.github/workflows/consumer-matrix.yml)
 - [.github/workflows/parity.yml](.github/workflows/parity.yml)
 - [.github/workflows/postgres-conformance.yml](.github/workflows/postgres-conformance.yml)
+- [.github/workflows/helm-chart.yml](.github/workflows/helm-chart.yml)
+
+Use `just release-check` before tagging a release.
 
 ## Tests and benchmarks
 
