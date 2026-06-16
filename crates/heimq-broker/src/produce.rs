@@ -19,7 +19,7 @@ pub enum SequenceDecision {
 }
 
 /// Hook used by protocol/front-end crates to supply idempotent producer state.
-pub trait SequenceValidator {
+pub trait SequenceValidator: Sync {
     fn validate(
         &self,
         producer_id: i64,
@@ -92,6 +92,12 @@ impl ProduceAppendStatus {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AppendPlan {
+    Append { header: Option<RecordBatchHeader> },
+    Complete(ProduceAppendOutcome),
+}
+
 /// Rejections that a protocol handler can map to its wire-level error codes.
 #[derive(Debug)]
 pub enum ProduceAppendError {
@@ -113,6 +119,50 @@ impl ProduceAppendError {
 /// Apply shared produce append semantics without depending on a concrete Kafka
 /// request/response crate version.
 pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, ProduceAppendError> {
+    let header = match plan_append(&cmd)? {
+        AppendPlan::Append { header } => header,
+        AppendPlan::Complete(outcome) => return Ok(outcome),
+    };
+
+    match cmd.storage.append(cmd.topic, cmd.partition, cmd.records) {
+        Ok((base_offset, high_watermark)) => Ok(ProduceAppendOutcome {
+            status: ProduceAppendStatus::Appended {
+                base_offset,
+                high_watermark,
+            },
+            header,
+        }),
+        Err(err) => Err(ProduceAppendError::Storage(err)),
+    }
+}
+
+/// Async variant of [`append_records`] for storage backends that can defer
+/// commit completion without blocking the caller's worker thread.
+pub async fn append_records_async(
+    cmd: ProduceAppend<'_>,
+) -> Result<ProduceAppendOutcome, ProduceAppendError> {
+    let header = match plan_append(&cmd)? {
+        AppendPlan::Append { header } => header,
+        AppendPlan::Complete(outcome) => return Ok(outcome),
+    };
+
+    match cmd
+        .storage
+        .append_async(cmd.topic, cmd.partition, cmd.records)
+        .await
+    {
+        Ok((base_offset, high_watermark)) => Ok(ProduceAppendOutcome {
+            status: ProduceAppendStatus::Appended {
+                base_offset,
+                high_watermark,
+            },
+            header,
+        }),
+        Err(err) => Err(ProduceAppendError::Storage(err)),
+    }
+}
+
+fn plan_append(cmd: &ProduceAppend<'_>) -> Result<AppendPlan, ProduceAppendError> {
     let caps = cmd.storage.capabilities();
     let header = RecordBatchHeader::peek(cmd.records);
 
@@ -121,7 +171,7 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
     }
 
     if cmd.records.is_empty() {
-        return Ok(ProduceAppendOutcome {
+        return Ok(AppendPlan::Complete(ProduceAppendOutcome {
             status: ProduceAppendStatus::Empty {
                 high_watermark: cmd
                     .storage
@@ -129,7 +179,7 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
                     .unwrap_or(0),
             },
             header,
-        });
+        }));
     }
 
     if cmd.records.len() > caps.max_batch_bytes || cmd.records.len() > caps.max_message_bytes {
@@ -152,13 +202,13 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
                         .storage
                         .high_watermark(cmd.topic, cmd.partition)
                         .unwrap_or(0);
-                    return Ok(ProduceAppendOutcome {
+                    return Ok(AppendPlan::Complete(ProduceAppendOutcome {
                         status: ProduceAppendStatus::Duplicate {
                             base_offset: high_watermark.saturating_sub(i64::from(hdr.record_count)),
                             high_watermark,
                         },
                         header,
-                    });
+                    }));
                 }
                 SequenceDecision::OutOfOrder => {
                     return Err(ProduceAppendError::OutOfOrderSequenceNumber);
@@ -167,31 +217,156 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
         }
     }
 
-    match cmd.storage.append(cmd.topic, cmd.partition, cmd.records) {
-        Ok((base_offset, high_watermark)) => Ok(ProduceAppendOutcome {
-            status: ProduceAppendStatus::Appended {
-                base_offset,
-                high_watermark,
-            },
-            header,
-        }),
-        Err(err) => Err(ProduceAppendError::Storage(err)),
-    }
+    Ok(AppendPlan::Append { header })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::error::Result;
-    use crate::storage::{BackendCapabilities, TopicLog};
+    use crate::storage::{AppendFuture, BackendCapabilities, TopicLog};
     use parking_lot::Mutex;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
 
     struct TestStorage {
         caps: BackendCapabilities,
         high_watermark: Mutex<i64>,
         appended: Mutex<Vec<Vec<u8>>>,
         fail_append: bool,
+    }
+
+    struct DeferredAppendState {
+        complete: AtomicBool,
+        sync_append_count: AtomicUsize,
+        async_poll_count: AtomicUsize,
+    }
+
+    impl DeferredAppendState {
+        fn new() -> Self {
+            Self {
+                complete: AtomicBool::new(false),
+                sync_append_count: AtomicUsize::new(0),
+                async_poll_count: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    struct DeferredStorage {
+        caps: BackendCapabilities,
+        high_watermark: Arc<Mutex<i64>>,
+        state: Arc<DeferredAppendState>,
+    }
+
+    impl DeferredStorage {
+        fn new(state: Arc<DeferredAppendState>) -> Self {
+            Self {
+                caps: BackendCapabilities::default(),
+                high_watermark: Arc::new(Mutex::new(0)),
+                state,
+            }
+        }
+    }
+
+    struct DeferredAppendFuture {
+        state: Arc<DeferredAppendState>,
+        high_watermark: Arc<Mutex<i64>>,
+    }
+
+    impl Future for DeferredAppendFuture {
+        type Output = Result<(i64, i64)>;
+
+        fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+            self.state.async_poll_count.fetch_add(1, Ordering::SeqCst);
+            if !self.state.complete.load(Ordering::SeqCst) {
+                return Poll::Pending;
+            }
+            let mut high_watermark = self.high_watermark.lock();
+            let base_offset = *high_watermark;
+            *high_watermark += 1;
+            Poll::Ready(Ok((base_offset, *high_watermark)))
+        }
+    }
+
+    impl LogBackend for DeferredStorage {
+        fn create_topic(&self, _name: &str, _num_partitions: i32) -> Result<Arc<dyn TopicLog>> {
+            Err(HeimqError::Storage("not implemented".into()))
+        }
+
+        fn delete_topic(&self, _name: &str) -> Result<()> {
+            Ok(())
+        }
+
+        fn list_topics(&self) -> Vec<String> {
+            Vec::new()
+        }
+
+        fn topic(&self, _name: &str) -> Option<Arc<dyn TopicLog>> {
+            None
+        }
+
+        fn capabilities(&self) -> &BackendCapabilities {
+            &self.caps
+        }
+
+        fn get_or_create_topic(&self, _name: &str, _num_partitions: i32) -> Arc<dyn TopicLog> {
+            panic!("not needed for produce core tests")
+        }
+
+        fn get_all_topic_metadata(&self) -> Vec<(String, i32)> {
+            Vec::new()
+        }
+
+        fn default_num_partitions(&self) -> i32 {
+            1
+        }
+
+        fn auto_create_topics(&self) -> bool {
+            true
+        }
+
+        fn append(
+            &self,
+            _topic_name: &str,
+            _partition: i32,
+            _records: &[u8],
+        ) -> Result<(i64, i64)> {
+            self.state.sync_append_count.fetch_add(1, Ordering::SeqCst);
+            Err(HeimqError::Storage("sync append should not be used".into()))
+        }
+
+        fn append_async<'a>(
+            &'a self,
+            _topic_name: &'a str,
+            _partition: i32,
+            _records: &'a [u8],
+        ) -> AppendFuture<'a> {
+            Box::pin(DeferredAppendFuture {
+                state: self.state.clone(),
+                high_watermark: self.high_watermark.clone(),
+            })
+        }
+
+        fn fetch(
+            &self,
+            _topic_name: &str,
+            _partition: i32,
+            _offset: i64,
+            _max_bytes: i32,
+        ) -> Result<(Vec<u8>, i64)> {
+            Ok((Vec::new(), *self.high_watermark.lock()))
+        }
+
+        fn high_watermark(&self, _topic_name: &str, _partition: i32) -> Result<i64> {
+            Ok(*self.high_watermark.lock())
+        }
+
+        fn log_start_offset(&self, _topic_name: &str, _partition: i32) -> Result<i64> {
+            Ok(0)
+        }
     }
 
     impl TestStorage {
@@ -336,6 +511,22 @@ mod tests {
         bytes
     }
 
+    fn noop_waker() -> Waker {
+        unsafe fn clone(_: *const ()) -> RawWaker {
+            noop_raw_waker()
+        }
+        unsafe fn wake(_: *const ()) {}
+        unsafe fn wake_by_ref(_: *const ()) {}
+        unsafe fn drop(_: *const ()) {}
+        fn noop_raw_waker() -> RawWaker {
+            RawWaker::new(
+                std::ptr::null(),
+                &RawWakerVTable::new(clone, wake, wake_by_ref, drop),
+            )
+        }
+        unsafe { Waker::from_raw(noop_raw_waker()) }
+    }
+
     #[test]
     fn produce_append_core_appends_accepted_records() {
         let storage = TestStorage::new();
@@ -352,6 +543,39 @@ mod tests {
         );
         assert_eq!(storage.append_count(), 1);
         assert_eq!(outcome.header.unwrap().record_count, 2);
+    }
+
+    #[test]
+    fn produce_append_async_waits_on_deferred_backend_without_sync_append() {
+        let state = Arc::new(DeferredAppendState::new());
+        let storage = DeferredStorage::new(state.clone());
+        let records = record_batch_header_bytes(1, -1, 0);
+        let mut future = Box::pin(append_records_async(append(
+            &storage,
+            &records,
+            &AcceptAllSequenceValidator,
+        )));
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        assert!(matches!(future.as_mut().poll(&mut cx), Poll::Pending));
+        assert_eq!(state.sync_append_count.load(Ordering::SeqCst), 0);
+        assert_eq!(state.async_poll_count.load(Ordering::SeqCst), 1);
+
+        state.complete.store(true, Ordering::SeqCst);
+        let outcome = match future.as_mut().poll(&mut cx) {
+            Poll::Ready(Ok(outcome)) => outcome,
+            other => panic!("expected ready outcome, got {other:?}"),
+        };
+
+        assert_eq!(
+            outcome.status,
+            ProduceAppendStatus::Appended {
+                base_offset: 0,
+                high_watermark: 1
+            }
+        );
+        assert_eq!(state.sync_append_count.load(Ordering::SeqCst), 0);
     }
 
     #[test]

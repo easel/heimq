@@ -88,15 +88,18 @@ impl Router {
     }
 
     /// Route a request and return the response
-    /// Async variant of [`route`] that honours `max_wait_ms` on Fetch (API 1).
+    /// Async variant of [`route`] that awaits async Produce appends (API 0)
+    /// and honours `max_wait_ms` on Fetch (API 1).
     ///
     /// For all other API keys this behaves identically to [`route`].
     pub async fn route_async(&self, data: &[u8]) -> Result<Bytes> {
         // Decode once; pass decoded header+body to handle_fetch_long_poll to avoid
         // re-decoding the same frame in the long-poll path.
         if let Ok((header, body)) = decode_request(data) {
-            if header.api_key == 1 {
-                return self.handle_fetch_long_poll(header, body).await;
+            match header.api_key {
+                0 => return self.handle_produce_async(&header, &body).await,
+                1 => return self.handle_fetch_long_poll(header, body).await,
+                _ => {}
             }
         }
         self.route(data)
@@ -160,7 +163,11 @@ impl Router {
 
     /// Execute a Fetch using an already-decoded [`FetchRequest`], bypassing the
     /// per-request body decode that `handle_fetch` would otherwise perform.
-    fn handle_fetch_with_request(&self, header: &RequestHeader, request: FetchRequest) -> Result<Bytes> {
+    fn handle_fetch_with_request(
+        &self,
+        header: &RequestHeader,
+        request: FetchRequest,
+    ) -> Result<Bytes> {
         let tm = self.transaction_manager.clone();
         let api_version = header.api_version;
         self.handle_and_encode(
@@ -312,6 +319,38 @@ impl Router {
                 Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps, &tm)),
             )
         };
+        // Wake any Fetch long-polls waiting for new data.
+        if result.is_ok() {
+            if let Some(ref notify) = self.append_notify {
+                notify.notify_waiters();
+            }
+        }
+        result
+    }
+
+    async fn handle_produce_async(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        use kafka_protocol::messages::produce_request::ProduceRequest;
+
+        // Decode acks up front: acks=0 means fire-and-forget — the broker must
+        // NOT send a response. We still store the records; we just return empty
+        // bytes to signal "no reply" to run_writer.
+        let acks_zero = {
+            let mut buf = bytes::Bytes::copy_from_slice(body);
+            ProduceRequest::decode(&mut buf, header.api_version)
+                .map(|req| req.acks == 0)
+                .unwrap_or(false)
+        };
+
+        let ps = self.producer_state.clone();
+        let tm = self.transaction_manager.clone();
+        let response =
+            produce::handle_async(header.api_version, body, &self.storage, &ps, &tm).await;
+        let result = if acks_zero {
+            response.map(|_| bytes::Bytes::new())
+        } else {
+            response.and_then(|response| self.encode_response_bytes(header, &response))
+        };
+
         // Wake any Fetch long-polls waiting for new data.
         if result.is_ok() {
             if let Some(ref notify) = self.append_notify {
