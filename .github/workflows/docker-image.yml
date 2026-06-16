@@ -12,10 +12,13 @@ permissions:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/heimq
+  LOCAL_IMAGE: heimq:local
 
 jobs:
   docker-image:
     runs-on: ubuntu-latest
+    outputs:
+      image_digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
 
@@ -34,14 +37,40 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
             type=ref,event=tag
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'push' && !contains(github.ref_name, '-') }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'push' && !contains(github.ref_name, '-') }}
+            type=semver,pattern={{major}},enable=${{ github.event_name == 'push' && !contains(github.ref_name, '-') && !startsWith(github.ref_name, 'v0.') }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && !contains(github.ref_name, '-') }}
             type=raw,value=manual,enable=${{ github.event_name == 'workflow_dispatch' }}
 
+      - name: Build smoke image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          platforms: linux/amd64
+          tags: ${{ env.LOCAL_IMAGE }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Smoke test built image
+        run: ./scripts/docker-image-smoke.sh "${{ env.LOCAL_IMAGE }}"
+
       - name: Build and push image
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          platforms: linux/amd64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Publish image digest
+        if: ${{ steps.push.outputs.digest != '' }}
+        run: |
+          echo "Image digest: ${{ steps.push.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
