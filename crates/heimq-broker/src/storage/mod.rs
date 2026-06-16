@@ -17,7 +17,12 @@ pub use record_batch_view::{RecordBatchHeader, RecordBatchView, RecordView};
 
 use crate::error::Result;
 use bytes::Bytes;
+use std::future::{ready, Future};
+use std::pin::Pin;
 use std::sync::Arc;
+
+/// Runtime-neutral future returned by append entrypoints.
+pub type AppendFuture<'a> = Pin<Box<dyn Future<Output = Result<(i64, i64)>> + Send + 'a>>;
 
 /// Record stored in a partition
 #[derive(Debug, Clone)]
@@ -96,6 +101,21 @@ pub trait LogBackend: Send + Sync {
     /// and auto-creates the topic when `auto_create_topics()` is set.
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
 
+    /// Append a raw record-batch without requiring the caller's worker thread to
+    /// block until a deferred backend commit completes.
+    ///
+    /// Synchronous backends inherit the existing `append` behavior. Deferred
+    /// backends should override this and return a future that resolves when the
+    /// append's offset assignment is complete.
+    fn append_async<'a>(
+        &'a self,
+        topic_name: &'a str,
+        partition: i32,
+        records: &'a [u8],
+    ) -> AppendFuture<'a> {
+        Box::pin(ready(self.append(topic_name, partition, records)))
+    }
+
     /// Drop records older than `retention_ms` across all partitions, returning the
     /// bytes freed. Backends without time-based retention keep the no-op default.
     fn reclaim_expired(&self, _now_ms: i64, _retention_ms: u64) -> usize {
@@ -145,6 +165,16 @@ pub trait PartitionLog: Send + Sync {
     /// the batch. Backends that pass through raw bytes (like the in-memory
     /// backend) should prefer `raw_bytes` over re-encoding the view.
     fn append(&self, view: &RecordBatchView<'_>, raw_bytes: Option<&[u8]>) -> Result<(i64, i64)>;
+
+    /// Async append entrypoint for partition-level backends with deferred
+    /// commits. Synchronous implementations inherit `append`.
+    fn append_async<'a, 'b>(
+        &'a self,
+        view: &'a RecordBatchView<'b>,
+        raw_bytes: Option<&'a [u8]>,
+    ) -> AppendFuture<'a> {
+        Box::pin(ready(self.append(view, raw_bytes)))
+    }
 
     /// Read records starting at `offset`, up to `max_bytes`.
     fn read(&self, offset: i64, max_bytes: usize, wait: FetchWait) -> Result<(Vec<u8>, i64)>;

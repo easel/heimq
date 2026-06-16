@@ -171,6 +171,12 @@ impl PartitionLog for MemoryPartitionLog {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::{Bytes, BytesMut};
+    use kafka_protocol::indexmap::IndexMap;
+    use kafka_protocol::protocol::StrBytes;
+    use kafka_protocol::records::{
+        Compression, Record, RecordBatchEncoder, RecordEncodeOptions, TimestampType,
+    };
     use proptest::prelude::*;
 
     #[test]
@@ -185,6 +191,39 @@ mod tests {
         let mut batch = vec![0u8; 61];
         batch[57..61].copy_from_slice(&record_count.to_be_bytes());
         batch
+    }
+
+    fn valid_record_batch() -> Bytes {
+        let mut headers = IndexMap::new();
+        headers.insert(
+            StrBytes::from_static_str("h"),
+            Some(Bytes::from_static(b"v")),
+        );
+        let records = vec![Record {
+            transactional: false,
+            control: false,
+            partition_leader_epoch: 0,
+            producer_id: 1,
+            producer_epoch: 0,
+            timestamp_type: TimestampType::Creation,
+            offset: 0,
+            sequence: 0,
+            timestamp: 1,
+            key: Some(Bytes::from_static(b"k")),
+            value: Some(Bytes::from_static(b"v")),
+            headers,
+        }];
+        let mut buf = BytesMut::new();
+        RecordBatchEncoder::encode(
+            &mut buf,
+            &records,
+            &RecordEncodeOptions {
+                version: 2,
+                compression: Compression::None,
+            },
+        )
+        .unwrap();
+        buf.freeze()
     }
 
     #[test]
@@ -204,6 +243,27 @@ mod tests {
             <MemoryPartitionLog as PartitionLog>::read(&partition, 0, 1024, FetchWait::Immediate)
                 .unwrap();
         assert_eq!(hw, 3);
+        assert!(!data.is_empty());
+    }
+
+    #[test]
+    fn trait_async_append_default_bridge_matches_sync_append() {
+        let partition = MemoryPartitionLog::new(0);
+        let raw = valid_record_batch();
+        let view = RecordBatchView::from_bytes(&raw).unwrap();
+
+        let (base, count) = tokio_test::block_on(
+            <MemoryPartitionLog as PartitionLog>::append_async(&partition, &view, Some(&raw)),
+        )
+        .unwrap();
+
+        assert_eq!(base, 0);
+        assert_eq!(count, 1);
+
+        let (data, hw) =
+            <MemoryPartitionLog as PartitionLog>::read(&partition, 0, 1024, FetchWait::Immediate)
+                .unwrap();
+        assert_eq!(hw, 1);
         assert!(!data.is_empty());
     }
 

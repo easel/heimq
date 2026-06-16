@@ -349,6 +349,24 @@ mod tests {
     }
 
     #[test]
+    fn test_async_append_default_bridge_matches_sync_append() {
+        let storage = MemoryLog::new(test_config());
+        storage.create_topic("topic", 1).unwrap();
+        let records = vec![1, 2, 3];
+
+        let (base_offset, count) =
+            tokio_test::block_on(LogBackend::append_async(&storage, "topic", 0, &records)).unwrap();
+
+        assert_eq!(base_offset, 0);
+        assert_eq!(count, 1);
+        assert_eq!(storage.total_messages(), 1);
+
+        let (fetched, hw) = storage.fetch("topic", 0, 0, 1024).unwrap();
+        assert_eq!(fetched, records);
+        assert_eq!(hw, 1);
+    }
+
+    #[test]
     fn test_auto_create_disabled() {
         let mut config = (*test_config()).clone();
         config.auto_create_topics = false;
