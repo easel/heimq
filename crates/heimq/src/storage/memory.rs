@@ -9,6 +9,7 @@ use crate::config::Config;
 use crate::error::{HeimqError, Result};
 use crate::storage::{BackendCapabilities, LogBackend, MemoryTopicLog, TopicLog};
 use dashmap::DashMap;
+use metrics::{counter, gauge};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
 use tracing::{debug, info};
@@ -69,6 +70,17 @@ impl MemoryLog {
     /// Total bytes of stored record batches across all partitions.
     pub fn total_bytes(&self) -> i64 {
         self.total_bytes.load(Ordering::Relaxed)
+    }
+
+    fn set_total_bytes_metric(&self) {
+        gauge!("heimq_memory_log_bytes").set(self.total_bytes() as f64);
+    }
+
+    fn record_reclaimed_bytes(reason: &'static str, bytes: usize) {
+        if bytes > 0 {
+            counter!("heimq_retention_reclaimed_bytes_total", "reason" => reason)
+                .increment(bytes as u64);
+        }
     }
 
     fn resolve_topic_for_append(&self, name: &str) -> Result<Arc<MemoryTopicLog>> {
@@ -185,6 +197,8 @@ impl LogBackend for MemoryLog {
             let now_ms = chrono::Utc::now().timestamp_millis();
             self.reclaim_expired(now_ms, self.config.retention_ms);
             if self.total_bytes.load(Ordering::Relaxed) as u64 + records.len() as u64 > cap {
+                counter!("heimq_storage_full_errors_total").increment(1);
+                self.set_total_bytes_metric();
                 return Err(HeimqError::StorageFull(format!(
                     "in-memory cap {} bytes reached and no expired data to reclaim",
                     cap
@@ -198,6 +212,8 @@ impl LogBackend for MemoryLog {
         self.total_messages.fetch_add(count, Ordering::Relaxed);
         self.total_bytes
             .fetch_add(records.len() as i64, Ordering::Relaxed);
+        counter!("heimq_memory_log_messages_total").increment(count as u64);
+        self.set_total_bytes_metric();
 
         debug!(
             topic = topic_name,
@@ -222,6 +238,8 @@ impl LogBackend for MemoryLog {
         }
         if freed > 0 {
             self.total_bytes.fetch_sub(freed as i64, Ordering::Relaxed);
+            Self::record_reclaimed_bytes("retention_ms", freed);
+            self.set_total_bytes_metric();
         }
         freed
     }
@@ -232,16 +250,25 @@ impl LogBackend for MemoryLog {
             None => return 0,
         };
         let mut freed = 0usize;
+        let mut expired_freed = 0usize;
+        let mut size_freed = 0usize;
         for p in 0..t.num_partitions() {
             if let Ok(part) = t.get_memory_partition(p) {
-                freed += part.reclaim_expired(cutoff_ms);
+                let expired = part.reclaim_expired(cutoff_ms);
+                expired_freed += expired;
+                freed += expired;
                 if retention_bytes >= 0 {
-                    freed += part.reclaim_to_size(retention_bytes as usize);
+                    let size = part.reclaim_to_size(retention_bytes as usize);
+                    size_freed += size;
+                    freed += size;
                 }
             }
         }
         if freed > 0 {
             self.total_bytes.fetch_sub(freed as i64, Ordering::Relaxed);
+            Self::record_reclaimed_bytes("retention_ms", expired_freed);
+            Self::record_reclaimed_bytes("retention_bytes", size_freed);
+            self.set_total_bytes_metric();
         }
         freed
     }
