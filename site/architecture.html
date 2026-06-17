@@ -21,6 +21,7 @@
             <a href="deployment.html">Deployment</a>
             <a href="compatibility-testing.html">Compatibility / testing</a>
             <a href="architecture.html" aria-current="page">Architecture</a>
+            <a href="resources.html">Resources</a>
           </nav>
         </header>
       </div>
@@ -28,18 +29,27 @@
       <main class="shell">
         <section class="hero">
           <div class="eyebrow">Architecture</div>
-          <h1>One runtime, three delivery channels, one static docs surface.</h1>
+          <h1>One distribution, one embeddable engine, one evidence trail.</h1>
           <p class="lede">
-            The project is organized to keep runtime code, release packaging, and docs
-            separate without making the release path hard to understand.
+            heimq separates the memory-first CLI distribution from the engine
+            crates that downstream systems embed. Release packaging and docs stay
+            close to the same commands and workflows readers can inspect.
           </p>
         </section>
 
         <section class="section">
           <div class="list-grid">
             <div class="mini">
-              <strong>Runtime</strong>
-              <span>Rust workspace crates build a single broker binary that accepts Kafka-compatible traffic on port 9092.</span>
+              <strong>Distribution</strong>
+              <span>The <code>heimq</code> CLI runs a single-node, memory-first broker that accepts Kafka-compatible traffic on port 9092.</span>
+            </div>
+            <div class="mini">
+              <strong>Engine crates</strong>
+              <span><code>heimq-wire</code> and <code>heimq-broker</code> provide wire scaffolding and broker semantics over pluggable backend traits.</span>
+            </div>
+            <div class="mini">
+              <strong>Conformance</strong>
+              <span><code>heimq-testkit</code> and parity workloads turn compatibility into repeatable evidence.</span>
             </div>
             <div class="mini">
               <strong>Binary distribution</strong>
@@ -63,6 +73,7 @@
               <h2>What lives where</h2>
               <ul>
                 <li><code>crates/</code> holds the Rust implementation and test crates.</li>
+                <li><code>crates/heimq/docs/helix</code> holds the product vision, PRD, contracts, tests, and design context.</li>
                 <li><code>charts/heimq</code> holds the deployment chart.</li>
                 <li><code>.github/workflows</code> holds release and validation automation.</li>
                 <li><code>site/</code> holds the static documentation pages.</li>
@@ -71,8 +82,9 @@
             <aside class="panel">
               <h2>Design principle</h2>
               <p>
-                Keep operational instructions close to the shipped artifact. The site
-                mirrors the README rather than inventing a second set of commands.
+                Keep public claims close to evidence. The site mirrors README
+                commands, links to HELIX product context, and points compatibility
+                statements at tests and contracts.
               </p>
               <div class="callout">
                 That makes the site useful for first-time readers while still allowing
@@ -85,7 +97,7 @@
 
       <div class="shell footer">
         <div>Back to the <a href="index.html">overview</a>.</div>
-        <div>Source control: <a href="https://github.com/easel/heimq/blob/main/README.md">README.md</a> and <a href="https://github.com/easel/heimq/blob/main/docs/release/release-infrastructure-plan.md">plan</a>.</div>
+        <div>Source control: <a href="resources.html">Resources</a>.</div>
       </div>
     </div>
   </body>

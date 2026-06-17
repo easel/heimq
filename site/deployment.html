@@ -21,6 +21,7 @@
             <a href="deployment.html" aria-current="page">Deployment</a>
             <a href="compatibility-testing.html">Compatibility / testing</a>
             <a href="architecture.html">Architecture</a>
+            <a href="resources.html">Resources</a>
           </nav>
         </header>
       </div>
@@ -30,8 +31,9 @@
           <div class="eyebrow">Deployment</div>
           <h1>Release artifacts land in GitHub Releases, GHCR, OCI, and Pages.</h1>
           <p class="lede">
-            The repository uses a small number of predictable publish targets so the
-            release story stays easy to verify and explain.
+            heimq keeps install paths predictable: binaries on GitHub Releases,
+            images and charts in GHCR, and this static site on GitHub Pages.
+            Each publish target has a workflow and a verification path.
           </p>
         </section>
 
@@ -75,15 +77,15 @@
     branches:
       - main</code></pre>
           <p>
-            That keeps the site published from the branch that carries the release
-            infrastructure plan and the README links.
+            That keeps the public docs published from the branch that carries the
+            release infrastructure plan, README, and checked-in site source.
           </p>
         </section>
       </main>
 
       <div class="shell footer">
         <div>Quick start commands are mirrored on <a href="quickstart.html">the quick start page</a>.</div>
-        <div>Workflow references: <a href="https://github.com/easel/heimq/tree/main/.github/workflows">.github/workflows</a></div>
+        <div>Workflow references: <a href="resources.html">Resources</a> and <a href="https://github.com/easel/heimq/tree/main/.github/workflows">.github/workflows</a></div>
       </div>
     </div>
   </body>

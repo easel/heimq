@@ -31,6 +31,7 @@ jobs:
           test -f "${SITE_DIR}/deployment.html"
           test -f "${SITE_DIR}/compatibility-testing.html"
           test -f "${SITE_DIR}/architecture.html"
+          test -f "${SITE_DIR}/resources.html"
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

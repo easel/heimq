@@ -21,6 +21,7 @@
             <a href="deployment.html">Deployment</a>
             <a href="compatibility-testing.html" aria-current="page">Compatibility / testing</a>
             <a href="architecture.html">Architecture</a>
+            <a href="resources.html">Resources</a>
           </nav>
         </header>
       </div>
@@ -28,11 +29,12 @@
       <main class="shell">
         <section class="hero">
           <div class="eyebrow">Compatibility and testing</div>
-          <h1>Compatibility is proven by tests, not by wishful claims.</h1>
+          <h1>Compatibility is a measured surface, not a blanket promise.</h1>
           <p class="lede">
-            heimq is aimed at the protocol flows used by the checked-in suites and
-            smoke tests. The project keeps the compatibility surface explicit so the
-            limits stay visible.
+            heimq targets the Kafka flows used by standard clients, consumer
+            groups, transactions, idempotent producers, benchmarks, and ecosystem
+            tools. The supported surface is only as broad as the contracts and
+            suites that exercise it.
           </p>
         </section>
 
@@ -43,7 +45,10 @@
               <h2>What is validated</h2>
               <ul>
                 <li>Format, clippy, and workspace tests in CI.</li>
-                <li>Producer/consumer smoke flows against the local broker.</li>
+                <li>Producer/consumer smoke flows through standard Kafka clients.</li>
+                <li>Differential parity workloads against Redpanda.</li>
+                <li>Benchmark smoke paths for Kafka perf-test and OpenMessaging Benchmark.</li>
+                <li>Ecosystem integration scripts for Kafka-speaking tools.</li>
                 <li>Container smoke validation for the release image.</li>
                 <li>Helm rendering and linting for the chart.</li>
               </ul>
@@ -54,7 +59,8 @@
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace --all-targets
 just bench-smoke
-just parity</code></pre>
+just parity
+./scripts/compatibility-test.sh</code></pre>
             </aside>
           </div>
         </section>
@@ -66,7 +72,7 @@ just parity</code></pre>
             <li>Single-node only; no replication or controller quorum.</li>
             <li>Memory-first operation; persistence is intentionally narrow.</li>
             <li>Security protocols such as SASL and TLS are not enabled by default.</li>
-            <li>Kafka compatibility is bounded by the suites and fixtures in this repository.</li>
+            <li>Kafka compatibility is bounded by the contracts, suites, and fixtures in this repository.</li>
           </ul>
           <div class="callout alt" style="margin-top: 18px;">
             The README and this site are aligned on the same install commands, so a
@@ -77,7 +83,7 @@ just parity</code></pre>
 
       <div class="shell footer">
         <div>Compatibility guidance mirrors <a href="https://github.com/easel/heimq/blob/main/README.md">README.md</a>.</div>
-        <div>Validation plan: <a href="https://github.com/easel/heimq/blob/main/docs/release/release-infrastructure-plan.md">release infrastructure plan</a>.</div>
+        <div>Evidence links: <a href="resources.html">Resources</a>.</div>
       </div>
     </div>
   </body>
