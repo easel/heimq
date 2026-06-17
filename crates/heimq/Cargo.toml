@@ -2,7 +2,7 @@
 name = "heimq"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.85"
+rust-version = "1.88"
 authors = ["heimq contributors"]
 description = "A fast, lightweight, single-node Kafka-compatible API server"
 license = "MIT"
@@ -110,4 +110,3 @@ path = "tests/compat.rs"
 # [[bench]]
 # name = "latency"
 # harness = false
-
