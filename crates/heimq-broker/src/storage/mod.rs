@@ -24,6 +24,14 @@ use std::sync::Arc;
 /// Runtime-neutral future returned by append entrypoints.
 pub type AppendFuture<'a> = Pin<Box<dyn Future<Output = Result<(i64, i64)>> + Send + 'a>>;
 
+/// Effective retention policy for one append admission decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetentionPolicy {
+    pub retention_ms: u64,
+    /// Per-partition byte window. `-1` means unlimited.
+    pub retention_bytes: i64,
+}
+
 /// Record stored in a partition
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -101,6 +109,19 @@ pub trait LogBackend: Send + Sync {
     /// and auto-creates the topic when `auto_create_topics()` is set.
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
 
+    /// Append a raw record-batch using the caller's effective topic retention
+    /// policy for append-time admission. Backends that do not enforce retention
+    /// at append time can inherit the plain append behavior.
+    fn append_with_retention_policy(
+        &self,
+        topic_name: &str,
+        partition: i32,
+        records: &[u8],
+        _retention: Option<RetentionPolicy>,
+    ) -> Result<(i64, i64)> {
+        self.append(topic_name, partition, records)
+    }
+
     /// Append a raw record-batch without requiring the caller's worker thread to
     /// block until a deferred backend commit completes.
     ///
@@ -114,6 +135,17 @@ pub trait LogBackend: Send + Sync {
         records: &'a [u8],
     ) -> AppendFuture<'a> {
         Box::pin(ready(self.append(topic_name, partition, records)))
+    }
+
+    /// Async variant of [`append_with_retention_policy`].
+    fn append_async_with_retention_policy<'a>(
+        &'a self,
+        topic_name: &'a str,
+        partition: i32,
+        records: &'a [u8],
+        _retention: Option<RetentionPolicy>,
+    ) -> AppendFuture<'a> {
+        self.append_async(topic_name, partition, records)
     }
 
     /// Drop records older than `retention_ms` across all partitions, returning the

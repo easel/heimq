@@ -277,7 +277,8 @@ impl Server {
                 .with_producer_state(self.producer_state.clone())
                 .with_transaction_manager(self.transaction_manager.clone())
                 .with_append_notify(self.append_notify.clone())
-                .with_config_store(self.config_store.clone());
+                .with_config_store(self.config_store.clone())
+                .with_default_retention_ms(self.config.retention_ms);
 
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(Box::new(socket), router).await {

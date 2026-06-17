@@ -613,6 +613,91 @@ fn memory_bound_per_topic_retention_bytes_trims_consumer_visible_log() {
 }
 
 #[test]
+fn memory_bound_retention_bytes_trims_before_storage_full() {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let first_records = vec![new_record_with_payload(0, now_ms, &"first".repeat(512))];
+    let second_records = vec![new_record_with_payload(
+        1,
+        now_ms + 1,
+        &"second".repeat(512),
+    )];
+    let first_batch = encode_record_batch(&first_records);
+    let second_batch = encode_record_batch(&second_records);
+    let cap = second_batch.len() as u64 + 128;
+
+    let server = TestServer::start_with_memory_bounds(60_000, cap);
+    let topic = unique_topic("memory-bound-append-retention-bytes");
+    assert_eq!(create_topic(&server, &topic, 1).topics[0].error_code, 0);
+    assert_eq!(
+        set_topic_config(
+            &server,
+            &topic,
+            "retention.bytes",
+            &(second_batch.len() + 16).to_string()
+        ),
+        0
+    );
+
+    assert_eq!(
+        produce_batch(&server, &topic, first_batch).responses[0].partition_responses[0].error_code,
+        0
+    );
+    assert_eq!(
+        produce_batch(&server, &topic, second_batch).responses[0].partition_responses[0].error_code,
+        0,
+        "retention.bytes should trim before append admission returns storage-full"
+    );
+
+    let earliest = list_offset(&server, &topic, -2);
+    assert_eq!(earliest, 1);
+    let (error_code, fetched, high_watermark) = fetch_records_from(&server, &topic, earliest);
+    assert_eq!(error_code, 0);
+    assert_eq!(high_watermark, 2);
+    assert_eq!(fetched, second_records);
+}
+
+#[test]
+fn memory_bound_per_topic_retention_ms_protects_data_from_low_broker_default() {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let first_records = vec![new_record_with_payload(0, now_ms, &"protected".repeat(512))];
+    let second_records = vec![new_record_with_payload(
+        1,
+        now_ms + 2_000,
+        &"blocked".repeat(512),
+    )];
+    let first_batch = encode_record_batch(&first_records);
+    let cap = first_batch.len() as u64 + 64;
+
+    let server = TestServer::start_with_memory_bounds(100, cap);
+    let topic = unique_topic("memory-bound-topic-retention-ms");
+    assert_eq!(create_topic(&server, &topic, 1).topics[0].error_code, 0);
+    assert_eq!(
+        set_topic_config(&server, &topic, "retention.ms", "60000"),
+        0
+    );
+
+    assert_eq!(
+        produce_batch(&server, &topic, first_batch).responses[0].partition_responses[0].error_code,
+        0
+    );
+
+    std::thread::sleep(std::time::Duration::from_millis(250));
+
+    let second_response = produce_records(&server, &topic, &second_records);
+    assert_eq!(
+        second_response.responses[0].partition_responses[0].error_code, 56,
+        "topic retention.ms must keep the first batch protected even when broker default is low"
+    );
+
+    let earliest = list_offset(&server, &topic, -2);
+    assert_eq!(earliest, 0);
+    let (error_code, fetched, high_watermark) = fetch_records_from(&server, &topic, 0);
+    assert_eq!(error_code, 0);
+    assert_eq!(high_watermark, 1);
+    assert_eq!(fetched, first_records);
+}
+
+#[test]
 fn contract_list_offsets_earliest_latest() {
     let server = TestServer::start();
     let topic = unique_topic("contract-offsets");

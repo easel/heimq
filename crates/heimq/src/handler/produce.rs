@@ -1,8 +1,9 @@
 //! Produce request handler (API Key 0)
 
+use crate::config_store::ConfigStore;
 use crate::error::{ErrorCode, Result};
 use crate::producer_state::{ProducerStateManager, SequenceCheck};
-use crate::storage::LogBackend;
+use crate::storage::{LogBackend, RetentionPolicy};
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
 use heimq_broker::produce::{
@@ -52,6 +53,66 @@ pub fn handle(
     storage: &Arc<dyn LogBackend>,
     producer_state: &Arc<ProducerStateManager>,
     transaction_manager: &Arc<TransactionManager>,
+) -> Result<ProduceResponse> {
+    handle_inner(
+        api_version,
+        body,
+        storage,
+        producer_state,
+        transaction_manager,
+        None,
+        0,
+    )
+}
+
+pub fn handle_with_config_store(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    producer_state: &Arc<ProducerStateManager>,
+    transaction_manager: &Arc<TransactionManager>,
+    config_store: &Arc<ConfigStore>,
+    default_retention_ms: u64,
+) -> Result<ProduceResponse> {
+    handle_inner(
+        api_version,
+        body,
+        storage,
+        producer_state,
+        transaction_manager,
+        Some(config_store),
+        default_retention_ms,
+    )
+}
+
+fn effective_retention_policy(
+    config_store: Option<&Arc<ConfigStore>>,
+    default_retention_ms: u64,
+    topic: &str,
+) -> Option<RetentionPolicy> {
+    let store = config_store?;
+    let retention_ms = store
+        .get_override(topic, "retention.ms")
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(default_retention_ms);
+    let retention_bytes = store
+        .get_override(topic, "retention.bytes")
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(-1);
+    Some(RetentionPolicy {
+        retention_ms,
+        retention_bytes,
+    })
+}
+
+fn handle_inner(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    producer_state: &Arc<ProducerStateManager>,
+    transaction_manager: &Arc<TransactionManager>,
+    config_store: Option<&Arc<ConfigStore>>,
+    default_retention_ms: u64,
 ) -> Result<ProduceResponse> {
     debug!(
         api_version = api_version,
@@ -105,6 +166,11 @@ pub fn handle(
                     records: records.as_ref(),
                     transactional_attempted,
                     sequence_validator: &sequence_validator,
+                    retention_policy: effective_retention_policy(
+                        config_store,
+                        default_retention_ms,
+                        &topic_name,
+                    ),
                 }) {
                     Ok(outcome) => {
                         if matches!(outcome.status, ProduceAppendStatus::Duplicate { .. }) {
@@ -208,6 +274,48 @@ pub async fn handle_async(
     producer_state: &Arc<ProducerStateManager>,
     transaction_manager: &Arc<TransactionManager>,
 ) -> Result<ProduceResponse> {
+    handle_async_inner(
+        api_version,
+        body,
+        storage,
+        producer_state,
+        transaction_manager,
+        None,
+        0,
+    )
+    .await
+}
+
+pub async fn handle_async_with_config_store(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    producer_state: &Arc<ProducerStateManager>,
+    transaction_manager: &Arc<TransactionManager>,
+    config_store: &Arc<ConfigStore>,
+    default_retention_ms: u64,
+) -> Result<ProduceResponse> {
+    handle_async_inner(
+        api_version,
+        body,
+        storage,
+        producer_state,
+        transaction_manager,
+        Some(config_store),
+        default_retention_ms,
+    )
+    .await
+}
+
+async fn handle_async_inner(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    producer_state: &Arc<ProducerStateManager>,
+    transaction_manager: &Arc<TransactionManager>,
+    config_store: Option<&Arc<ConfigStore>>,
+    default_retention_ms: u64,
+) -> Result<ProduceResponse> {
     debug!(
         api_version = api_version,
         body_len = body.len(),
@@ -259,6 +367,11 @@ pub async fn handle_async(
                     records: records.as_ref(),
                     transactional_attempted,
                     sequence_validator: &sequence_validator,
+                    retention_policy: effective_retention_policy(
+                        config_store,
+                        default_retention_ms,
+                        &topic_name,
+                    ),
                 })
                 .await
                 {

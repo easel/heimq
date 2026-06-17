@@ -105,6 +105,21 @@ impl MemoryPartitionLog {
         freed
     }
 
+    /// Drop oldest batches until the partition is within `max_bytes`, allowing
+    /// the partition to become empty. This is only used before accepting a new
+    /// append under `retention.bytes`.
+    pub fn reclaim_to_size_allow_empty(&self, max_bytes: usize) -> usize {
+        let mut segment = self.active_segment.write();
+        let freed = segment.reclaim_to_size_allow_empty(max_bytes);
+        if freed > 0 {
+            let new_start = segment
+                .first_offset()
+                .unwrap_or_else(|| self.next_offset.load(Ordering::SeqCst));
+            self.log_start_offset.store(new_start, Ordering::SeqCst);
+        }
+        freed
+    }
+
     /// Fetch records starting from the given offset.
     ///
     /// Returns `(record_batch_data, high_watermark)`.

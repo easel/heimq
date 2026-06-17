@@ -7,7 +7,9 @@
 
 use crate::config::Config;
 use crate::error::{HeimqError, Result};
-use crate::storage::{BackendCapabilities, LogBackend, MemoryTopicLog, TopicLog};
+use crate::storage::{
+    AppendFuture, BackendCapabilities, LogBackend, MemoryTopicLog, RetentionPolicy, TopicLog,
+};
 use dashmap::DashMap;
 use metrics::{counter, gauge};
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -81,6 +83,41 @@ impl MemoryLog {
             counter!("heimq_retention_reclaimed_bytes_total", "reason" => reason)
                 .increment(bytes as u64);
         }
+    }
+
+    fn reclaim_topic_for_append(
+        &self,
+        topic: &str,
+        append_partition: i32,
+        cutoff_ms: i64,
+        retention_bytes: i64,
+    ) -> usize {
+        let t = match self.get_memory_topic(topic) {
+            Some(t) => t,
+            None => return 0,
+        };
+        let mut freed = 0usize;
+        let mut expired_freed = 0usize;
+        let mut size_freed = 0usize;
+        for p in 0..t.num_partitions() {
+            if let Ok(part) = t.get_memory_partition(p) {
+                let expired = part.reclaim_expired(cutoff_ms);
+                expired_freed += expired;
+                freed += expired;
+                if retention_bytes >= 0 && p == append_partition {
+                    let size = part.reclaim_to_size_allow_empty(retention_bytes as usize);
+                    size_freed += size;
+                    freed += size;
+                }
+            }
+        }
+        if freed > 0 {
+            self.total_bytes.fetch_sub(freed as i64, Ordering::Relaxed);
+            Self::record_reclaimed_bytes("retention_ms", expired_freed);
+            Self::record_reclaimed_bytes("retention_bytes", size_freed);
+            self.set_total_bytes_metric();
+        }
+        freed
     }
 
     fn resolve_topic_for_append(&self, name: &str) -> Result<Arc<MemoryTopicLog>> {
@@ -188,14 +225,45 @@ impl LogBackend for MemoryLog {
     }
 
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)> {
+        self.append_with_retention_policy(
+            topic_name,
+            partition,
+            records,
+            Some(RetentionPolicy {
+                retention_ms: self.config.retention_ms,
+                retention_bytes: -1,
+            }),
+        )
+    }
+
+    fn append_with_retention_policy(
+        &self,
+        topic_name: &str,
+        partition: i32,
+        records: &[u8],
+        retention: Option<RetentionPolicy>,
+    ) -> Result<(i64, i64)> {
         // Memory cap + backpressure: if accepting this batch would exceed the cap,
-        // first drop expired data; if it is still over, reject with a retriable
-        // storage error so the producer backs off. This keeps memory bounded
-        // without evicting un-expired data (preserving the retention.ms contract).
+        // first reclaim data allowed by the topic retention policy; if it is
+        // still over, reject with a retriable storage error so the producer
+        // backs off. This keeps memory bounded without evicting un-expired data.
+        let retention = retention.unwrap_or(RetentionPolicy {
+            retention_ms: self.config.retention_ms,
+            retention_bytes: -1,
+        });
         let cap = self.config.max_memory_bytes;
         if cap > 0 && self.total_bytes.load(Ordering::Relaxed) as u64 + records.len() as u64 > cap {
             let now_ms = chrono::Utc::now().timestamp_millis();
-            self.reclaim_expired(now_ms, self.config.retention_ms);
+            let cutoff = now_ms.saturating_sub(retention.retention_ms as i64);
+            let retention_bytes = if retention.retention_bytes >= 0 {
+                retention
+                    .retention_bytes
+                    .saturating_sub(records.len() as i64)
+                    .max(0)
+            } else {
+                -1
+            };
+            self.reclaim_topic_for_append(topic_name, partition, cutoff, retention_bytes);
             if self.total_bytes.load(Ordering::Relaxed) as u64 + records.len() as u64 > cap {
                 counter!("heimq_storage_full_errors_total").increment(1);
                 self.set_total_bytes_metric();
@@ -224,6 +292,18 @@ impl LogBackend for MemoryLog {
         );
 
         Ok((base_offset, count))
+    }
+
+    fn append_async_with_retention_policy<'a>(
+        &'a self,
+        topic_name: &'a str,
+        partition: i32,
+        records: &'a [u8],
+        retention: Option<RetentionPolicy>,
+    ) -> AppendFuture<'a> {
+        Box::pin(std::future::ready(self.append_with_retention_policy(
+            topic_name, partition, records, retention,
+        )))
     }
 
     fn reclaim_expired(&self, now_ms: i64, retention_ms: u64) -> usize {

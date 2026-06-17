@@ -79,6 +79,24 @@ impl Segment {
         freed
     }
 
+    /// Drop oldest batches until the stored size is within `max_bytes`,
+    /// allowing the segment to become empty. Used by append admission before a
+    /// replacement batch is accepted under `retention.bytes`.
+    pub fn reclaim_to_size_allow_empty(&mut self, max_bytes: usize) -> usize {
+        let mut freed = 0;
+        while self.size > max_bytes {
+            let oldest = match self.batches.keys().next().copied() {
+                Some(k) => k,
+                None => break,
+            };
+            if let Some(data) = self.batches.remove(&oldest) {
+                self.size = self.size.saturating_sub(data.len());
+                freed += data.len();
+            }
+        }
+        freed
+    }
+
     /// Drop the leading (oldest) batches whose `max_timestamp` is older than
     /// `cutoff_ms`, returning the number of bytes freed. Batches are stored in
     /// ascending offset order, which is also produce-time order, so dropping from

@@ -26,6 +26,7 @@ pub struct Router {
     transaction_manager: Arc<TransactionManager>,
     /// Per-topic dynamic config overrides (AlterConfigs / DescribeConfigs).
     config_store: Arc<ConfigStore>,
+    default_retention_ms: u64,
     /// Signalled after every successful Produce to wake Fetch long-polls.
     append_notify: Option<Arc<tokio::sync::Notify>>,
 }
@@ -58,6 +59,7 @@ impl Router {
             producer_state: ProducerStateManager::new(),
             transaction_manager: TransactionManager::new(),
             config_store: Arc::new(ConfigStore::new()),
+            default_retention_ms: 7 * 24 * 60 * 60 * 1000,
             append_notify: None,
         }
     }
@@ -84,6 +86,11 @@ impl Router {
     /// retention sweeper all see the same state across connections).
     pub fn with_config_store(mut self, config_store: Arc<ConfigStore>) -> Self {
         self.config_store = config_store;
+        self
+    }
+
+    pub fn with_default_retention_ms(mut self, retention_ms: u64) -> Self {
+        self.default_retention_ms = retention_ms;
         self
     }
 
@@ -310,13 +317,33 @@ impl Router {
 
         let ps = self.producer_state.clone();
         let tm = self.transaction_manager.clone();
+        let store = self.config_store.clone();
+        let default_retention_ms = self.default_retention_ms;
         let result = if acks_zero {
-            let _ = produce::handle(header.api_version, body, &self.storage, &ps, &tm);
+            let _ = produce::handle_with_config_store(
+                header.api_version,
+                body,
+                &self.storage,
+                &ps,
+                &tm,
+                &store,
+                default_retention_ms,
+            );
             Ok(bytes::Bytes::new())
         } else {
             self.handle_and_encode(
                 header,
-                Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps, &tm)),
+                Box::new(|| {
+                    produce::handle_with_config_store(
+                        header.api_version,
+                        body,
+                        &self.storage,
+                        &ps,
+                        &tm,
+                        &store,
+                        default_retention_ms,
+                    )
+                }),
             )
         };
         // Wake any Fetch long-polls waiting for new data.
@@ -343,8 +370,16 @@ impl Router {
 
         let ps = self.producer_state.clone();
         let tm = self.transaction_manager.clone();
-        let response =
-            produce::handle_async(header.api_version, body, &self.storage, &ps, &tm).await;
+        let response = produce::handle_async_with_config_store(
+            header.api_version,
+            body,
+            &self.storage,
+            &ps,
+            &tm,
+            &self.config_store,
+            self.default_retention_ms,
+        )
+        .await;
         let result = if acks_zero {
             response.map(|_| bytes::Bytes::new())
         } else {

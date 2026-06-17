@@ -5,7 +5,7 @@
 //! returns append outcomes that protocol handlers can map to wire responses.
 
 use crate::error::HeimqError;
-use crate::storage::{LogBackend, RecordBatchHeader};
+use crate::storage::{LogBackend, RecordBatchHeader, RetentionPolicy};
 
 /// Result of an idempotent sequence validation check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,6 +57,7 @@ pub struct ProduceAppend<'a> {
     pub records: &'a [u8],
     pub transactional_attempted: bool,
     pub sequence_validator: &'a dyn SequenceValidator,
+    pub retention_policy: Option<RetentionPolicy>,
 }
 
 /// Successful append decision.
@@ -124,7 +125,12 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
         AppendPlan::Complete(outcome) => return Ok(outcome),
     };
 
-    match cmd.storage.append(cmd.topic, cmd.partition, cmd.records) {
+    match cmd.storage.append_with_retention_policy(
+        cmd.topic,
+        cmd.partition,
+        cmd.records,
+        cmd.retention_policy,
+    ) {
         Ok((base_offset, high_watermark)) => Ok(ProduceAppendOutcome {
             status: ProduceAppendStatus::Appended {
                 base_offset,
@@ -148,7 +154,12 @@ pub async fn append_records_async(
 
     match cmd
         .storage
-        .append_async(cmd.topic, cmd.partition, cmd.records)
+        .append_async_with_retention_policy(
+            cmd.topic,
+            cmd.partition,
+            cmd.records,
+            cmd.retention_policy,
+        )
         .await
     {
         Ok((base_offset, high_watermark)) => Ok(ProduceAppendOutcome {
@@ -494,6 +505,7 @@ mod tests {
             records,
             transactional_attempted: false,
             sequence_validator,
+            retention_policy: None,
         }
     }
 
