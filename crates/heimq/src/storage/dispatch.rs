@@ -17,8 +17,7 @@ fn parse_scheme(url: &str) -> Result<&str> {
         .map(|(scheme, _)| scheme)
         .ok_or_else(|| {
             HeimqError::Config(format!(
-                "storage URL missing scheme (expected `<scheme>://...`): {}",
-                url
+                "storage URL missing scheme (expected `<scheme>://...`): {url}"
             ))
         })
 }
@@ -29,8 +28,7 @@ pub fn dispatch_log_backend(url: &str, config: Arc<Config>) -> Result<Arc<dyn Lo
     match scheme {
         "memory" => Ok(Arc::new(MemoryLog::new(config))),
         other => Err(HeimqError::Config(format!(
-            "unsupported log-backend scheme `{}://` in URL `{}` (supported: memory://)",
-            other, url
+            "unsupported log-backend scheme `{other}://` in URL `{url}` (supported: memory://)"
         ))),
     }
 }
@@ -68,8 +66,7 @@ pub fn dispatch_group_coordinator(
     match scheme {
         "memory" => Ok(memory_manager),
         other => Err(HeimqError::Config(format!(
-            "unsupported group-coordinator scheme `{}://` in URL `{}` (supported: memory://)",
-            other, url
+            "unsupported group-coordinator scheme `{other}://` in URL `{url}` (supported: memory://)"
         ))),
     }
 }

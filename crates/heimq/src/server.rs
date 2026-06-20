@@ -379,8 +379,7 @@ async fn run_reader(
             // WIRE-001 §1: frame-size cap
             if msg_len > MAX_FRAME_BYTES {
                 return Err(crate::error::HeimqError::Protocol(format!(
-                    "frame size {} exceeds max_frame_bytes {}",
-                    msg_len, MAX_FRAME_BYTES
+                    "frame size {msg_len} exceeds max_frame_bytes {MAX_FRAME_BYTES}"
                 )));
             }
             if buffer.len() < 4 + msg_len {

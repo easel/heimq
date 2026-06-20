@@ -239,8 +239,7 @@ async fn run_reader<R: AsyncRead + Unpin + Send + 'static>(
             let msg_len = u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]) as usize;
             if msg_len > MAX_FRAME_BYTES {
                 return Err(WireError::Protocol(format!(
-                    "frame size {} exceeds max {}",
-                    msg_len, MAX_FRAME_BYTES
+                    "frame size {msg_len} exceeds max {MAX_FRAME_BYTES}"
                 )));
             }
             if buf.len() < 4 + msg_len {
