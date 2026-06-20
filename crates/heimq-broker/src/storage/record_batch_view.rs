@@ -132,7 +132,7 @@ impl<'a> RecordBatchView<'a> {
     pub fn from_bytes(raw: &'a [u8]) -> Result<Self> {
         let mut buf = Bytes::copy_from_slice(raw);
         let set = RecordBatchDecoder::decode(&mut buf)
-            .map_err(|e| HeimqError::Protocol(format!("decode record batch: {}", e)))?;
+            .map_err(|e| HeimqError::Protocol(format!("decode record batch: {e}")))?;
         Self::from_raw_and_set(raw, set)
     }
 
