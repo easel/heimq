@@ -1,0 +1,51 @@
+{
+  "attempt_id": "20260616T045032-2a2803f1",
+  "bead_id": "heimq-ea88c9d3",
+  "base_rev": "d80271ec367ab2ad8e0483265a0449fb89dd973d",
+  "created_at": "2026-06-16T04:50:33.053412927Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-ea88c9d3",
+    "title": "Reduce in-memory fetch aggregation copy overhead",
+    "description": "Memory fetch currently builds a fresh Vec for every fetch and appends each selected record batch with extend_from_slice in Segment::read. That can reallocate and copies all fetched bytes before the FetchResponse encoder writes the response frame. Improve the in-memory fetch aggregation path without changing externally visible Kafka Fetch behavior. Prefer a small, low-risk change first: compute/capacity-plan the selected bytes and allocate once, or return a structure that avoids an intermediate copy if the trait shape already supports it. Keep retention and mid-batch fetch correctness intact.\n\nIn-scope files:\n- crates/heimq/src/storage/segment.rs\n- crates/heimq/src/storage/partition.rs\n- crates/heimq/src/handler/fetch.rs, only if a return-shape adjustment is needed\n- crates/heimq/src/storage/mod.rs, only if trait exports need adjustment\n\nOut-of-scope:\n- Durable backend changes.\n- Full zero-copy protocol encoder rewrite if it requires broad trait churn.\n- Fetch semantic changes for transactions or isolation level.",
+    "acceptance": "1. `cargo test -p heimq storage::segment --lib` passes.\n2. `cargo test -p heimq storage::partition --lib` passes.\n3. `cargo test -p heimq --test integration test_rdkafka_produce_consume_roundtrip -- --ignored --nocapture` passes.\n4. `BENCH_RECORDS=1000 BENCH_LATENCY_SAMPLES=10 BENCH_DIAGNOSTICS=1 cargo test -p heimq --release --test bench_baseline -- --ignored --nocapture` passes.",
+    "parent": "heimq-c06bb2b9",
+    "labels": [
+      "area:storage",
+      "area:performance",
+      "kind:optimization"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "worker-20260616T043521-7139",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead heimq-ea88c9d3\",\"fingerprint\":\"939403adc9966d8f2e509226400d5fed799dfcd9c11d15d7fc86c4923b7a810c\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"939403adc9966d8f2e509226400d5fed799dfcd9c11d15d7fc86c4923b7a810c\"}",
+          "created_at": "2026-06-16T04:50:31.475301091Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "crates/heimq/docs/helix/01-frame/features/FEAT-004-benchmark-conformance.md",
+      "title": "Feature Specification: FEAT-004 — Standard Kafka Benchmark Conformance"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260616T045032-2a2803f1",
+    "prompt": ".ddx/executions/20260616T045032-2a2803f1/prompt.md",
+    "manifest": ".ddx/executions/20260616T045032-2a2803f1/manifest.json",
+    "result": ".ddx/executions/20260616T045032-2a2803f1/result.json",
+    "checks": ".ddx/executions/20260616T045032-2a2803f1/checks.json",
+    "usage": ".ddx/executions/20260616T045032-2a2803f1/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-ea88c9d3-20260616T045032-2a2803f1"
+  },
+  "prompt_sha": "60e7b3fbd0e4e8a02a3db7d919d29995a54cd77240413161618ff0b79152bdc0"
+}

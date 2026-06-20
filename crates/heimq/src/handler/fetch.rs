@@ -13,22 +13,13 @@ use kafka_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::debug;
 
-/// Handle Fetch request
-pub fn handle(
-    api_version: i16,
-    body: &[u8],
+/// Handle Fetch request with a pre-decoded FetchRequest (avoids redundant decode on hot path).
+pub fn handle_request(
+    _api_version: i16,
+    request: FetchRequest,
     storage: &Arc<dyn LogBackend>,
     transaction_manager: &Arc<TransactionManager>,
 ) -> Result<FetchResponse> {
-    let mut buf = Bytes::copy_from_slice(body);
-    let request = match FetchRequest::decode(&mut buf, api_version) {
-        Ok(r) => r,
-        Err(e) => {
-            tracing::warn!(error = %e, "Failed to decode fetch request");
-            return Ok(FetchResponse::default());
-        }
-    };
-
     let max_bytes = request.max_bytes as usize;
     // isolation_level: 0 = READ_UNCOMMITTED, 1 = READ_COMMITTED (available from v4)
     let isolation_level = request.isolation_level;
@@ -90,7 +81,7 @@ pub fn handle(
                     }
 
                     if !records.is_empty() {
-                        partition_data.records = Some(Bytes::from(records).into());
+                        partition_data.records = Some(Bytes::from(records));
                     }
                 }
                 Err(e) => {
@@ -106,4 +97,22 @@ pub fn handle(
     }
 
     Ok(response)
+}
+
+/// Handle Fetch request (decodes body and delegates to [`handle_request`]).
+pub fn handle(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    transaction_manager: &Arc<TransactionManager>,
+) -> Result<FetchResponse> {
+    let mut buf = Bytes::copy_from_slice(body);
+    let request = match FetchRequest::decode(&mut buf, api_version) {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!(error = %e, "Failed to decode fetch request");
+            return Ok(FetchResponse::default());
+        }
+    };
+    handle_request(api_version, request, storage, transaction_manager)
 }

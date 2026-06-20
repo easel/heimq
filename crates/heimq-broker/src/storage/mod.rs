@@ -13,11 +13,24 @@ pub use capabilities::{
 };
 pub use cluster_view::{BrokerInfo, ClusterView, ClusterViewError};
 pub use offset_store::{CommittedOffset, OffsetStore, OffsetStoreCapabilities};
-pub use record_batch_view::{RecordBatchHeader, RecordBatchView, RecordView};
+pub use record_batch_view::{stamp_base_offset, RecordBatchHeader, RecordBatchView, RecordView};
 
 use crate::error::Result;
 use bytes::Bytes;
+use std::future::{ready, Future};
+use std::pin::Pin;
 use std::sync::Arc;
+
+/// Runtime-neutral future returned by append entrypoints.
+pub type AppendFuture<'a> = Pin<Box<dyn Future<Output = Result<(i64, i64)>> + Send + 'a>>;
+
+/// Effective retention policy for one append admission decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetentionPolicy {
+    pub retention_ms: u64,
+    /// Per-partition byte window. `-1` means unlimited.
+    pub retention_bytes: i64,
+}
 
 /// Record stored in a partition
 #[derive(Debug, Clone)]
@@ -96,6 +109,45 @@ pub trait LogBackend: Send + Sync {
     /// and auto-creates the topic when `auto_create_topics()` is set.
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
 
+    /// Append a raw record-batch using the caller's effective topic retention
+    /// policy for append-time admission. Backends that do not enforce retention
+    /// at append time can inherit the plain append behavior.
+    fn append_with_retention_policy(
+        &self,
+        topic_name: &str,
+        partition: i32,
+        records: &[u8],
+        _retention: Option<RetentionPolicy>,
+    ) -> Result<(i64, i64)> {
+        self.append(topic_name, partition, records)
+    }
+
+    /// Append a raw record-batch without requiring the caller's worker thread to
+    /// block until a deferred backend commit completes.
+    ///
+    /// Synchronous backends inherit the existing `append` behavior. Deferred
+    /// backends should override this and return a future that resolves when the
+    /// append's offset assignment is complete.
+    fn append_async<'a>(
+        &'a self,
+        topic_name: &'a str,
+        partition: i32,
+        records: &'a [u8],
+    ) -> AppendFuture<'a> {
+        Box::pin(ready(self.append(topic_name, partition, records)))
+    }
+
+    /// Async variant of [`append_with_retention_policy`].
+    fn append_async_with_retention_policy<'a>(
+        &'a self,
+        topic_name: &'a str,
+        partition: i32,
+        records: &'a [u8],
+        _retention: Option<RetentionPolicy>,
+    ) -> AppendFuture<'a> {
+        self.append_async(topic_name, partition, records)
+    }
+
     /// Drop records older than `retention_ms` across all partitions, returning the
     /// bytes freed. Backends without time-based retention keep the no-op default.
     fn reclaim_expired(&self, _now_ms: i64, _retention_ms: u64) -> usize {
@@ -145,6 +197,16 @@ pub trait PartitionLog: Send + Sync {
     /// the batch. Backends that pass through raw bytes (like the in-memory
     /// backend) should prefer `raw_bytes` over re-encoding the view.
     fn append(&self, view: &RecordBatchView<'_>, raw_bytes: Option<&[u8]>) -> Result<(i64, i64)>;
+
+    /// Async append entrypoint for partition-level backends with deferred
+    /// commits. Synchronous implementations inherit `append`.
+    fn append_async<'a, 'b>(
+        &'a self,
+        view: &'a RecordBatchView<'b>,
+        raw_bytes: Option<&'a [u8]>,
+    ) -> AppendFuture<'a> {
+        Box::pin(ready(self.append(view, raw_bytes)))
+    }
 
     /// Read records starting at `offset`, up to `max_bytes`.
     fn read(&self, offset: i64, max_bytes: usize, wait: FetchWait) -> Result<(Vec<u8>, i64)>;

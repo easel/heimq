@@ -60,6 +60,25 @@ impl RecordBatchHeader {
     }
 }
 
+/// Stamp the assigned `base_offset` into a Kafka v2 record batch, in place.
+///
+/// `base_offset` lives at bytes `0..8` (big-endian), *before* the CRC at `17..21`,
+/// so rewriting it does not invalidate the batch CRC (which covers `attributes`
+/// onward). Storage backends that assign offsets out of band — e.g. a diskless
+/// broker whose coordinator sequences offsets after the bytes are produced — call
+/// this on the read path instead of poking the bytes themselves; heimq owns the v2
+/// wire layout, so the knowledge lives here.
+///
+/// Returns `false` and does nothing if `batch` is not a well-formed v2 batch
+/// header (shorter than the 61-byte fixed header, or `magic != 2`).
+pub fn stamp_base_offset(batch: &mut [u8], base_offset: i64) -> bool {
+    if batch.len() < 61 || batch.get(16) != Some(&2) {
+        return false;
+    }
+    batch[0..8].copy_from_slice(&base_offset.to_be_bytes());
+    true
+}
+
 /// Structured view of a single Kafka record batch.
 ///
 /// Carries parsed batch-level metadata plus the decoded records and a
@@ -345,5 +364,30 @@ mod tests {
     fn view_rejects_malformed_bytes() {
         let bogus = [0u8; 4];
         assert!(RecordBatchView::from_bytes(&bogus).is_err());
+    }
+
+    #[test]
+    fn stamp_base_offset_rewrites_header_crc_safely() {
+        let records = vec![
+            make_record(0, 1_000, b"k0", b"v0"),
+            make_record(1, 1_050, b"k1", b"v1"),
+        ];
+        let mut raw = encode(&records, Compression::None);
+        // Producer sent base_offset 0; the log assigns 1000.
+        assert!(stamp_base_offset(&mut raw, 1_000));
+        assert_eq!(i64::from_be_bytes(raw[0..8].try_into().unwrap()), 1_000);
+        // The batch still decodes (CRC unaffected) and reports the new offsets.
+        let view = RecordBatchView::from_bytes(&raw).expect("decode after stamp");
+        assert_eq!(view.base_offset(), 1_000);
+        assert_eq!(view.record_count(), 2);
+        let offsets: Vec<i64> = view
+            .records()
+            .map(|r| 1_000 + r.offset_delta as i64)
+            .collect();
+        assert_eq!(offsets, vec![1_000, 1_001]);
+        // Non-v2 / short buffers are rejected without mutation.
+        let mut bogus = [0u8; 8];
+        assert!(!stamp_base_offset(&mut bogus, 5));
+        assert_eq!(bogus, [0u8; 8]);
     }
 }

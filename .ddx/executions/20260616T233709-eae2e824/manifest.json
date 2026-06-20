@@ -1,0 +1,31 @@
+{
+  "attempt_id": "20260616T233709-eae2e824",
+  "bead_id": "heimq-040374f9",
+  "base_rev": "296409bc316e14011cf952a8f097e437504390ec",
+  "created_at": "2026-06-16T23:37:09.875986615Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-040374f9",
+    "title": "Final release infrastructure verification",
+    "description": "Final audit bead for docs/release/release-infrastructure-plan.md. Do not add new product scope. Verify the release, Docker, Helm, README, microsite, reproducible test infrastructure, and runbook beads are complete and internally consistent. In-scope files: docs/release/release-infrastructure-plan.md, README.md, .github/workflows/**, charts/heimq/**, site/**, justfile or Makefile, rust-toolchain.toml, Dockerfile. Out of scope: protocol/storage behavior changes. If a required item is incomplete, leave this bead open and add or update child beads rather than papering over the gap.",
+    "acceptance": "1. `ddx bead status` shows no open/proposed child beads under `heimq-46fe0670` except this final audit.\n2. `cargo fmt --all -- --check` passes.\n3. `cargo clippy --workspace --all-targets -- -D warnings` passes.\n4. `cargo test --workspace --all-targets` passes.\n5. `helm lint charts/heimq`, `helm template heimq charts/heimq`, and `helm package charts/heimq` pass.\n6. `docker build -t heimq:local .` passes.\n7. README.md, site/, Docker workflow, Helm chart, and release workflow all agree on repository/image/version mapping.",
+    "parent": "heimq-46fe0670",
+    "labels": [
+      "area:release",
+      "kind:chore",
+      "release-infra"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260616T233709-eae2e824",
+    "prompt": ".ddx/executions/20260616T233709-eae2e824/prompt.md",
+    "manifest": ".ddx/executions/20260616T233709-eae2e824/manifest.json",
+    "result": ".ddx/executions/20260616T233709-eae2e824/result.json",
+    "checks": ".ddx/executions/20260616T233709-eae2e824/checks.json",
+    "usage": ".ddx/executions/20260616T233709-eae2e824/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-040374f9-20260616T233709-eae2e824"
+  },
+  "prompt_sha": "ef7065fd59f10db540a0418cefd4ab38e0ebb2dc88fcc576a98e4e3c8dc5a537"
+}

@@ -1,0 +1,59 @@
+{
+  "attempt_id": "20260616T050613-081dfb07",
+  "bead_id": "hx-c49b5fea",
+  "base_rev": "55da4d91c41a3b0362a0ba635837b863306a8704",
+  "created_at": "2026-06-16T05:06:13.916109855Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "hx-c49b5fea",
+    "title": "Async produce path: stop blocking a worker thread per in-flight append",
+    "description": "PROBLEM: LogBackend::append / PartitionLog::append are synchronous, so a Produce request blocks its broker worker thread until the backend returns. For backends that DEFER the durable commit — e.g. fjord's CoordinatorLogBackend, whose server-side flush buffer (group commit) holds the append until a batched commit_object completes — the number of in-flight appends, and therefore the achievable group-commit / object-coalescing degree, is bounded by the broker's worker-thread count rather than by client concurrency.\n\nEVIDENCE (fjord): with client batching disabled (linger.ms=0, batch.num.messages=1), 32 concurrent producers coalesced only ~15x with 16 worker threads — the degree tracked worker count, not the 32 connections. Sync append caps the win of deferred-commit backends.\n\nDESIGN: add an async append entry point on the storage seam (e.g. `async fn append_async(..) -\u003e Future\u003c(offset,count)\u003e` that the produce router awaits, or offload the sync append onto a bounded spawn_blocking pool). The backend signals completion (offset assigned) via a Future/oneshot instead of blocking the calling worker. Keep the existing sync `append` working for simple backends via a default impl that bridges to the async one (or vice-versa). fjord's Flusher already uses a background flush thread + a per-append channel — it would hand back the receiver's Future directly instead of blocking on recv(). Must preserve per-(producer,partition) ordering and idempotent sequencing and not regress the in-memory/object-log backends.\n\nDiscovered while building fjord's TD-005 server-side flush buffering (fjord commits 1c33261 / 05ee78c).",
+    "acceptance": "Produce handler no longer holds a worker thread for the duration of a deferred backend commit; a single broker with N worker threads sustains many more than N concurrent in-flight appends; fjord's flush_coalescing benchmark shows coalescing degree scaling with client concurrency rather than broker worker-thread count; per-(producer,partition) ordering and idempotent sequencing preserved; all conformance/parity tests stay green; simple in-memory/log backends keep working via a default sync bridge.",
+    "labels": [
+      "performance",
+      "produce-path",
+      "storage-trait",
+      "fjord"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "ddx-server",
+          "body": "worker=worker-20260616T043521-7139 state=failed reason=terminal-worker-claim",
+          "created_at": "2026-06-16T05:00:26.180779861Z",
+          "kind": "bead.reaped",
+          "source": "server-workers",
+          "summary": "terminal-worker-claim"
+        },
+        {
+          "actor": "worker-20260616T050026-6c60",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead hx-c49b5fea\",\"fingerprint\":\"24eff04622821dd2dd5398e62b5a48e566e130792f507423094704ca8e44f5b4\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"24eff04622821dd2dd5398e62b5a48e566e130792f507423094704ca8e44f5b4\"}",
+          "created_at": "2026-06-16T05:02:58.26528166Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "worker-20260616T050026-6c60",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead hx-c49b5fea\",\"fingerprint\":\"24eff04622821dd2dd5398e62b5a48e566e130792f507423094704ca8e44f5b4\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"24eff04622821dd2dd5398e62b5a48e566e130792f507423094704ca8e44f5b4\"}",
+          "created_at": "2026-06-16T05:06:12.371233525Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260616T050613-081dfb07",
+    "prompt": ".ddx/executions/20260616T050613-081dfb07/prompt.md",
+    "manifest": ".ddx/executions/20260616T050613-081dfb07/manifest.json",
+    "result": ".ddx/executions/20260616T050613-081dfb07/result.json",
+    "checks": ".ddx/executions/20260616T050613-081dfb07/checks.json",
+    "usage": ".ddx/executions/20260616T050613-081dfb07/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-hx-c49b5fea-20260616T050613-081dfb07"
+  },
+  "prompt_sha": "375b7068def752d0bc7b9d7f500b5ca4762ba04561cb171a47da491073757c2e"
+}

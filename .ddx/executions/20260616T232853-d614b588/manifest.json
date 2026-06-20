@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260616T232853-d614b588",
+  "bead_id": "heimq-7ebc6dec",
+  "base_rev": "e5786f9418e90a042767484fe99fdcb0c12ac646",
+  "created_at": "2026-06-16T23:28:53.896172188Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-7ebc6dec",
+    "title": "Document and gate the heimq release process",
+    "description": "Add the release runbook and final release-check surface from docs/release/release-infrastructure-plan.md. Current state: no docs release runbook exists except the plan. In-scope files: docs/release/**, justfile or Makefile if a release-check target is needed, README.md links if needed. Required content: tag naming, pre-release verification, workflow behavior, artifact verification, Docker/Helm publish locations, rollback/recovery. Out of scope: implementing missing release workflows already covered by other beads.",
+    "acceptance": "1. `test -f docs/release/runbook.md` passes.\n2. `grep -q \"vX.Y.Z\" docs/release/runbook.md` passes.\n3. The runbook documents pre-release verification, artifact verification, Docker and Helm publish locations, and rollback/recovery.\n4. `just release-check` or `make release-check` exists and runs the available local release validation commands.\n5. `grep -q \"docs/release/runbook.md\" README.md` passes.\n6. `cargo fmt --all -- --check` passes.\n7. `cargo test --workspace --all-targets` passes.\n8. `helm lint charts/heimq` and `helm template heimq charts/heimq` pass.",
+    "parent": "heimq-46fe0670",
+    "labels": [
+      "area:release",
+      "area:docs",
+      "kind:task",
+      "release-infra"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260616T232853-d614b588",
+    "prompt": ".ddx/executions/20260616T232853-d614b588/prompt.md",
+    "manifest": ".ddx/executions/20260616T232853-d614b588/manifest.json",
+    "result": ".ddx/executions/20260616T232853-d614b588/result.json",
+    "checks": ".ddx/executions/20260616T232853-d614b588/checks.json",
+    "usage": ".ddx/executions/20260616T232853-d614b588/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-7ebc6dec-20260616T232853-d614b588"
+  },
+  "prompt_sha": "f20981e15df5c18e6780acccfcb97a1cdf31e6c9e4ed4c62eafbbbbf807ae2c6"
+}

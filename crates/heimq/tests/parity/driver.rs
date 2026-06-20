@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::broker::BrokerTarget;
 use anyhow::Result;
 use async_trait::async_trait;

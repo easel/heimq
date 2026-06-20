@@ -79,6 +79,24 @@ impl Segment {
         freed
     }
 
+    /// Drop oldest batches until the stored size is within `max_bytes`,
+    /// allowing the segment to become empty. Used by append admission before a
+    /// replacement batch is accepted under `retention.bytes`.
+    pub fn reclaim_to_size_allow_empty(&mut self, max_bytes: usize) -> usize {
+        let mut freed = 0;
+        while self.size > max_bytes {
+            let oldest = match self.batches.keys().next().copied() {
+                Some(k) => k,
+                None => break,
+            };
+            if let Some(data) = self.batches.remove(&oldest) {
+                self.size = self.size.saturating_sub(data.len());
+                freed += data.len();
+            }
+        }
+        freed
+    }
+
     /// Drop the leading (oldest) batches whose `max_timestamp` is older than
     /// `cutoff_ms`, returning the number of bytes freed. Batches are stored in
     /// ascending offset order, which is also produce-time order, so dropping from
@@ -88,9 +106,7 @@ impl Segment {
         let expired: Vec<i64> = self
             .batches
             .iter()
-            .take_while(|(_, b)| {
-                batch_max_timestamp(b).map_or(false, |ts| ts > 0 && ts < cutoff_ms)
-            })
+            .take_while(|(_, b)| batch_max_timestamp(b).is_some_and(|ts| ts > 0 && ts < cutoff_ms))
             .map(|(&k, _)| k)
             .collect();
         let mut freed = 0;
@@ -105,9 +121,6 @@ impl Segment {
 
     /// Read record batches starting from the given offset
     pub fn read(&self, start_offset: i64, max_bytes: usize) -> Vec<u8> {
-        let mut result = Vec::new();
-        let mut bytes_read = 0;
-
         // Step back one entry so we include the batch that contains start_offset
         // when start_offset falls mid-batch (base_offset < start_offset but the
         // batch spans records up to or past start_offset).  The consumer is
@@ -118,6 +131,19 @@ impl Segment {
             .next_back()
             .map(|(&k, _)| k)
             .unwrap_or(start_offset);
+
+        // Pre-compute total bytes so we can allocate once instead of reallocating
+        // as extend_from_slice grows the Vec.
+        let mut capacity = 0usize;
+        for (_, batch) in self.batches.range(first_key..) {
+            if capacity + batch.len() > max_bytes && capacity > 0 {
+                break;
+            }
+            capacity += batch.len();
+        }
+
+        let mut result = Vec::with_capacity(capacity);
+        let mut bytes_read = 0;
 
         for (_offset, batch) in self.batches.range(first_key..) {
             if bytes_read + batch.len() > max_bytes && !result.is_empty() {

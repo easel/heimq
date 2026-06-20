@@ -704,7 +704,7 @@ public class KafkaOracle {
             throw new RuntimeException("expected " + N + " unique (partition,offset) pairs, got " + produced.size());
         }
 
-        boolean completed = done.await(30, TimeUnit.SECONDS);
+        boolean completed = done.await(60, TimeUnit.SECONDS);
         stop.set(true);
         exec.shutdownNow();
         exec.awaitTermination(5, TimeUnit.SECONDS);

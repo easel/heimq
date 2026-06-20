@@ -51,7 +51,23 @@ impl Server {
         offset_store: Arc<dyn OffsetStore>,
     ) -> Result<Self> {
         let config = Arc::new(config);
-        Self::build_with_offsets(config, storage, offset_store)
+        Self::build_with_offsets(config, storage, offset_store, None)
+    }
+
+    /// Like [`with_backends`], but with an externally provided [`ClusterView`].
+    ///
+    /// This is the seam multi-node embeddings (e.g. fjord) use to present a
+    /// multi-broker topology: the injected view drives Metadata, the partition
+    /// leader hints, and group-coordinator routing instead of the default
+    /// single-node view derived from config.
+    pub fn with_backends_and_cluster_view(
+        config: Config,
+        storage: Arc<dyn LogBackend>,
+        offset_store: Arc<dyn OffsetStore>,
+        cluster_view: Arc<dyn ClusterView>,
+    ) -> Result<Self> {
+        let config = Arc::new(config);
+        Self::build_with_offsets(config, storage, offset_store, Some(cluster_view))
     }
 
     /// Create a new server with an externally provided log backend.
@@ -75,6 +91,7 @@ impl Server {
         config: Arc<Config>,
         storage: Arc<dyn LogBackend>,
         offset_store: Arc<dyn OffsetStore>,
+        cluster_view: Option<Arc<dyn ClusterView>>,
     ) -> Result<Self> {
         let consumer_groups = Arc::new(ConsumerGroupManager::with_offset_store(
             config.clone(),
@@ -89,7 +106,8 @@ impl Server {
             consumer_groups.offset_store().capabilities(),
             coordinator.capabilities(),
         ));
-        let cluster_view = SingleNodeClusterView::arc_from_config(&config);
+        let cluster_view =
+            cluster_view.unwrap_or_else(|| SingleNodeClusterView::arc_from_config(&config));
         let max_memory_bytes = config.max_memory_bytes;
 
         for spec in &config.create_topics {
@@ -259,7 +277,8 @@ impl Server {
                 .with_producer_state(self.producer_state.clone())
                 .with_transaction_manager(self.transaction_manager.clone())
                 .with_append_notify(self.append_notify.clone())
-                .with_config_store(self.config_store.clone());
+                .with_config_store(self.config_store.clone())
+                .with_default_retention_ms(self.config.retention_ms);
 
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(Box::new(socket), router).await {
@@ -414,8 +433,11 @@ async fn run_writer(
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+    use crate::consumer_group::MemoryOffsetStore;
+    use crate::storage::{BrokerInfo, ClusterViewError};
     use crate::test_support::{init_tracing, test_config, test_consumer_groups, test_storage};
     use bytes::BufMut;
     use clap::Parser;
@@ -425,6 +447,65 @@ mod tests {
     use std::task::{Context, Poll};
     use tokio::io::AsyncWriteExt;
     use tokio::io::ReadBuf;
+
+    struct FixedClusterView {
+        broker: BrokerInfo,
+        cluster_id: String,
+    }
+
+    impl ClusterView for FixedClusterView {
+        fn self_broker(&self) -> BrokerInfo {
+            self.broker.clone()
+        }
+
+        fn brokers(&self) -> Vec<BrokerInfo> {
+            vec![self.broker.clone()]
+        }
+
+        fn cluster_id(&self) -> String {
+            self.cluster_id.clone()
+        }
+
+        fn partition_leader(
+            &self,
+            _topic: &str,
+            _partition: i32,
+        ) -> std::result::Result<BrokerInfo, ClusterViewError> {
+            Ok(self.broker.clone())
+        }
+
+        fn find_coordinator(
+            &self,
+            _group_id: &str,
+        ) -> std::result::Result<BrokerInfo, ClusterViewError> {
+            Ok(self.broker.clone())
+        }
+    }
+
+    #[test]
+    fn with_backends_and_cluster_view_uses_injected_view() {
+        let config = Config::parse_from(["heimq"]);
+        let storage = test_storage(true);
+        let offset_store: Arc<dyn OffsetStore> = Arc::new(MemoryOffsetStore::new());
+        let injected: Arc<dyn ClusterView> = Arc::new(FixedClusterView {
+            broker: BrokerInfo {
+                node_id: 42,
+                host: "broker.example.test".to_string(),
+                port: 19_092,
+            },
+            cluster_id: "external-cluster".to_string(),
+        });
+
+        let server =
+            Server::with_backends_and_cluster_view(config, storage, offset_store, injected)
+                .unwrap();
+
+        let broker = server.cluster_view.self_broker();
+        assert_eq!(server.cluster_view.cluster_id(), "external-cluster");
+        assert_eq!(broker.node_id, 42);
+        assert_eq!(broker.host, "broker.example.test");
+        assert_eq!(broker.port, 19_092);
+    }
 
     struct ScriptedStream {
         data: Vec<u8>,
@@ -470,10 +551,7 @@ mod tests {
         ) -> Poll<std::io::Result<()>> {
             let this = self.get_mut();
             if this.fail_read {
-                return Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "read failed",
-                )));
+                return Poll::Ready(Err(std::io::Error::other("read failed")));
             }
 
             if this.pos >= this.data.len() {
@@ -496,10 +574,7 @@ mod tests {
         ) -> Poll<std::io::Result<usize>> {
             let this = self.get_mut();
             if this.fail_write {
-                return Poll::Ready(Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "write failed",
-                )));
+                return Poll::Ready(Err(std::io::Error::other("write failed")));
             }
             Poll::Ready(Ok(buf.len()))
         }
@@ -731,7 +806,7 @@ mod tests {
         let config = Config::parse_from(["heimq"]);
         let server = Server::new(config).unwrap();
         let mut served = 0usize;
-        let error = std::io::Error::new(std::io::ErrorKind::Other, "accept failed");
+        let error = std::io::Error::other("accept failed");
         let should_continue = server.handle_accept_result(Err(error), Some(1), &mut served);
         assert!(should_continue);
         assert_eq!(served, 0);
@@ -913,7 +988,7 @@ mod tests {
     // WIRE-001 §1: frame-size cap enforced — connection close, no response
     #[tokio::test]
     async fn test_frame_size_cap_enforced() {
-        let _ = init_tracing();
+        init_tracing();
         let config = Arc::new(Config::parse_from(["heimq"]));
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
@@ -963,7 +1038,7 @@ mod tests {
     // WIRE-001 §3: error frame sent before close when routing fails with identifiable correlation_id
     #[tokio::test]
     async fn test_malformed_request_typed_error_frame() {
-        let _ = init_tracing();
+        init_tracing();
         let config = Arc::new(Config::parse_from(["heimq"]));
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());

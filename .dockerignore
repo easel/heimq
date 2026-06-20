@@ -1,0 +1,14 @@
+.git
+.github
+.ddx
+.agents
+.claude
+.codex
+.agent
+target
+**/target
+*.log
+*.tmp
+Dockerfile
+charts
+docs

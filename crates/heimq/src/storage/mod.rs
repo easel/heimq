@@ -14,9 +14,9 @@ mod topic;
 
 // Trait families and supporting types live in heimq-broker.
 pub use heimq_broker::storage::{
-    AtomicAppendScope, BackendCapabilities, CommittedOffset, CompressionCodec, Durability,
-    FetchWait, LogBackend, OffsetStore, OffsetStoreCapabilities, PartitionLog, Record,
-    RetentionMode, TopicConfig, TopicLog,
+    AppendFuture, AtomicAppendScope, BackendCapabilities, CommittedOffset, CompressionCodec,
+    Durability, FetchWait, LogBackend, OffsetStore, OffsetStoreCapabilities, PartitionLog, Record,
+    RetentionMode, RetentionPolicy, TopicConfig, TopicLog,
 };
 pub use heimq_broker::storage::{BrokerInfo, ClusterView, ClusterViewError};
 pub use heimq_broker::storage::{RecordBatchView, RecordView};

@@ -7,6 +7,8 @@ use heimq::server;
 
 use clap::Parser;
 use config::Config;
+use metrics::{describe_counter, describe_gauge, Unit};
+use metrics_exporter_prometheus::PrometheusBuilder;
 use server::Server;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -28,6 +30,52 @@ fn max_connections_from_env() -> Option<usize> {
         .filter(|value| *value > 0)
 }
 
+fn describe_metrics() {
+    describe_gauge!(
+        "heimq_memory_log_bytes",
+        Unit::Bytes,
+        "Total retained record-batch bytes across the in-memory log."
+    );
+    describe_counter!(
+        "heimq_memory_log_messages_total",
+        "Total accepted records across the in-memory log."
+    );
+    describe_counter!(
+        "heimq_storage_full_errors_total",
+        "Total produce appends rejected because the in-memory cap was exhausted."
+    );
+    describe_counter!(
+        "heimq_retention_reclaimed_bytes_total",
+        Unit::Bytes,
+        "Bytes reclaimed by retention.ms expiry or retention.bytes trimming."
+    );
+
+    metrics::gauge!("heimq_memory_log_bytes").set(0.0);
+    metrics::counter!("heimq_memory_log_messages_total").increment(0);
+    metrics::counter!("heimq_storage_full_errors_total").increment(0);
+    metrics::counter!("heimq_retention_reclaimed_bytes_total", "reason" => "retention_ms")
+        .increment(0);
+    metrics::counter!("heimq_retention_reclaimed_bytes_total", "reason" => "retention_bytes")
+        .increment(0);
+}
+
+fn start_metrics_exporter(config: &Config) -> anyhow::Result<()> {
+    if !config.metrics {
+        return Ok(());
+    }
+
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], config.metrics_port));
+    PrometheusBuilder::new()
+        .with_http_listener(addr)
+        .install()?;
+    describe_metrics();
+    info!(
+        "Metrics endpoint listening on 0.0.0.0:{}",
+        config.metrics_port
+    );
+    Ok(())
+}
+
 async fn run_with_config(config: Config, max_connections: Option<usize>) -> anyhow::Result<()> {
     init_tracing();
 
@@ -44,6 +92,8 @@ async fn run_with_config(config: Config, max_connections: Option<usize>) -> anyh
         info!("Data directory: {}", config.data_dir.display());
     }
 
+    start_metrics_exporter(&config)?;
+
     let server = Server::new(config).expect("valid server configuration");
     server.run_with_max_connections(max_connections).await?;
 
@@ -58,7 +108,7 @@ fn config_from_env() -> Config {
             argv.extend(args.split_whitespace().map(|arg| arg.to_string()));
             return Config::parse_from(argv);
         }
-        return Config::parse_from(["heimq"]);
+        Config::parse_from(["heimq"])
     }
     #[cfg(not(any(test, coverage)))]
     Config::parse()
@@ -125,7 +175,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_with_config_bind_error() {
-        let _guard = ENV_LOCK.lock().unwrap();
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
 

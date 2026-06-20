@@ -17,15 +17,6 @@ pub struct BrokerTarget {
     pub bootstrap_servers: String,
 }
 
-impl BrokerTarget {
-    pub fn client_config(&self) -> ClientConfig {
-        let mut cfg = ClientConfig::new();
-        cfg.set("bootstrap.servers", &self.bootstrap_servers);
-        cfg.set("socket.timeout.ms", "10000");
-        cfg
-    }
-}
-
 pub struct Targets {
     pub heimq: BrokerTarget,
     pub redpanda: BrokerTarget,

@@ -16,26 +16,26 @@ pub fn diff(
 
     // Length mismatch: report missing/extra at each step beyond the shared prefix.
     let shared = heimq.len().min(oracle_obs.len());
-    for i in shared..heimq.len() {
+    for obs in heimq.iter().skip(shared) {
         diffs.push(DiffRecord {
             workload: workload.to_string(),
             oracle: oracle.to_string(),
-            step: heimq[i].step,
+            step: obs.step,
             field: "observation".to_string(),
-            heimq_value: serde_json::json!(format!("{:?}", event_kind(&heimq[i].event))),
+            heimq_value: serde_json::json!(format!("{:?}", event_kind(&obs.event))),
             oracle_value: serde_json::Value::Null,
             divergence: "extra_in_heimq".to_string(),
             exemption: None,
         });
     }
-    for i in shared..oracle_obs.len() {
+    for obs in oracle_obs.iter().skip(shared) {
         diffs.push(DiffRecord {
             workload: workload.to_string(),
             oracle: oracle.to_string(),
-            step: oracle_obs[i].step,
+            step: obs.step,
             field: "observation".to_string(),
             heimq_value: serde_json::Value::Null,
-            oracle_value: serde_json::json!(format!("{:?}", event_kind(&oracle_obs[i].event))),
+            oracle_value: serde_json::json!(format!("{:?}", event_kind(&obs.event))),
             divergence: "missing_in_heimq".to_string(),
             exemption: None,
         });

@@ -125,16 +125,15 @@ Normative rules:
   An impl MAY perform product work (example: niflheim enqueues materialization)
   before returning. The broker engine MUST NOT send a Produce response before
   `append` returns.
-- **Async pre-ack work is UNRESOLVED on the sync surface** (bead heimq-77965f97):
-  the `append` methods above are sync `fn`, so complete-work-before-ack is
-  expressible only for *synchronous* pre-ack work (the WAL-deferred-ack fixture
-  pushes to an in-memory buffer synchronously). A consumer whose pre-ack work is
-  genuinely async — niflheim awaits a WAL write + materialization enqueue before
-  the produce ack — cannot express it here, and the async wire layer
-  (`heimq-wire` reader/writer split) awaits the sync produce handler with no
-  pre-ack hook. Resolve with an async append seam (a `PartitionLogV2`/`async fn`
-  surface, mirroring the `GroupCoordinatorBackendV2` guidance under Family 3, or
-  an async pre-ack hook in the produce path) before niflheim adoption lands.
+- **Async pre-ack work — RESOLVED** (bead heimq-77965f97): `LogBackend` and
+  `PartitionLog` now expose `append_async` returning an `AppendFuture`
+  (`crates/heimq-broker/src/storage/mod.rs`), documented to "return a future that
+  resolves when the append's offset assignment is complete." Synchronous backends
+  inherit the default (`ready(self.append(...))`); deferred backends (niflheim,
+  awaiting a WAL write + materialization enqueue before the produce ack) override
+  it so complete-work-before-ack is expressible for *genuinely async* pre-ack
+  work. `produce::append_records_async` carries the future through the produce
+  path. This gap is closed.
 - **Record-decode exposure** (bead heimq-0123b72d): an impl reads produced
   records via `RecordBatchView`/`RecordView`
   (`crates/heimq-broker/src/storage/record_batch_view.rs`). `RecordView::headers()`
@@ -341,6 +340,6 @@ fn find_coordinator(&self, _g: &str) -> Result<BrokerInfo, ClusterViewError> {
 - [x] Non-normative notes cannot be mistaken for contract requirements.
 - [ ] `ClusterView` trait and DTOs finalized in Slice 1 (currently proposed).
 - [ ] `RequestContext` principal threading implemented in backend traits (bead heimq-43770932; required by Cross-Cutting Rules, absent as of 1913f46).
-- [ ] `append` async pre-ack seam for genuinely-async product work (bead heimq-77965f97; sync surface today).
+- [x] `append` async pre-ack seam for genuinely-async product work (bead heimq-77965f97; `append_async`/`AppendFuture` landed on `LogBackend`+`PartitionLog`).
 - [ ] Record-view iteration free of re-exported `kafka-protocol` types (bead heimq-0123b72d; `RecordView::headers()` leaks `StrBytes` today).
 - [ ] Consumer-shaped fixture backends compiled and passing (IP-001 Slice 3).

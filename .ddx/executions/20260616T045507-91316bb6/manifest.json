@@ -1,0 +1,51 @@
+{
+  "attempt_id": "20260616T045507-91316bb6",
+  "bead_id": "heimq-2f9d8d89",
+  "base_rev": "b771b71c78784bb540fc79e2c780908185e0e0f5",
+  "created_at": "2026-06-16T04:55:07.885653342Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-2f9d8d89",
+    "title": "Refresh balanced heimq benchmark baseline",
+    "description": "After the diagnostic benchmark and fetch-path optimization beads land, rerun the heimq baseline and update the benchmark documentation with balanced evidence. The purpose is not to hide produce performance; it is to report the remaining produce/consume gap with enough context to tell client-side polling overhead from broker fetch overhead.\n\nRequired documentation:\n- Current commit SHA benchmarked.\n- Produce throughput and consume throughput for the default baseline.\n- Diagnostic consume output, including consumer poll count and records per non-empty poll.\n- Any tuned consumer-fetch profile numbers added by the diagnostic bead.\n- A short explanation of remaining asymmetry and any follow-up bead needed.\n\nIn-scope files:\n- crates/heimq/benches/BASELINE.md\n- crates/heimq/tests/bench_baseline.rs only if benchmark output formatting needs small cleanup\n\nOut-of-scope:\n- New broker optimizations.\n- Niflheim benchmark updates.\n- Changing historical comparison tables without rerunning the matching command.",
+    "acceptance": "1. `BENCH_RECORDS=100000 BENCH_LATENCY_SAMPLES=2000 BENCH_DIAGNOSTICS=1 cargo test -p heimq --release --test bench_baseline -- --ignored --nocapture` passes.\n2. crates/heimq/benches/BASELINE.md records the new commit SHA, default produce/consume numbers, diagnostic consume stats, and any tuned-fetch profile numbers.\n3. `cargo test -p heimq --test bench_baseline -- --list` passes.",
+    "parent": "heimq-c06bb2b9",
+    "labels": [
+      "area:benchmarks",
+      "area:performance",
+      "kind:documentation"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "worker-20260616T043521-7139",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"readiness route unavailable: lifecycle dispatch: project root mutation rejected for bead heimq-2f9d8d89\",\"fingerprint\":\"db9492d23cb891236a12d9ec71287f87e34c2aefa9bb08a2f076a47b6fbf8d2a\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"db9492d23cb891236a12d9ec71287f87e34c2aefa9bb08a2f076a47b6fbf8d2a\"}",
+          "created_at": "2026-06-16T04:55:06.254926687Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "FEAT-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "FEAT-004",
+      "path": "crates/heimq/docs/helix/01-frame/features/FEAT-004-benchmark-conformance.md",
+      "title": "Feature Specification: FEAT-004 — Standard Kafka Benchmark Conformance"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260616T045507-91316bb6",
+    "prompt": ".ddx/executions/20260616T045507-91316bb6/prompt.md",
+    "manifest": ".ddx/executions/20260616T045507-91316bb6/manifest.json",
+    "result": ".ddx/executions/20260616T045507-91316bb6/result.json",
+    "checks": ".ddx/executions/20260616T045507-91316bb6/checks.json",
+    "usage": ".ddx/executions/20260616T045507-91316bb6/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-2f9d8d89-20260616T045507-91316bb6"
+  },
+  "prompt_sha": "4ea9550a7ee92cc7a8b18166d2d24e06cdcd881453c0f3c4702db0e1bbac6055"
+}

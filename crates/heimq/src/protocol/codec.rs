@@ -90,8 +90,6 @@ pub fn decode_request(data: &[u8]) -> std::io::Result<(RequestHeader, Bytes)> {
             let mut buf = vec![0u8; len as usize];
             cursor.copy_to_slice(&mut buf);
             Some(String::from_utf8_lossy(&buf).to_string())
-        } else if len == -1 {
-            None
         } else {
             None
         }

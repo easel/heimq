@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>heimq | Architecture</title>
+    <meta name="description" content="Runtime, packaging, and release architecture for heimq." />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="shell topbar">
+        <header class="masthead">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            heimq
+          </div>
+          <nav class="nav" aria-label="Primary">
+            <a href="index.html">Overview</a>
+            <a href="quickstart.html">Quick start</a>
+            <a href="deployment.html">Deployment</a>
+            <a href="compatibility-testing.html">Compatibility / testing</a>
+            <a href="architecture.html" aria-current="page">Architecture</a>
+            <a href="resources.html">Resources</a>
+          </nav>
+        </header>
+      </div>
+
+      <main class="shell">
+        <section class="hero">
+          <div class="eyebrow">Architecture</div>
+          <h1>One distribution, one embeddable engine, one evidence trail.</h1>
+          <p class="lede">
+            heimq separates the memory-first CLI distribution from the engine
+            crates that downstream systems embed. Release packaging and docs stay
+            close to the same commands and workflows readers can inspect.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="list-grid">
+            <div class="mini">
+              <strong>Distribution</strong>
+              <span>The <code>heimq</code> CLI runs a single-node, memory-first broker that accepts Kafka-compatible traffic on port 9092.</span>
+            </div>
+            <div class="mini">
+              <strong>Engine crates</strong>
+              <span><code>heimq-wire</code> and <code>heimq-broker</code> provide wire scaffolding and broker semantics over pluggable backend traits.</span>
+            </div>
+            <div class="mini">
+              <strong>Conformance</strong>
+              <span><code>heimq-testkit</code> and parity workloads turn compatibility into repeatable evidence.</span>
+            </div>
+            <div class="mini">
+              <strong>Binary distribution</strong>
+              <span>Release workflow packages the Linux x86_64 artifact and publishes it through GitHub Releases.</span>
+            </div>
+            <div class="mini">
+              <strong>Container distribution</strong>
+              <span>Docker workflow tags and publishes the image to GHCR after a smoke test passes.</span>
+            </div>
+            <div class="mini">
+              <strong>Chart distribution</strong>
+              <span>Helm workflow packages the chart and pushes it to the GHCR OCI registry.</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="two-col">
+            <div>
+              <div class="tag">Repo layers</div>
+              <h2>What lives where</h2>
+              <ul>
+                <li><code>crates/</code> holds the Rust implementation and test crates.</li>
+                <li><code>crates/heimq/docs/helix</code> holds the product vision, PRD, contracts, tests, and design context.</li>
+                <li><code>charts/heimq</code> holds the deployment chart.</li>
+                <li><code>.github/workflows</code> holds release and validation automation.</li>
+                <li><code>site/</code> holds the static documentation pages.</li>
+              </ul>
+            </div>
+            <aside class="panel">
+              <h2>Design principle</h2>
+              <p>
+                Keep public claims close to evidence. The site mirrors README
+                commands, links to HELIX product context, and points compatibility
+                statements at tests and contracts.
+              </p>
+              <div class="callout">
+                That makes the site useful for first-time readers while still allowing
+                the README to remain the authoritative source for copy-paste commands.
+              </div>
+            </aside>
+          </div>
+        </section>
+      </main>
+
+      <div class="shell footer">
+        <div>Back to the <a href="index.html">overview</a>.</div>
+        <div>Source control: <a href="resources.html">Resources</a>.</div>
+      </div>
+    </div>
+  </body>
+</html>

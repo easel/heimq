@@ -1,0 +1,32 @@
+{
+  "attempt_id": "20260616T224410-490329cb",
+  "bead_id": "heimq-fcb0b677",
+  "base_rev": "62ceb2916bebbd436a81cb634bb75f7c16b11cb7",
+  "created_at": "2026-06-16T22:44:10.696302302Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-fcb0b677",
+    "title": "Validate and publish the heimq Helm chart",
+    "description": "Make charts/heimq release-grade per docs/release/release-infrastructure-plan.md. Current state: charts/heimq exists with Chart.yaml, values, templates, and README, but no CI workflow lints/templates/packages/publishes it. Chart version/appVersion currently 0.1.0 and image tag defaults to appVersion. In-scope files: charts/heimq/**, .github/workflows/* for Helm lint/package/publish, docs/release/* if needed. Out of scope: changing broker runtime behavior, Docker image workflow except consuming its tag contract, microsite.",
+    "acceptance": "1. A CI workflow validates `helm lint charts/heimq` and `helm template heimq charts/heimq`.\n2. A release flow packages the chart and documents or publishes a GHCR OCI chart path.\n3. `grep -q \"appVersion\" charts/heimq/Chart.yaml` passes and chart image tag defaults resolve to a Docker tag published by release workflows.\n4. `helm lint charts/heimq` passes.\n5. `helm template heimq charts/heimq` passes.\n6. `helm package charts/heimq` passes.",
+    "parent": "heimq-46fe0670",
+    "labels": [
+      "area:helm",
+      "area:ci",
+      "kind:task",
+      "release-infra"
+    ]
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260616T224410-490329cb",
+    "prompt": ".ddx/executions/20260616T224410-490329cb/prompt.md",
+    "manifest": ".ddx/executions/20260616T224410-490329cb/manifest.json",
+    "result": ".ddx/executions/20260616T224410-490329cb/result.json",
+    "checks": ".ddx/executions/20260616T224410-490329cb/checks.json",
+    "usage": ".ddx/executions/20260616T224410-490329cb/usage.json",
+    "worktree": "Users/erik/Projects/.ddx-exec-wt/.execute-bead-wt-heimq-fcb0b677-20260616T224410-490329cb"
+  },
+  "prompt_sha": "1386155e4cf6ccd1b74db5fdc760b8a9b3b2454fbd4173af16045fc664a38bb0"
+}

@@ -9,6 +9,7 @@ use crate::protocol::{decode_request, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend};
 use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
+use kafka_protocol::messages::fetch_request::FetchRequest;
 use kafka_protocol::protocol::{Decodable, Encodable};
 use std::sync::Arc;
 use tracing::{debug, warn};
@@ -25,6 +26,7 @@ pub struct Router {
     transaction_manager: Arc<TransactionManager>,
     /// Per-topic dynamic config overrides (AlterConfigs / DescribeConfigs).
     config_store: Arc<ConfigStore>,
+    default_retention_ms: u64,
     /// Signalled after every successful Produce to wake Fetch long-polls.
     append_notify: Option<Arc<tokio::sync::Notify>>,
 }
@@ -57,6 +59,7 @@ impl Router {
             producer_state: ProducerStateManager::new(),
             transaction_manager: TransactionManager::new(),
             config_store: Arc::new(ConfigStore::new()),
+            default_retention_ms: 7 * 24 * 60 * 60 * 1000,
             append_notify: None,
         }
     }
@@ -86,15 +89,24 @@ impl Router {
         self
     }
 
+    pub fn with_default_retention_ms(mut self, retention_ms: u64) -> Self {
+        self.default_retention_ms = retention_ms;
+        self
+    }
+
     /// Route a request and return the response
-    /// Async variant of [`route`] that honours `max_wait_ms` on Fetch (API 1).
+    /// Async variant of [`route`] that awaits async Produce appends (API 0)
+    /// and honours `max_wait_ms` on Fetch (API 1).
     ///
     /// For all other API keys this behaves identically to [`route`].
     pub async fn route_async(&self, data: &[u8]) -> Result<Bytes> {
-        // Fast path: non-Fetch requests are always synchronous.
-        if let Ok((ref header, _)) = decode_request(data) {
-            if header.api_key == 1 {
-                return self.handle_fetch_long_poll(data).await;
+        // Decode once; pass decoded header+body to handle_fetch_long_poll to avoid
+        // re-decoding the same frame in the long-poll path.
+        if let Ok((header, body)) = decode_request(data) {
+            match header.api_key {
+                0 => return self.handle_produce_async(&header, &body).await,
+                1 => return self.handle_fetch_long_poll(header, body).await,
+                _ => {}
             }
         }
         self.route(data)
@@ -102,73 +114,73 @@ impl Router {
 
     /// Long-poll implementation for Fetch (API 1).
     ///
-    /// Decodes `max_wait_ms` and the requested (topic, partition, fetch_offset)
-    /// tuples from the request. If no partition has data available at the
-    /// requested offset and `max_wait_ms > 0`, polls in 50 ms increments up to
-    /// `max_wait_ms` (capped at 500 ms) checking the storage high watermark
-    /// directly. Only executes the Fetch once data is confirmed available,
-    /// avoiding partial-batch races.
-    async fn handle_fetch_long_poll(&self, data: &[u8]) -> Result<Bytes> {
-        use bytes::Bytes as RawBytes;
-        use kafka_protocol::messages::fetch_request::FetchRequest;
-        use kafka_protocol::protocol::Decodable;
-
-        let (max_wait_ms, topics) = match decode_request(data) {
-            Ok((header, body)) => {
-                match FetchRequest::decode(
-                    &mut RawBytes::copy_from_slice(&body),
-                    header.api_version,
-                ) {
-                    Ok(req) => {
-                        let mw = req.max_wait_ms.max(0) as u32;
-                        let topics: Vec<(String, i32, i64)> = req
-                            .topics
-                            .iter()
-                            .flat_map(|t| {
-                                let name = t.topic.0.to_string();
-                                t.partitions
-                                    .iter()
-                                    .map(move |p| (name.clone(), p.partition, p.fetch_offset))
-                            })
-                            .collect();
-                        (mw, topics)
-                    }
-                    Err(_) => return self.route(data),
-                }
-            }
-            Err(_) => return self.route(data),
+    /// Accepts a pre-decoded header and body (decoded once by `route_async`) and
+    /// decodes the FetchRequest exactly once. Reuses that decoded request for both
+    /// the long-poll offset checks and the final Fetch execution, eliminating the
+    /// redundant re-decodes that occurred when `route(data)` was called at the end.
+    async fn handle_fetch_long_poll(&self, header: RequestHeader, body: Bytes) -> Result<Bytes> {
+        let fetch_req = match FetchRequest::decode(&mut body.clone(), header.api_version) {
+            Ok(r) => r,
+            Err(_) => return self.handle_fetch(&header, body.as_ref()),
         };
 
-        if max_wait_ms == 0 || self.storage_has_data(&topics) {
-            return self.route(data);
-        }
+        let max_wait_ms = fetch_req.max_wait_ms.max(0) as u32;
+        let topics: Vec<(String, i32, i64)> = fetch_req
+            .topics
+            .iter()
+            .flat_map(|t| {
+                let name = t.topic.0.to_string();
+                t.partitions
+                    .iter()
+                    .map(move |p| (name.clone(), p.partition, p.fetch_offset))
+            })
+            .collect();
 
-        let deadline = tokio::time::Instant::now()
-            + std::time::Duration::from_millis(max_wait_ms.min(30_000) as u64);
+        if max_wait_ms > 0 && !self.storage_has_data(&topics) {
+            let deadline = tokio::time::Instant::now()
+                + std::time::Duration::from_millis(max_wait_ms.min(30_000) as u64);
 
-        if let Some(ref notify) = self.append_notify {
-            // Notify path: register the waiter BEFORE the data check to avoid the
-            // race where a produce arrives between the check and the await.
-            loop {
-                let notified = notify.notified();
-                if self.storage_has_data(&topics) {
-                    return self.route(data);
+            if let Some(ref notify) = self.append_notify {
+                // Notify path: register the waiter BEFORE the data check to avoid the
+                // race where a produce arrives between the check and the await.
+                loop {
+                    let notified = notify.notified();
+                    if self.storage_has_data(&topics) {
+                        break;
+                    }
+                    tokio::select! {
+                        _ = notified => {}
+                        _ = tokio::time::sleep_until(deadline) => break,
+                    }
                 }
-                tokio::select! {
-                    _ = notified => {}
-                    _ = tokio::time::sleep_until(deadline) => { return self.route(data); }
+            } else {
+                // Fallback: poll every 10 ms up to max_wait_ms.
+                const POLL_INTERVAL_MS: u64 = 10;
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
+                    if self.storage_has_data(&topics) || tokio::time::Instant::now() >= deadline {
+                        break;
+                    }
                 }
             }
-        } else {
-            // Fallback: poll every 10 ms up to max_wait_ms.
-            const POLL_INTERVAL_MS: u64 = 10;
-            loop {
-                tokio::time::sleep(std::time::Duration::from_millis(POLL_INTERVAL_MS)).await;
-                if self.storage_has_data(&topics) || tokio::time::Instant::now() >= deadline {
-                    return self.route(data);
-                }
-            }
         }
+
+        self.handle_fetch_with_request(&header, fetch_req)
+    }
+
+    /// Execute a Fetch using an already-decoded [`FetchRequest`], bypassing the
+    /// per-request body decode that `handle_fetch` would otherwise perform.
+    fn handle_fetch_with_request(
+        &self,
+        header: &RequestHeader,
+        request: FetchRequest,
+    ) -> Result<Bytes> {
+        let tm = self.transaction_manager.clone();
+        let api_version = header.api_version;
+        self.handle_and_encode(
+            header,
+            Box::new(move || fetch::handle_request(api_version, request, &self.storage, &tm)),
+        )
     }
 
     /// Returns `true` if any of the requested (topic, partition, fetch_offset)
@@ -305,15 +317,75 @@ impl Router {
 
         let ps = self.producer_state.clone();
         let tm = self.transaction_manager.clone();
+        let store = self.config_store.clone();
+        let default_retention_ms = self.default_retention_ms;
         let result = if acks_zero {
-            let _ = produce::handle(header.api_version, body, &self.storage, &ps, &tm);
+            let _ = produce::handle_with_config_store(
+                header.api_version,
+                body,
+                &self.storage,
+                &ps,
+                &tm,
+                &store,
+                default_retention_ms,
+            );
             Ok(bytes::Bytes::new())
         } else {
             self.handle_and_encode(
                 header,
-                Box::new(|| produce::handle(header.api_version, body, &self.storage, &ps, &tm)),
+                Box::new(|| {
+                    produce::handle_with_config_store(
+                        header.api_version,
+                        body,
+                        &self.storage,
+                        &ps,
+                        &tm,
+                        &store,
+                        default_retention_ms,
+                    )
+                }),
             )
         };
+        // Wake any Fetch long-polls waiting for new data.
+        if result.is_ok() {
+            if let Some(ref notify) = self.append_notify {
+                notify.notify_waiters();
+            }
+        }
+        result
+    }
+
+    async fn handle_produce_async(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        use kafka_protocol::messages::produce_request::ProduceRequest;
+
+        // Decode acks up front: acks=0 means fire-and-forget — the broker must
+        // NOT send a response. We still store the records; we just return empty
+        // bytes to signal "no reply" to run_writer.
+        let acks_zero = {
+            let mut buf = bytes::Bytes::copy_from_slice(body);
+            ProduceRequest::decode(&mut buf, header.api_version)
+                .map(|req| req.acks == 0)
+                .unwrap_or(false)
+        };
+
+        let ps = self.producer_state.clone();
+        let tm = self.transaction_manager.clone();
+        let response = produce::handle_async_with_config_store(
+            header.api_version,
+            body,
+            &self.storage,
+            &ps,
+            &tm,
+            &self.config_store,
+            self.default_retention_ms,
+        )
+        .await;
+        let result = if acks_zero {
+            response.map(|_| bytes::Bytes::new())
+        } else {
+            response.and_then(|response| self.encode_response_bytes(header, &response))
+        };
+
         // Wake any Fetch long-polls waiting for new data.
         if result.is_ok() {
             if let Some(ref notify) = self.append_notify {
@@ -1001,11 +1073,12 @@ mod tests {
     fn test_niflheim_shape_wal_adapter() {
         use crate::storage::{BackendCapabilities, TopicLog};
         use std::sync::Mutex;
+        type WalEntry = (String, i32, Vec<u8>);
 
         struct WalShapeBackend {
             inner: Arc<dyn crate::storage::LogBackend>,
             caps: BackendCapabilities,
-            wal: Arc<Mutex<Vec<(String, i32, Vec<u8>)>>>,
+            wal: Arc<Mutex<Vec<WalEntry>>>,
         }
         impl crate::storage::LogBackend for WalShapeBackend {
             fn create_topic(&self, n: &str, p: i32) -> crate::error::Result<Arc<dyn TopicLog>> {
@@ -1131,7 +1204,9 @@ mod tests {
         }
         impl crate::storage::LogBackend for QueueSinkBackend {
             fn create_topic(&self, _n: &str, _p: i32) -> crate::error::Result<Arc<dyn TopicLog>> {
-                Err(crate::error::HeimqError::Protocol("pqueue-sink: no topics".into()).into())
+                Err(crate::error::HeimqError::Protocol(
+                    "pqueue-sink: no topics".into(),
+                ))
             }
             fn delete_topic(&self, _n: &str) -> crate::error::Result<()> {
                 Ok(())

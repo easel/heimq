@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>heimq | Overview</title>
+    <meta
+      name="description"
+      content="heimq is a single-node Kafka-compatible broker distribution and embeddable engine for tests, CI, and Kafka-speaking systems."
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="shell topbar">
+        <header class="masthead">
+          <div class="brand" aria-label="heimq">
+            <span class="brand-mark" aria-hidden="true"></span>
+            heimq
+          </div>
+          <nav class="nav" aria-label="Primary">
+            <a href="index.html" aria-current="page">Overview</a>
+            <a href="quickstart.html">Quick start</a>
+            <a href="deployment.html">Deployment</a>
+            <a href="compatibility-testing.html">Compatibility / testing</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="resources.html">Resources</a>
+          </nav>
+        </header>
+      </div>
+
+      <main class="shell">
+        <section class="hero">
+          <div class="eyebrow">Kafka-compatible test broker</div>
+          <div class="hero-grid">
+            <div class="stack">
+              <h1>Run Kafka client tests without carrying a Kafka cluster.</h1>
+              <p class="lede">
+                heimq is a memory-first, single-node broker that speaks the Kafka
+                wire protocol for local development, CI, and ephemeral workloads.
+                Standard clients point at heimq unchanged; the project proves the
+                supported surface with parity, benchmark, ecosystem, and conformance
+                tests.
+              </p>
+            </div>
+            <aside class="panel">
+              <img class="hero-visual" src="assets/heimq-console.png" alt="Abstract heimq broker message flow" />
+              <h2>Two surfaces</h2>
+              <p>
+                The <strong>distribution</strong> is the <code>heimq</code> CLI: a fast,
+                single-binary Kafka endpoint for test harnesses. The
+                <strong>engine</strong> is the <code>heimq-wire</code> /
+                <code>heimq-broker</code>
+                crate family: wire scaffolding and broker semantics over
+                pluggable backend traits.
+              </p>
+              <div class="callout alt">
+                North star: any Kafka client that runs against Redpanda should run
+                against heimq for the in-scope semantic surface.
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="tag">Overview</div>
+          <h2>Project shape</h2>
+          <div class="metrics">
+            <div class="metric">
+              <span class="label">Distribution</span>
+              <span class="value">Single binary, memory-first broker</span>
+            </div>
+            <div class="metric">
+              <span class="label">Engine</span>
+              <span class="value">Wire and semantics over backend traits</span>
+            </div>
+            <div class="metric">
+              <span class="label">Evidence</span>
+              <span class="value">Parity, benchmark, ecosystem, conformance suites</span>
+            </div>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <h3><a href="quickstart.html">Quick start</a></h3>
+              <p>Build from source, run the binary, or launch the release image with copy-pasteable commands.</p>
+            </div>
+            <div class="card">
+              <h3><a href="deployment.html">Deployment</a></h3>
+              <p>See where releases land: GitHub Releases, GHCR images, OCI charts, and Pages docs.</p>
+            </div>
+            <div class="card">
+              <h3><a href="compatibility-testing.html">Compatibility and testing</a></h3>
+              <p>Understand the supported protocol surface and the commands that validate it.</p>
+            </div>
+            <div class="card">
+              <h3><a href="architecture.html">Architecture</a></h3>
+              <p>Review the distribution, engine, backend traits, and release layers that shape the project.</p>
+            </div>
+            <div class="card">
+              <h3><a href="resources.html">Resources</a></h3>
+              <p>Jump into the product vision, PRD, contracts, test suites, release plan, and deployment workflows.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="two-col">
+            <div>
+              <div class="tag">Use cases</div>
+              <h2>Where heimq fits</h2>
+              <ul>
+                <li>Run service tests against a real Kafka wire surface without booting Kafka or Redpanda.</li>
+                <li>Keep CI feedback fast while retaining parity checks against a production-shaped broker.</li>
+                <li>Embed Kafka wire and broker semantics into Rust-native data systems through stable traits.</li>
+              </ul>
+            </div>
+            <div class="panel">
+              <h2>Boundaries</h2>
+              <p>
+                heimq is not a Kafka cluster replacement. It does not provide
+                replication, controller quorum, or production Kafka durability.
+                The distribution stays single-node; durability is a backend
+                property for engine consumers.
+              </p>
+              <p>
+                Compatibility claims are bounded by the checked-in tests, fixtures,
+                contracts, and benchmarks.
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="shell footer">
+        <div>Release docs are tracked in <a href="https://github.com/easel/heimq/blob/main/docs/release/release-infrastructure-plan.md">the infrastructure plan</a>.</div>
+        <div>
+          Start with <a href="quickstart.html">Quick start</a> or <a href="resources.html">Resources</a>.
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

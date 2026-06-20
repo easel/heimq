@@ -1,0 +1,16 @@
+{
+  "ran": true,
+  "changed_docs": [
+    "docs/release/release-infrastructure-plan.md"
+  ],
+  "findings": [
+    {
+      "file": "docs/release/release-infrastructure-plan.md",
+      "line": 15,
+      "rule_id": "prose.specificity.actor_action",
+      "severity": "advisory",
+      "rationale": "The sentence says something enables or supports work without naming the actor, action, artifact, or boundary.",
+      "suggested_edit": "Name the actor, action, artifact, or boundary that makes the statement concrete."
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"status":"block","summary":"workspace tests failed","failing_tests":"test test_legacy_produce ... FAILED|test test_legacy_binary_payload_produce ... FAILED|test result: FAILED. 17 passed; 2 failed; 42 ignored; 0 measured; 0 filtered out; finished in 10.03s"}

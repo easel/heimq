@@ -1,0 +1,7 @@
+heimq is installed.
+
+Kafka bootstrap service:
+  {{ include "heimq.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+Port-forward for local testing:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "heimq.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}

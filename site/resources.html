@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>heimq | Resources</title>
+    <meta name="description" content="Product, release, architecture, testing, and deployment resources for heimq." />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <div class="shell topbar">
+        <header class="masthead">
+          <div class="brand">
+            <span class="brand-mark" aria-hidden="true"></span>
+            heimq
+          </div>
+          <nav class="nav" aria-label="Primary">
+            <a href="index.html">Overview</a>
+            <a href="quickstart.html">Quick start</a>
+            <a href="deployment.html">Deployment</a>
+            <a href="compatibility-testing.html">Compatibility / testing</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="resources.html" aria-current="page">Resources</a>
+          </nav>
+        </header>
+      </div>
+
+      <main class="shell">
+        <section class="hero">
+          <div class="eyebrow">Resources</div>
+          <h1>Trace each public claim back to a file, workflow, or test surface.</h1>
+          <p class="lede">
+            The site is a doorway into the repository. Use these links to move
+            from product intent to commands, contracts, release artifacts, and
+            verification evidence.
+          </p>
+        </section>
+
+        <section class="section">
+          <div class="tag">Product context</div>
+          <h2>Why heimq exists</h2>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/crates/heimq/docs/helix/00-discover/product-vision.md">
+              <span class="resource-kind">Vision</span>
+              <strong>Product vision</strong>
+              <span>Distribution, engine, north star, users, value propositions, and success definition.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/crates/heimq/docs/helix/01-frame/prd.md">
+              <span class="resource-kind">PRD</span>
+              <strong>Product requirements</strong>
+              <span>Goals, non-goals, personas, functional requirements, risks, and acceptance sketches.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/crates/heimq/docs/helix/01-frame/concerns.md">
+              <span class="resource-kind">Concerns</span>
+              <strong>Project concerns</strong>
+              <span>Rust workspace, verification posture, single-binary broker, and in-memory datastore assumptions.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/crates/heimq/docs/helix/02-design/DESIGN.md">
+              <span class="resource-kind">Design</span>
+              <strong>Microsite DESIGN.md</strong>
+              <span>Navigation, active state, hierarchy, tokens, and public-site voice for this microsite.</span>
+            </a>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="tag">Run and deploy</div>
+          <h2>Installable surfaces</h2>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/README.md">
+              <span class="resource-kind">Readme</span>
+              <strong>Root README</strong>
+              <span>Source, Docker, Helm, release artifacts, development commands, tests, and limits.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/pkgs/container/heimq">
+              <span class="resource-kind">Image</span>
+              <strong>GHCR image</strong>
+              <span>Published container image namespace: <code>ghcr.io/easel/heimq</code>.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/tree/main/charts/heimq">
+              <span class="resource-kind">Helm</span>
+              <strong>Helm chart</strong>
+              <span>Chart source and usage docs for installing a memory-only heimq broker.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/docs/release/runbook.md">
+              <span class="resource-kind">Runbook</span>
+              <strong>Release runbook</strong>
+              <span>Tagging, verification, release behavior, published locations, and recovery guidance.</span>
+            </a>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="tag">Compatibility evidence</div>
+          <h2>Contracts, tests, and benchmarks</h2>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/crates/heimq/docs/helix/02-design/contracts/API-001-kafka-protocol.md">
+              <span class="resource-kind">Contract</span>
+              <strong>Kafka protocol contract</strong>
+              <span>In-scope API surface and version expectations for protocol compatibility.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/tree/main/crates/heimq/tests/parity">
+              <span class="resource-kind">Parity</span>
+              <strong>Differential parity harness</strong>
+              <span>Workloads run against heimq and Redpanda to compare observable client behavior.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/tree/main/tests/ecosystem">
+              <span class="resource-kind">Ecosystem</span>
+              <strong>Ecosystem integration scripts</strong>
+              <span>Kafka Connect, Flink, ksqlDB, Debezium, Schema Registry, and librdkafka-oriented checks.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/tree/main/scripts/bench">
+              <span class="resource-kind">Bench</span>
+              <strong>Benchmark scripts</strong>
+              <span>Kafka perf-test and OpenMessaging Benchmark smoke infrastructure.</span>
+            </a>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="tag">Automation</div>
+          <h2>Release and site workflows</h2>
+          <div class="resource-grid">
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/.github/workflows/pages.yml">
+              <span class="resource-kind">Pages</span>
+              <strong>GitHub Pages workflow</strong>
+              <span>Uploads the checked-in <code>site/</code> directory and deploys this microsite.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/.github/workflows/test.yml">
+              <span class="resource-kind">CI</span>
+              <strong>Main test workflow</strong>
+              <span>Format, clippy, and workspace tests for the Rust workspace.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/.github/workflows/docker-image.yml">
+              <span class="resource-kind">Docker</span>
+              <strong>Docker image workflow</strong>
+              <span>Builds, tags, smokes, and publishes the release image.</span>
+            </a>
+            <a class="resource" href="https://github.com/easel/heimq/blob/main/.github/workflows/helm-chart.yml">
+              <span class="resource-kind">Helm</span>
+              <strong>Helm chart workflow</strong>
+              <span>Lints, templates, packages, and publishes the OCI chart.</span>
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <div class="shell footer">
+        <div>Use <a href="compatibility-testing.html">Compatibility and testing</a> for the command surface.</div>
+        <div>Back to <a href="index.html">Overview</a>.</div>
+      </div>
+    </div>
+  </body>
+</html>
