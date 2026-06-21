@@ -2,6 +2,7 @@
 
 use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
+use crate::storage::RequestContext;
 use bytes::Bytes;
 use kafka_protocol::messages::leave_group_request::LeaveGroupRequest;
 use kafka_protocol::messages::LeaveGroupResponse;
@@ -12,6 +13,15 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     coordinator: &dyn GroupCoordinatorBackend,
+) -> Result<LeaveGroupResponse> {
+    handle_with_context(api_version, body, coordinator, &RequestContext::ANONYMOUS)
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    coordinator: &dyn GroupCoordinatorBackend,
+    ctx: &RequestContext,
 ) -> Result<LeaveGroupResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match LeaveGroupRequest::decode(&mut buf, api_version) {
@@ -32,7 +42,7 @@ pub fn handle(
         vec![request.member_id.to_string()]
     };
 
-    let result = coordinator.leave_group(&group_id, &member_ids);
+    let result = coordinator.leave_group_with_context(ctx, &group_id, &member_ids);
     debug!(
         group = %group_id,
         members = member_ids.len(),

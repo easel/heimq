@@ -45,15 +45,15 @@ Owning system: `heimq-broker` crate (`src/storage/`, `src/consumer_group/`).
 
 ### Cross-Cutting Rules
 
-**Principal context** (REQUIRED — not yet implemented; bead heimq-43770932):
+**Principal context** (IMPLEMENTED; bead heimq-43770932):
 Every trait method serving a client request MUST accept a `RequestContext`
-carrying `principal: Option<Principal>` and `client_id: Option<&str>`. The
-engine passes context but enforces none of its contents — tenancy, quota, and
-RBAC are the impl's responsibility. As of commit 1913f46 this is ABSENT from
-the backend traits (the program closed Slices 1 and 9 without delivering it);
-niflheim adoption requires it. SASL/TLS/auth themselves remain embedder
-responsibilities (out of scope below) — this rule covers only the context
-threading.
+carrying principal, tenant, and client-id fields. The engine passes context but
+enforces none of its contents — tenancy, quota, and RBAC are the impl's
+responsibility. `heimq-broker::RequestContext` is constructible by embedders;
+context-aware backend methods (`*_with_context`) are threaded through request
+handlers while legacy methods remain as compatibility shims. SASL/TLS/auth
+themselves remain embedder responsibilities (out of scope below) — this rule
+covers only the context threading.
 
 **Capability-gated advertisement**: A backend family absent or returning
 `name == "unknown"` causes `compute_supported_apis`
@@ -134,13 +134,12 @@ Normative rules:
   it so complete-work-before-ack is expressible for *genuinely async* pre-ack
   work. `produce::append_records_async` carries the future through the produce
   path. This gap is closed.
-- **Record-decode exposure** (bead heimq-0123b72d): an impl reads produced
+- **Record-decode exposure — RESOLVED** (bead heimq-0123b72d): an impl reads produced
   records via `RecordBatchView`/`RecordView`
   (`crates/heimq-broker/src/storage/record_batch_view.rs`). `RecordView::headers()`
-  currently returns `kafka_protocol::protocol::StrBytes`, so iterating headers
-  forces a direct `kafka-protocol` dependency on the consumer. A consumer
-  requiring zero direct `kafka-protocol` dependency (niflheim) MUST be able to
-  iterate records — key, value, headers, timestamp — over engine-owned types only.
+  exposes `(&str, Option<&[u8]>)`, so a consumer requiring zero direct
+  `kafka-protocol` dependency (niflheim) can iterate records — key, value,
+  headers, timestamp — over engine/std/bytes types only.
 - `append` returns `(base_offset, log_end_offset)`; both MUST be monotonically
   increasing within a partition.
 
@@ -339,7 +338,7 @@ fn find_coordinator(&self, _g: &str) -> Result<BrokerInfo, ClusterViewError> {
 - [x] Executable tests derivable: per-family conformance suites; `compute_supported_apis` tests at `src/protocol/mod.rs:125–250`.
 - [x] Non-normative notes cannot be mistaken for contract requirements.
 - [ ] `ClusterView` trait and DTOs finalized in Slice 1 (currently proposed).
-- [ ] `RequestContext` principal threading implemented in backend traits (bead heimq-43770932; required by Cross-Cutting Rules, absent as of 1913f46).
+- [x] `RequestContext` principal/tenant/client-id threading implemented in backend traits (bead heimq-43770932).
 - [x] `append` async pre-ack seam for genuinely-async product work (bead heimq-77965f97; `append_async`/`AppendFuture` landed on `LogBackend`+`PartitionLog`).
-- [ ] Record-view iteration free of re-exported `kafka-protocol` types (bead heimq-0123b72d; `RecordView::headers()` leaks `StrBytes` today).
+- [x] Record-view iteration free of re-exported `kafka-protocol` types (bead heimq-0123b72d).
 - [ ] Consumer-shaped fixture backends compiled and passing (IP-001 Slice 3).

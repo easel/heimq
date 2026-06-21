@@ -4,7 +4,7 @@
 //! Used by kafka-consumer-groups.sh --delete-offsets.
 
 use crate::error::Result;
-use crate::storage::OffsetStore;
+use crate::storage::{OffsetStore, RequestContext};
 use bytes::Bytes;
 use kafka_protocol::messages::offset_delete_request::OffsetDeleteRequest;
 use kafka_protocol::messages::offset_delete_response::{
@@ -19,6 +19,15 @@ pub fn handle(
     body: &[u8],
     offset_store: &Arc<dyn OffsetStore>,
 ) -> Result<OffsetDeleteResponse> {
+    handle_with_context(api_version, body, offset_store, &RequestContext::ANONYMOUS)
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
+) -> Result<OffsetDeleteResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match OffsetDeleteRequest::decode(&mut buf, api_version) {
         Ok(r) => r,
@@ -32,7 +41,12 @@ pub fn handle(
         let topic_name = topic.name.0.as_str();
         let mut response_partitions = Vec::new();
         for partition in &topic.partitions {
-            offset_store.delete_offset(group_id, topic_name, partition.partition_index);
+            offset_store.delete_offset_with_context(
+                ctx,
+                group_id,
+                topic_name,
+                partition.partition_index,
+            );
             let mut rp = OffsetDeleteResponsePartition::default();
             rp.partition_index = partition.partition_index;
             rp.error_code = 0;

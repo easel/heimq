@@ -2,6 +2,7 @@
 
 use crate::consumer_group::{GroupCoordinatorBackend, JoinRequest};
 use crate::error::Result;
+use crate::storage::RequestContext;
 use bytes::Bytes;
 use kafka_protocol::messages::join_group_request::JoinGroupRequest;
 use kafka_protocol::messages::join_group_response::JoinGroupResponseMember;
@@ -13,6 +14,15 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     coordinator: &dyn GroupCoordinatorBackend,
+) -> Result<JoinGroupResponse> {
+    handle_with_context(api_version, body, coordinator, &RequestContext::ANONYMOUS)
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    coordinator: &dyn GroupCoordinatorBackend,
+    ctx: &RequestContext,
 ) -> Result<JoinGroupResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match JoinGroupRequest::decode(&mut buf, api_version) {
@@ -34,16 +44,19 @@ pub fn handle(
         .map(|p| (p.name.to_string(), p.metadata.to_vec()))
         .collect();
 
-    let result = coordinator.join_group(JoinRequest {
-        group_id: group_id.clone(),
-        member_id,
-        client_id: "client".to_string(),
-        client_host: "127.0.0.1".to_string(),
-        session_timeout_ms: request.session_timeout_ms,
-        rebalance_timeout_ms: request.rebalance_timeout_ms,
-        protocol_type,
-        protocols,
-    });
+    let result = coordinator.join_group_with_context(
+        ctx,
+        JoinRequest {
+            group_id: group_id.clone(),
+            member_id,
+            client_id: "client".to_string(),
+            client_host: "127.0.0.1".to_string(),
+            session_timeout_ms: request.session_timeout_ms,
+            rebalance_timeout_ms: request.rebalance_timeout_ms,
+            protocol_type,
+            protocols,
+        },
+    );
 
     debug!(
         group = %group_id,

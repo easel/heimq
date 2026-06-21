@@ -1,7 +1,7 @@
 //! Fetch request handler (API Key 1)
 
 use crate::error::{ErrorCode, Result};
-use crate::storage::LogBackend;
+use crate::storage::{LogBackend, RequestContext};
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
 use kafka_protocol::messages::fetch_request::FetchRequest;
@@ -19,6 +19,22 @@ pub fn handle_request(
     request: FetchRequest,
     storage: &Arc<dyn LogBackend>,
     transaction_manager: &Arc<TransactionManager>,
+) -> Result<FetchResponse> {
+    handle_request_with_context(
+        _api_version,
+        request,
+        storage,
+        transaction_manager,
+        &RequestContext::ANONYMOUS,
+    )
+}
+
+pub fn handle_request_with_context(
+    _api_version: i16,
+    request: FetchRequest,
+    storage: &Arc<dyn LogBackend>,
+    transaction_manager: &Arc<TransactionManager>,
+    ctx: &RequestContext,
 ) -> Result<FetchResponse> {
     let max_bytes = request.max_bytes as usize;
     // isolation_level: 0 = READ_UNCOMMITTED, 1 = READ_COMMITTED (available from v4)
@@ -38,7 +54,13 @@ pub fn handle_request(
             let mut partition_data = PartitionData::default();
             partition_data.partition_index = partition;
 
-            match storage.fetch(&topic_name, partition, fetch_offset, partition_max_bytes) {
+            match storage.fetch_with_context(
+                ctx,
+                &topic_name,
+                partition,
+                fetch_offset,
+                partition_max_bytes,
+            ) {
                 Ok((records, high_watermark)) => {
                     debug!(
                         topic = %topic_name,
@@ -49,7 +71,7 @@ pub fn handle_request(
                     );
                     partition_data.error_code = 0;
                     partition_data.log_start_offset = storage
-                        .log_start_offset(&topic_name, partition)
+                        .log_start_offset_with_context(ctx, &topic_name, partition)
                         .unwrap_or(-1);
 
                     // For READ_COMMITTED (isolation_level=1), use LSO as high_watermark
@@ -106,6 +128,22 @@ pub fn handle(
     storage: &Arc<dyn LogBackend>,
     transaction_manager: &Arc<TransactionManager>,
 ) -> Result<FetchResponse> {
+    handle_with_context(
+        api_version,
+        body,
+        storage,
+        transaction_manager,
+        &RequestContext::ANONYMOUS,
+    )
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    transaction_manager: &Arc<TransactionManager>,
+    ctx: &RequestContext,
+) -> Result<FetchResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match FetchRequest::decode(&mut buf, api_version) {
         Ok(r) => r,
@@ -114,5 +152,5 @@ pub fn handle(
             return Ok(FetchResponse::default());
         }
     };
-    handle_request(api_version, request, storage, transaction_manager)
+    handle_request_with_context(api_version, request, storage, transaction_manager, ctx)
 }

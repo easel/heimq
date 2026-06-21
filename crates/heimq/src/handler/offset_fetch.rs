@@ -1,7 +1,7 @@
 //! OffsetFetch request handler (API Key 9)
 
 use crate::error::Result;
-use crate::storage::OffsetStore;
+use crate::storage::{OffsetStore, RequestContext};
 use bytes::Bytes;
 use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequest;
 use kafka_protocol::messages::offset_fetch_response::{
@@ -16,6 +16,15 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     offset_store: &Arc<dyn OffsetStore>,
+) -> Result<OffsetFetchResponse> {
+    handle_with_context(api_version, body, offset_store, &RequestContext::ANONYMOUS)
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
 ) -> Result<OffsetFetchResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match OffsetFetchRequest::decode(&mut buf, api_version) {
@@ -35,6 +44,7 @@ pub fn handle(
                 &group_id,
                 group.topics.as_deref(),
                 offset_store,
+                ctx,
                 &mut resp_group,
             );
             response.groups.push(resp_group);
@@ -51,6 +61,7 @@ pub fn handle(
             &group_id,
             topics_slice.as_deref(),
             offset_store,
+            ctx,
             &mut response,
         );
         response.error_code = 0;
@@ -63,10 +74,11 @@ fn build_group_topics_v8(
     group_id: &str,
     topics: Option<&[kafka_protocol::messages::offset_fetch_request::OffsetFetchRequestTopics]>,
     offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
     resp_group: &mut OffsetFetchResponseGroup,
 ) {
     match topics {
-        None => fetch_all_v8(group_id, offset_store, resp_group),
+        None => fetch_all_v8(group_id, offset_store, ctx, resp_group),
         Some(ts) => {
             for topic in ts {
                 let topic_name = topic.name.0.to_string();
@@ -78,6 +90,7 @@ fn build_group_topics_v8(
                         &topic_name,
                         pi,
                         offset_store,
+                        ctx,
                     ));
                 }
                 resp_group.topics.push(topic_resp);
@@ -89,9 +102,10 @@ fn build_group_topics_v8(
 fn fetch_all_v8(
     group_id: &str,
     offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
     resp_group: &mut OffsetFetchResponseGroup,
 ) {
-    let all_offsets = offset_store.fetch_all_for_group(group_id);
+    let all_offsets = offset_store.fetch_all_for_group_with_context(ctx, group_id);
     let mut topic_map: std::collections::HashMap<String, Vec<(i32, i64, Option<String>)>> =
         std::collections::HashMap::new();
     for ((topic, partition), committed) in all_offsets {
@@ -120,10 +134,13 @@ fn build_partition_v8(
     topic_name: &str,
     partition_index: i32,
     offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
 ) -> OffsetFetchResponsePartitions {
     let mut p = OffsetFetchResponsePartitions::default();
     p.partition_index = partition_index;
-    if let Some(committed) = offset_store.fetch(group_id, topic_name, partition_index) {
+    if let Some(committed) =
+        offset_store.fetch_with_context(ctx, group_id, topic_name, partition_index)
+    {
         p.committed_offset = committed.offset;
         p.metadata = committed.metadata.map(StrBytes::from_string);
         p.error_code = 0;
@@ -138,10 +155,11 @@ fn build_group_topics_v0_7(
     group_id: &str,
     topics: Option<&[(String, &[i32])]>,
     offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
     response: &mut OffsetFetchResponse,
 ) {
     match topics {
-        None => fetch_all_v0_7(group_id, offset_store, response),
+        None => fetch_all_v0_7(group_id, offset_store, ctx, response),
         Some(ts) => {
             for (topic_name, partition_indexes) in ts {
                 let mut topic_response = OffsetFetchResponseTopic::default();
@@ -152,6 +170,7 @@ fn build_group_topics_v0_7(
                         topic_name,
                         pi,
                         offset_store,
+                        ctx,
                     ));
                 }
                 response.topics.push(topic_response);
@@ -163,9 +182,10 @@ fn build_group_topics_v0_7(
 fn fetch_all_v0_7(
     group_id: &str,
     offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
     response: &mut OffsetFetchResponse,
 ) {
-    let all_offsets = offset_store.fetch_all_for_group(group_id);
+    let all_offsets = offset_store.fetch_all_for_group_with_context(ctx, group_id);
     let mut topic_map: std::collections::HashMap<String, Vec<(i32, i64, Option<String>)>> =
         std::collections::HashMap::new();
     for ((topic, partition), committed) in all_offsets {
@@ -194,10 +214,13 @@ fn build_partition_v0_7(
     topic_name: &str,
     partition_index: i32,
     offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
 ) -> OffsetFetchResponsePartition {
     let mut p = OffsetFetchResponsePartition::default();
     p.partition_index = partition_index;
-    if let Some(committed) = offset_store.fetch(group_id, topic_name, partition_index) {
+    if let Some(committed) =
+        offset_store.fetch_with_context(ctx, group_id, topic_name, partition_index)
+    {
         p.committed_offset = committed.offset;
         p.metadata = committed.metadata.map(StrBytes::from_string);
         p.error_code = 0;

@@ -16,6 +16,7 @@ pub use offset_store::{CommittedOffset, OffsetStore, OffsetStoreCapabilities};
 pub use record_batch_view::{stamp_base_offset, RecordBatchHeader, RecordBatchView, RecordView};
 
 use crate::error::Result;
+use crate::RequestContext;
 use bytes::Bytes;
 use std::future::{ready, Future};
 use std::pin::Pin;
@@ -109,6 +110,18 @@ pub trait LogBackend: Send + Sync {
     /// and auto-creates the topic when `auto_create_topics()` is set.
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
 
+    /// Context-aware append entrypoint for request-serving callers.
+    fn append_with_context(
+        &self,
+        ctx: &RequestContext,
+        topic_name: &str,
+        partition: i32,
+        records: &[u8],
+    ) -> Result<(i64, i64)> {
+        let _ = ctx;
+        self.append(topic_name, partition, records)
+    }
+
     /// Append a raw record-batch using the caller's effective topic retention
     /// policy for append-time admission. Backends that do not enforce retention
     /// at append time can inherit the plain append behavior.
@@ -120,6 +133,19 @@ pub trait LogBackend: Send + Sync {
         _retention: Option<RetentionPolicy>,
     ) -> Result<(i64, i64)> {
         self.append(topic_name, partition, records)
+    }
+
+    /// Context-aware variant of [`append_with_retention_policy`].
+    fn append_with_context_and_retention_policy(
+        &self,
+        ctx: &RequestContext,
+        topic_name: &str,
+        partition: i32,
+        records: &[u8],
+        retention: Option<RetentionPolicy>,
+    ) -> Result<(i64, i64)> {
+        let _ = ctx;
+        self.append_with_retention_policy(topic_name, partition, records, retention)
     }
 
     /// Append a raw record-batch without requiring the caller's worker thread to
@@ -137,6 +163,18 @@ pub trait LogBackend: Send + Sync {
         Box::pin(ready(self.append(topic_name, partition, records)))
     }
 
+    /// Context-aware async append entrypoint.
+    fn append_async_with_context<'a>(
+        &'a self,
+        ctx: &'a RequestContext,
+        topic_name: &'a str,
+        partition: i32,
+        records: &'a [u8],
+    ) -> AppendFuture<'a> {
+        let _ = ctx;
+        self.append_async(topic_name, partition, records)
+    }
+
     /// Async variant of [`append_with_retention_policy`].
     fn append_async_with_retention_policy<'a>(
         &'a self,
@@ -146,6 +184,19 @@ pub trait LogBackend: Send + Sync {
         _retention: Option<RetentionPolicy>,
     ) -> AppendFuture<'a> {
         self.append_async(topic_name, partition, records)
+    }
+
+    /// Context-aware async variant of [`append_with_retention_policy`].
+    fn append_async_with_context_and_retention_policy<'a>(
+        &'a self,
+        ctx: &'a RequestContext,
+        topic_name: &'a str,
+        partition: i32,
+        records: &'a [u8],
+        retention: Option<RetentionPolicy>,
+    ) -> AppendFuture<'a> {
+        let _ = ctx;
+        self.append_async_with_retention_policy(topic_name, partition, records, retention)
     }
 
     /// Drop records older than `retention_ms` across all partitions, returning the
@@ -171,11 +222,44 @@ pub trait LogBackend: Send + Sync {
         max_bytes: i32,
     ) -> Result<(Vec<u8>, i64)>;
 
+    /// Context-aware fetch entrypoint for request-serving callers.
+    fn fetch_with_context(
+        &self,
+        ctx: &RequestContext,
+        topic_name: &str,
+        partition: i32,
+        offset: i64,
+        max_bytes: i32,
+    ) -> Result<(Vec<u8>, i64)> {
+        let _ = ctx;
+        self.fetch(topic_name, partition, offset, max_bytes)
+    }
+
     /// High watermark (next offset to be written) for a partition.
     fn high_watermark(&self, topic_name: &str, partition: i32) -> Result<i64>;
 
+    fn high_watermark_with_context(
+        &self,
+        ctx: &RequestContext,
+        topic_name: &str,
+        partition: i32,
+    ) -> Result<i64> {
+        let _ = ctx;
+        self.high_watermark(topic_name, partition)
+    }
+
     /// Earliest available offset for a partition.
     fn log_start_offset(&self, topic_name: &str, partition: i32) -> Result<i64>;
+
+    fn log_start_offset_with_context(
+        &self,
+        ctx: &RequestContext,
+        topic_name: &str,
+        partition: i32,
+    ) -> Result<i64> {
+        let _ = ctx;
+        self.log_start_offset(topic_name, partition)
+    }
 }
 
 /// A single topic inside a [`LogBackend`].
@@ -198,6 +282,17 @@ pub trait PartitionLog: Send + Sync {
     /// backend) should prefer `raw_bytes` over re-encoding the view.
     fn append(&self, view: &RecordBatchView<'_>, raw_bytes: Option<&[u8]>) -> Result<(i64, i64)>;
 
+    /// Context-aware append entrypoint for request-serving callers.
+    fn append_with_context(
+        &self,
+        ctx: &RequestContext,
+        view: &RecordBatchView<'_>,
+        raw_bytes: Option<&[u8]>,
+    ) -> Result<(i64, i64)> {
+        let _ = ctx;
+        self.append(view, raw_bytes)
+    }
+
     /// Async append entrypoint for partition-level backends with deferred
     /// commits. Synchronous implementations inherit `append`.
     fn append_async<'a, 'b>(
@@ -208,8 +303,31 @@ pub trait PartitionLog: Send + Sync {
         Box::pin(ready(self.append(view, raw_bytes)))
     }
 
+    /// Context-aware async append entrypoint.
+    fn append_async_with_context<'a, 'b>(
+        &'a self,
+        ctx: &'a RequestContext,
+        view: &'a RecordBatchView<'b>,
+        raw_bytes: Option<&'a [u8]>,
+    ) -> AppendFuture<'a> {
+        let _ = ctx;
+        self.append_async(view, raw_bytes)
+    }
+
     /// Read records starting at `offset`, up to `max_bytes`.
     fn read(&self, offset: i64, max_bytes: usize, wait: FetchWait) -> Result<(Vec<u8>, i64)>;
+
+    /// Context-aware read entrypoint for request-serving callers.
+    fn read_with_context(
+        &self,
+        ctx: &RequestContext,
+        offset: i64,
+        max_bytes: usize,
+        wait: FetchWait,
+    ) -> Result<(Vec<u8>, i64)> {
+        let _ = ctx;
+        self.read(offset, max_bytes, wait)
+    }
 
     fn log_start_offset(&self) -> i64;
     fn high_watermark(&self) -> i64;

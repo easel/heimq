@@ -2,6 +2,7 @@
 
 use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
+use crate::storage::RequestContext;
 use bytes::Bytes;
 use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
 use kafka_protocol::messages::describe_groups_response::{DescribedGroup, DescribedGroupMember};
@@ -12,6 +13,15 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     coordinator: &dyn GroupCoordinatorBackend,
+) -> Result<DescribeGroupsResponse> {
+    handle_with_context(api_version, body, coordinator, &RequestContext::ANONYMOUS)
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    coordinator: &dyn GroupCoordinatorBackend,
+    ctx: &RequestContext,
 ) -> Result<DescribeGroupsResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match DescribeGroupsRequest::decode(&mut buf, api_version) {
@@ -26,7 +36,7 @@ pub fn handle(
     let mut response = DescribeGroupsResponse::default();
     for gid in &request.groups {
         let group_id = gid.0.as_str();
-        let described = match coordinator.describe_group(group_id) {
+        let described = match coordinator.describe_group_with_context(ctx, group_id) {
             Some(d) => {
                 let mut dg = DescribedGroup::default();
                 dg.group_id =

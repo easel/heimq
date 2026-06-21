@@ -2,6 +2,7 @@
 
 use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
+use crate::storage::RequestContext;
 use bytes::Bytes;
 use kafka_protocol::messages::delete_groups_request::DeleteGroupsRequest;
 use kafka_protocol::messages::delete_groups_response::DeletableGroupResult;
@@ -13,6 +14,15 @@ pub fn handle(
     body: &[u8],
     coordinator: &dyn GroupCoordinatorBackend,
 ) -> Result<DeleteGroupsResponse> {
+    handle_with_context(api_version, body, coordinator, &RequestContext::ANONYMOUS)
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    coordinator: &dyn GroupCoordinatorBackend,
+    ctx: &RequestContext,
+) -> Result<DeleteGroupsResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match DeleteGroupsRequest::decode(&mut buf, api_version) {
         Ok(r) => r,
@@ -23,8 +33,10 @@ pub fn handle(
     for gid in &request.groups_names {
         let group_id = gid.0.as_str();
         // Also remove any committed offsets for the group.
-        coordinator.offset_store().delete_group(group_id);
-        let _existed = coordinator.delete_group(group_id);
+        coordinator
+            .offset_store()
+            .delete_group_with_context(ctx, group_id);
+        let _existed = coordinator.delete_group_with_context(ctx, group_id);
         let mut result = DeletableGroupResult::default();
         result.group_id =
             kafka_protocol::messages::GroupId(StrBytes::from_string(group_id.to_string()));

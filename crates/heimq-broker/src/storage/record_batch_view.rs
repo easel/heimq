@@ -15,7 +15,6 @@
 use crate::error::{HeimqError, Result};
 use crate::storage::CompressionCodec;
 use bytes::Bytes;
-use kafka_protocol::protocol::StrBytes;
 use kafka_protocol::records::{
     Compression, Record, RecordBatchDecoder, RecordCompression, RecordSet,
 };
@@ -114,8 +113,11 @@ pub struct RecordView<'a> {
 
 impl<'a> RecordView<'a> {
     /// Iterate over the record's headers as `(name, value)` pairs.
-    pub fn headers(&self) -> impl Iterator<Item = (&'a StrBytes, Option<&'a Bytes>)> + 'a {
-        self.record.headers.iter().map(|(k, v)| (k, v.as_ref()))
+    pub fn headers(&self) -> impl Iterator<Item = (&'a str, Option<&'a [u8]>)> + 'a {
+        self.record
+            .headers
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_ref().map(Bytes::as_ref)))
     }
 
     pub fn header_count(&self) -> usize {
@@ -257,6 +259,7 @@ fn compression_to_codec(c: Compression) -> CompressionCodec {
 mod tests {
     use super::*;
     use bytes::BytesMut;
+    use kafka_protocol::protocol::StrBytes;
     use kafka_protocol::records::{RecordBatchEncoder, RecordEncodeOptions, TimestampType};
 
     fn make_record(offset: i64, timestamp: i64, key: &[u8], value: &[u8]) -> Record {
@@ -349,6 +352,22 @@ mod tests {
                 (2, 100, Some(b"gamma".to_vec()), Some(b"three".to_vec()), 1),
             ]
         );
+    }
+
+    #[test]
+    fn public_api_iterates_decoded_records_without_kafka_protocol_types() {
+        let records = vec![make_record(0, 1_000, b"alpha", b"one")];
+        let raw = encode(&records, Compression::None);
+        let view = RecordBatchView::from_bytes(&raw).expect("decode view");
+
+        let record = view.records().next().expect("one decoded record");
+        let headers: Vec<(&str, Option<&[u8]>)> = record.headers().collect();
+
+        assert_eq!(record.offset_delta, 0);
+        assert_eq!(record.timestamp_delta, 0);
+        assert_eq!(record.key.map(Bytes::as_ref), Some(b"alpha".as_slice()));
+        assert_eq!(record.value.map(Bytes::as_ref), Some(b"one".as_slice()));
+        assert_eq!(headers, vec![("h1", Some(b"hv".as_slice()))]);
     }
 
     #[test]

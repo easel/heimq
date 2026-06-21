@@ -20,6 +20,7 @@ pub use heimq_broker::storage::{
 };
 pub use heimq_broker::storage::{BrokerInfo, ClusterView, ClusterViewError};
 pub use heimq_broker::storage::{RecordBatchView, RecordView};
+pub use heimq_broker::RequestContext;
 
 pub use cluster_view::SingleNodeClusterView;
 pub use dispatch::{dispatch_group_coordinator, dispatch_log_backend, dispatch_offset_store};

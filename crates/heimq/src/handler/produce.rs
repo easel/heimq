@@ -3,7 +3,7 @@
 use crate::config_store::ConfigStore;
 use crate::error::{ErrorCode, Result};
 use crate::producer_state::{ProducerStateManager, SequenceCheck};
-use crate::storage::{LogBackend, RetentionPolicy};
+use crate::storage::{LogBackend, RequestContext, RetentionPolicy};
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
 use heimq_broker::produce::{
@@ -60,6 +60,7 @@ pub fn handle(
         storage,
         producer_state,
         transaction_manager,
+        &RequestContext::ANONYMOUS,
         None,
         0,
     )
@@ -80,6 +81,30 @@ pub fn handle_with_config_store(
         storage,
         producer_state,
         transaction_manager,
+        &RequestContext::ANONYMOUS,
+        Some(config_store),
+        default_retention_ms,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn handle_with_context_and_config_store(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    producer_state: &Arc<ProducerStateManager>,
+    transaction_manager: &Arc<TransactionManager>,
+    ctx: &RequestContext,
+    config_store: &Arc<ConfigStore>,
+    default_retention_ms: u64,
+) -> Result<ProduceResponse> {
+    handle_inner(
+        api_version,
+        body,
+        storage,
+        producer_state,
+        transaction_manager,
+        ctx,
         Some(config_store),
         default_retention_ms,
     )
@@ -105,12 +130,14 @@ fn effective_retention_policy(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_inner(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
     producer_state: &Arc<ProducerStateManager>,
     transaction_manager: &Arc<TransactionManager>,
+    ctx: &RequestContext,
     config_store: Option<&Arc<ConfigStore>>,
     default_retention_ms: u64,
 ) -> Result<ProduceResponse> {
@@ -160,6 +187,7 @@ fn handle_inner(
 
             if let Some(records) = partition_data.records {
                 match append_records(ProduceAppend {
+                    ctx,
                     storage: storage.as_ref(),
                     topic: &topic_name,
                     partition,
@@ -280,6 +308,7 @@ pub async fn handle_async(
         storage,
         producer_state,
         transaction_manager,
+        &RequestContext::ANONYMOUS,
         None,
         0,
     )
@@ -301,18 +330,45 @@ pub async fn handle_async_with_config_store(
         storage,
         producer_state,
         transaction_manager,
+        &RequestContext::ANONYMOUS,
         Some(config_store),
         default_retention_ms,
     )
     .await
 }
 
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_async_with_context_and_config_store(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    producer_state: &Arc<ProducerStateManager>,
+    transaction_manager: &Arc<TransactionManager>,
+    ctx: &RequestContext,
+    config_store: &Arc<ConfigStore>,
+    default_retention_ms: u64,
+) -> Result<ProduceResponse> {
+    handle_async_inner(
+        api_version,
+        body,
+        storage,
+        producer_state,
+        transaction_manager,
+        ctx,
+        Some(config_store),
+        default_retention_ms,
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
 async fn handle_async_inner(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
     producer_state: &Arc<ProducerStateManager>,
     transaction_manager: &Arc<TransactionManager>,
+    ctx: &RequestContext,
     config_store: Option<&Arc<ConfigStore>>,
     default_retention_ms: u64,
 ) -> Result<ProduceResponse> {
@@ -361,6 +417,7 @@ async fn handle_async_inner(
 
             if let Some(records) = partition_data.records {
                 match append_records_async(ProduceAppend {
+                    ctx,
                     storage: storage.as_ref(),
                     topic: &topic_name,
                     partition,

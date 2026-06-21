@@ -1,7 +1,7 @@
 //! OffsetCommit request handler (API Key 8)
 
 use crate::error::Result;
-use crate::storage::OffsetStore;
+use crate::storage::{OffsetStore, RequestContext};
 use bytes::Bytes;
 use kafka_protocol::messages::offset_commit_request::OffsetCommitRequest;
 use kafka_protocol::messages::offset_commit_response::{
@@ -16,6 +16,15 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     offset_store: &Arc<dyn OffsetStore>,
+) -> Result<OffsetCommitResponse> {
+    handle_with_context(api_version, body, offset_store, &RequestContext::ANONYMOUS)
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    offset_store: &Arc<dyn OffsetStore>,
+    ctx: &RequestContext,
 ) -> Result<OffsetCommitResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match OffsetCommitRequest::decode(&mut buf, api_version) {
@@ -34,7 +43,8 @@ pub fn handle(
         for partition in &topic.partitions {
             let metadata = partition.committed_metadata.as_ref().map(|s| s.to_string());
             let commit_error = offset_store
-                .commit(
+                .commit_with_context(
+                    ctx,
                     &group_id,
                     &topic_name,
                     partition.partition_index,

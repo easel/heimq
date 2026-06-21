@@ -8,6 +8,7 @@
 
 use crate::error::Result;
 use crate::storage::Durability;
+use crate::RequestContext;
 use std::collections::HashMap;
 
 /// Committed offset record stored by an [`OffsetStore`].
@@ -68,18 +69,70 @@ pub trait OffsetStore: Send + Sync {
         metadata: Option<String>,
     ) -> Result<()>;
 
+    /// Context-aware commit entrypoint for request-serving callers.
+    #[allow(clippy::too_many_arguments)]
+    fn commit_with_context(
+        &self,
+        ctx: &RequestContext,
+        group_id: &str,
+        topic: &str,
+        partition: i32,
+        offset: i64,
+        leader_epoch: i32,
+        metadata: Option<String>,
+    ) -> Result<()> {
+        let _ = ctx;
+        self.commit(group_id, topic, partition, offset, leader_epoch, metadata)
+    }
+
     /// Fetch the committed offset for `(group, topic, partition)`.
     fn fetch(&self, group_id: &str, topic: &str, partition: i32) -> Option<CommittedOffset>;
+
+    fn fetch_with_context(
+        &self,
+        ctx: &RequestContext,
+        group_id: &str,
+        topic: &str,
+        partition: i32,
+    ) -> Option<CommittedOffset> {
+        let _ = ctx;
+        self.fetch(group_id, topic, partition)
+    }
 
     /// Fetch every committed offset for a group, keyed by `(topic, partition)`.
     fn fetch_all_for_group(&self, group_id: &str) -> HashMap<(String, i32), CommittedOffset>;
 
+    fn fetch_all_for_group_with_context(
+        &self,
+        ctx: &RequestContext,
+        group_id: &str,
+    ) -> HashMap<(String, i32), CommittedOffset> {
+        let _ = ctx;
+        self.fetch_all_for_group(group_id)
+    }
+
     /// Drop all committed offsets for a group.
     fn delete_group(&self, group_id: &str);
+
+    fn delete_group_with_context(&self, ctx: &RequestContext, group_id: &str) {
+        let _ = ctx;
+        self.delete_group(group_id);
+    }
 
     /// Drop the committed offset for a specific (group, topic, partition) triple.
     /// No-op if the offset does not exist.
     fn delete_offset(&self, group_id: &str, topic: &str, partition: i32);
+
+    fn delete_offset_with_context(
+        &self,
+        ctx: &RequestContext,
+        group_id: &str,
+        topic: &str,
+        partition: i32,
+    ) {
+        let _ = ctx;
+        self.delete_offset(group_id, topic, partition);
+    }
 
     /// Backend capabilities descriptor.
     fn capabilities(&self) -> &OffsetStoreCapabilities;

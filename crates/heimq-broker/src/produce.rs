@@ -6,6 +6,7 @@
 
 use crate::error::HeimqError;
 use crate::storage::{LogBackend, RecordBatchHeader, RetentionPolicy};
+use crate::RequestContext;
 
 /// Result of an idempotent sequence validation check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +52,7 @@ impl SequenceValidator for AcceptAllSequenceValidator {
 
 /// Inputs needed to decide and perform one partition append.
 pub struct ProduceAppend<'a> {
+    pub ctx: &'a RequestContext,
     pub storage: &'a dyn LogBackend,
     pub topic: &'a str,
     pub partition: i32,
@@ -125,7 +127,8 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
         AppendPlan::Complete(outcome) => return Ok(outcome),
     };
 
-    match cmd.storage.append_with_retention_policy(
+    match cmd.storage.append_with_context_and_retention_policy(
+        cmd.ctx,
         cmd.topic,
         cmd.partition,
         cmd.records,
@@ -154,7 +157,8 @@ pub async fn append_records_async(
 
     match cmd
         .storage
-        .append_async_with_retention_policy(
+        .append_async_with_context_and_retention_policy(
+            cmd.ctx,
             cmd.topic,
             cmd.partition,
             cmd.records,
@@ -186,7 +190,7 @@ fn plan_append(cmd: &ProduceAppend<'_>) -> Result<AppendPlan, ProduceAppendError
             status: ProduceAppendStatus::Empty {
                 high_watermark: cmd
                     .storage
-                    .high_watermark(cmd.topic, cmd.partition)
+                    .high_watermark_with_context(cmd.ctx, cmd.topic, cmd.partition)
                     .unwrap_or(0),
             },
             header,
@@ -211,7 +215,7 @@ fn plan_append(cmd: &ProduceAppend<'_>) -> Result<AppendPlan, ProduceAppendError
                 SequenceDecision::Duplicate => {
                     let high_watermark = cmd
                         .storage
-                        .high_watermark(cmd.topic, cmd.partition)
+                        .high_watermark_with_context(cmd.ctx, cmd.topic, cmd.partition)
                         .unwrap_or(0);
                     return Ok(AppendPlan::Complete(ProduceAppendOutcome {
                         status: ProduceAppendStatus::Duplicate {
@@ -247,6 +251,7 @@ mod tests {
         caps: BackendCapabilities,
         high_watermark: Mutex<i64>,
         appended: Mutex<Vec<Vec<u8>>>,
+        seen_contexts: Mutex<Vec<RequestContext>>,
         fail_append: bool,
     }
 
@@ -386,6 +391,7 @@ mod tests {
                 caps: BackendCapabilities::default(),
                 high_watermark: Mutex::new(0),
                 appended: Mutex::new(Vec::new()),
+                seen_contexts: Mutex::new(Vec::new()),
                 fail_append: false,
             }
         }
@@ -407,6 +413,10 @@ mod tests {
 
         fn append_count(&self) -> usize {
             self.appended.lock().len()
+        }
+
+        fn seen_contexts(&self) -> Vec<RequestContext> {
+            self.seen_contexts.lock().clone()
         }
     }
 
@@ -448,14 +458,41 @@ mod tests {
         }
 
         fn append(&self, _topic_name: &str, _partition: i32, records: &[u8]) -> Result<(i64, i64)> {
+            self.append_with_context(
+                &RequestContext::anonymous(),
+                _topic_name,
+                _partition,
+                records,
+            )
+        }
+
+        fn append_with_context(
+            &self,
+            ctx: &RequestContext,
+            _topic_name: &str,
+            _partition: i32,
+            records: &[u8],
+        ) -> Result<(i64, i64)> {
             if self.fail_append {
                 return Err(HeimqError::Storage("append failed".into()));
             }
             let mut high_watermark = self.high_watermark.lock();
             let base_offset = *high_watermark;
             *high_watermark += 1;
+            self.seen_contexts.lock().push(ctx.clone());
             self.appended.lock().push(records.to_vec());
             Ok((base_offset, *high_watermark))
+        }
+
+        fn append_with_context_and_retention_policy(
+            &self,
+            ctx: &RequestContext,
+            topic_name: &str,
+            partition: i32,
+            records: &[u8],
+            _retention: Option<RetentionPolicy>,
+        ) -> Result<(i64, i64)> {
+            self.append_with_context(ctx, topic_name, partition, records)
         }
 
         fn fetch(
@@ -499,6 +536,7 @@ mod tests {
         sequence_validator: &'a dyn SequenceValidator,
     ) -> ProduceAppend<'a> {
         ProduceAppend {
+            ctx: &RequestContext::ANONYMOUS,
             storage,
             topic: "events",
             partition: 0,
@@ -555,6 +593,29 @@ mod tests {
         );
         assert_eq!(storage.append_count(), 1);
         assert_eq!(outcome.header.unwrap().record_count, 2);
+    }
+
+    #[test]
+    fn produce_append_core_threads_request_context_to_backend() {
+        let storage = TestStorage::new();
+        let records = record_batch_header_bytes(1, -1, 0);
+        let ctx = RequestContext::new(
+            Some("principal-a".to_string()),
+            Some("tenant-a".to_string()),
+            Some("client-a".to_string()),
+        );
+
+        let outcome = append_records(ProduceAppend {
+            ctx: &ctx,
+            ..append(&storage, &records, &AcceptAllSequenceValidator)
+        })
+        .unwrap();
+
+        assert!(matches!(
+            outcome.status,
+            ProduceAppendStatus::Appended { .. }
+        ));
+        assert_eq!(storage.seen_contexts(), vec![ctx]);
     }
 
     #[test]

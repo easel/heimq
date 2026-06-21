@@ -14,6 +14,7 @@
 #![allow(dead_code)]
 
 use crate::storage::{Durability, OffsetStore};
+use crate::RequestContext;
 use std::sync::Arc;
 
 /// Declarative description of what a group-coordinator backend can do.
@@ -151,25 +152,75 @@ pub trait GroupCoordinatorBackend: Send + Sync {
     /// the member — the client must reissue the request with that id.
     fn join_group(&self, req: JoinRequest) -> JoinResult;
 
+    fn join_group_with_context(&self, ctx: &RequestContext, req: JoinRequest) -> JoinResult {
+        let _ = ctx;
+        self.join_group(req)
+    }
+
     /// Sync assignments. When the caller is the elected leader, the supplied
     /// per-member assignments are stored and the group transitions to
     /// `Stable`. Followers receive their previously-stored assignment.
     fn sync_group(&self, req: SyncRequest) -> SyncResult;
 
+    fn sync_group_with_context(&self, ctx: &RequestContext, req: SyncRequest) -> SyncResult {
+        let _ = ctx;
+        self.sync_group(req)
+    }
+
     /// Refresh a member's session timeout.
     fn heartbeat(&self, group_id: &str, generation_id: i32, member_id: &str) -> HeartbeatResult;
+
+    fn heartbeat_with_context(
+        &self,
+        ctx: &RequestContext,
+        group_id: &str,
+        generation_id: i32,
+        member_id: &str,
+    ) -> HeartbeatResult {
+        let _ = ctx;
+        self.heartbeat(group_id, generation_id, member_id)
+    }
 
     /// Remove one or more members from a group.
     fn leave_group(&self, group_id: &str, member_ids: &[String]) -> LeaveResult;
 
+    fn leave_group_with_context(
+        &self,
+        ctx: &RequestContext,
+        group_id: &str,
+        member_ids: &[String],
+    ) -> LeaveResult {
+        let _ = ctx;
+        self.leave_group(group_id, member_ids)
+    }
+
     /// List all known group IDs.
     fn list_groups(&self) -> Vec<String>;
+
+    fn list_groups_with_context(&self, ctx: &RequestContext) -> Vec<String> {
+        let _ = ctx;
+        self.list_groups()
+    }
 
     /// Describe a single group. Returns `None` if the group does not exist.
     fn describe_group(&self, group_id: &str) -> Option<GroupDescription>;
 
+    fn describe_group_with_context(
+        &self,
+        ctx: &RequestContext,
+        group_id: &str,
+    ) -> Option<GroupDescription> {
+        let _ = ctx;
+        self.describe_group(group_id)
+    }
+
     /// Delete a group. Returns true if the group existed and was removed.
     fn delete_group(&self, group_id: &str) -> bool;
+
+    fn delete_group_with_context(&self, ctx: &RequestContext, group_id: &str) -> bool {
+        let _ = ctx;
+        self.delete_group(group_id)
+    }
 
     /// Backend capabilities descriptor.
     fn capabilities(&self) -> &GroupCoordinatorCapabilities;

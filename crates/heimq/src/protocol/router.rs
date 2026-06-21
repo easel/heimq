@@ -6,7 +6,7 @@ use crate::error::Result;
 use crate::handler::*;
 use crate::producer_state::ProducerStateManager;
 use crate::protocol::{decode_request, encode_response, RequestHeader};
-use crate::storage::{ClusterView, LogBackend};
+use crate::storage::{ClusterView, LogBackend, RequestContext};
 use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
 use kafka_protocol::messages::fetch_request::FetchRequest;
@@ -280,6 +280,10 @@ impl Router {
         self.encode_response_bytes(header, &response)
     }
 
+    fn request_context(&self, header: &RequestHeader) -> RequestContext {
+        RequestContext::with_client_id(header.client_id.clone())
+    }
+
     fn handle_metadata(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         self.handle_and_encode(
             header,
@@ -319,13 +323,15 @@ impl Router {
         let tm = self.transaction_manager.clone();
         let store = self.config_store.clone();
         let default_retention_ms = self.default_retention_ms;
+        let ctx = self.request_context(header);
         let result = if acks_zero {
-            let _ = produce::handle_with_config_store(
+            let _ = produce::handle_with_context_and_config_store(
                 header.api_version,
                 body,
                 &self.storage,
                 &ps,
                 &tm,
+                &ctx,
                 &store,
                 default_retention_ms,
             );
@@ -334,12 +340,13 @@ impl Router {
             self.handle_and_encode(
                 header,
                 Box::new(|| {
-                    produce::handle_with_config_store(
+                    produce::handle_with_context_and_config_store(
                         header.api_version,
                         body,
                         &self.storage,
                         &ps,
                         &tm,
+                        &ctx,
                         &store,
                         default_retention_ms,
                     )
@@ -370,12 +377,14 @@ impl Router {
 
         let ps = self.producer_state.clone();
         let tm = self.transaction_manager.clone();
-        let response = produce::handle_async_with_config_store(
+        let ctx = self.request_context(header);
+        let response = produce::handle_async_with_context_and_config_store(
             header.api_version,
             body,
             &self.storage,
             &ps,
             &tm,
+            &ctx,
             &self.config_store,
             self.default_retention_ms,
         )
@@ -397,9 +406,12 @@ impl Router {
 
     fn handle_fetch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
         let tm = self.transaction_manager.clone();
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
-            Box::new(|| fetch::handle(header.api_version, body, &self.storage, &tm)),
+            Box::new(|| {
+                fetch::handle_with_context(header.api_version, body, &self.storage, &tm, &ctx)
+            }),
         )
     }
 
@@ -503,62 +515,106 @@ impl Router {
     }
 
     fn handle_join_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
-                join_group::handle(header.api_version, body, self.consumer_groups.as_ref())
+                join_group::handle_with_context(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.as_ref(),
+                    &ctx,
+                )
             }),
         )
     }
 
     fn handle_sync_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
-                sync_group::handle(header.api_version, body, self.consumer_groups.as_ref())
+                sync_group::handle_with_context(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.as_ref(),
+                    &ctx,
+                )
             }),
         )
     }
 
     fn handle_heartbeat(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
-            Box::new(|| heartbeat::handle(header.api_version, body, self.consumer_groups.as_ref())),
+            Box::new(|| {
+                heartbeat::handle_with_context(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.as_ref(),
+                    &ctx,
+                )
+            }),
         )
     }
 
     fn handle_leave_group(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
-                leave_group::handle(header.api_version, body, self.consumer_groups.as_ref())
+                leave_group::handle_with_context(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.as_ref(),
+                    &ctx,
+                )
             }),
         )
     }
 
     fn handle_describe_groups(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
-                describe_groups::handle(header.api_version, body, self.consumer_groups.as_ref())
+                describe_groups::handle_with_context(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.as_ref(),
+                    &ctx,
+                )
             }),
         )
     }
 
     fn handle_list_groups(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
-                list_groups::handle(header.api_version, body, self.consumer_groups.as_ref())
+                list_groups::handle_with_context(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.as_ref(),
+                    &ctx,
+                )
             }),
         )
     }
 
     fn handle_delete_groups(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
-                delete_groups::handle(header.api_version, body, self.consumer_groups.as_ref())
+                delete_groups::handle_with_context(
+                    header.api_version,
+                    body,
+                    self.consumer_groups.as_ref(),
+                    &ctx,
+                )
             }),
         )
     }
@@ -596,11 +652,12 @@ impl Router {
     }
 
     fn handle_offset_delete(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
                 let store = self.consumer_groups.offset_store();
-                offset_delete::handle(header.api_version, body, &store)
+                offset_delete::handle_with_context(header.api_version, body, &store, &ctx)
             }),
         )
     }
@@ -642,21 +699,23 @@ impl Router {
     }
 
     fn handle_offset_commit(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
                 let store = self.consumer_groups.offset_store();
-                offset_commit::handle(header.api_version, body, &store)
+                offset_commit::handle_with_context(header.api_version, body, &store, &ctx)
             }),
         )
     }
 
     fn handle_offset_fetch(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+        let ctx = self.request_context(header);
         self.handle_and_encode(
             header,
             Box::new(|| {
                 let store = self.consumer_groups.offset_store();
-                offset_fetch::handle(header.api_version, body, &store)
+                offset_fetch::handle_with_context(header.api_version, body, &store, &ctx)
             }),
         )
     }

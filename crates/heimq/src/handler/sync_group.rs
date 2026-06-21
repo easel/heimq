@@ -2,6 +2,7 @@
 
 use crate::consumer_group::{GroupCoordinatorBackend, SyncRequest};
 use crate::error::Result;
+use crate::storage::RequestContext;
 use bytes::Bytes;
 use kafka_protocol::messages::sync_group_request::SyncGroupRequest;
 use kafka_protocol::messages::SyncGroupResponse;
@@ -12,6 +13,15 @@ pub fn handle(
     api_version: i16,
     body: &[u8],
     coordinator: &dyn GroupCoordinatorBackend,
+) -> Result<SyncGroupResponse> {
+    handle_with_context(api_version, body, coordinator, &RequestContext::ANONYMOUS)
+}
+
+pub fn handle_with_context(
+    api_version: i16,
+    body: &[u8],
+    coordinator: &dyn GroupCoordinatorBackend,
+    ctx: &RequestContext,
 ) -> Result<SyncGroupResponse> {
     let mut buf = Bytes::copy_from_slice(body);
     let request = match SyncGroupRequest::decode(&mut buf, api_version) {
@@ -32,12 +42,15 @@ pub fn handle(
         .map(|a| (a.member_id.to_string(), a.assignment.to_vec()))
         .collect();
 
-    let result = coordinator.sync_group(SyncRequest {
-        group_id: group_id.clone(),
-        generation_id: request.generation_id,
-        member_id: member_id.clone(),
-        assignments,
-    });
+    let result = coordinator.sync_group_with_context(
+        ctx,
+        SyncRequest {
+            group_id: group_id.clone(),
+            generation_id: request.generation_id,
+            member_id: member_id.clone(),
+            assignments,
+        },
+    );
 
     debug!(
         group = %group_id,
