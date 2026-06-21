@@ -8,6 +8,7 @@
 //! Compiled only with `--features backend-postgres`. Without the feature the
 //! file is empty so `cargo test` still succeeds without a Postgres backend.
 
+#![allow(clippy::uninlined_format_args)]
 #![cfg(feature = "backend-postgres")]
 
 use bytes::{Buf, BufMut, BytesMut};

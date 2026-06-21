@@ -2,6 +2,8 @@
 //!
 //! Focused on transport, simplicity, and speed at the expense of durability.
 
+#![allow(clippy::uninlined_format_args)]
+
 use heimq::config;
 use heimq::server;
 

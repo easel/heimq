@@ -3,6 +3,8 @@
 //! This test is intentionally ignored by default because it targets a broker
 //! already deployed by `scripts/helm-memory-e2e.sh`.
 
+#![allow(clippy::uninlined_format_args)]
+
 use anyhow::{anyhow, bail, Context, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use heimq::protocol::is_flexible;
