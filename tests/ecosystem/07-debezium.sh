@@ -47,15 +47,34 @@ while ! docker exec "$PG_CID" pg_isready -U debezium >/dev/null 2>&1; do
 done
 echo "  PostgreSQL ready"
 
+pg_exec() {
+    local sql="$1"
+    local deadline=$((SECONDS + 30))
+    local last_log=""
+
+    while [ $SECONDS -lt $deadline ]; do
+        if docker exec "$PG_CID" psql -U debezium -d inventory -c "$sql" >/dev/null 2>"/tmp/heimq-pg-psql-${RUN_ID}.log"; then
+            rm -f "/tmp/heimq-pg-psql-${RUN_ID}.log"
+            return 0
+        fi
+        last_log=$(cat "/tmp/heimq-pg-psql-${RUN_ID}.log" 2>/dev/null || true)
+        sleep 1
+    done
+
+    echo "FAIL: PostgreSQL setup SQL did not complete" >&2
+    [ -n "$last_log" ] && echo "$last_log" >&2
+    docker logs "$PG_CID" 2>&1 | tail -30 >&2
+    return 1
+}
+
 # Create test table and publication
-docker exec "$PG_CID" psql -U debezium -d inventory -c "
+pg_exec "
 CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     item TEXT NOT NULL,
     quantity INT NOT NULL
-);" >/dev/null
-docker exec "$PG_CID" psql -U debezium -d inventory -c "
-CREATE PUBLICATION dbz_pub FOR TABLE orders;" 2>/dev/null || true
+);"
+pg_exec "CREATE PUBLICATION dbz_pub FOR TABLE orders;" || true
 
 # Start Debezium Connect on the same bridge network (so it can reach PG by IP)
 # Also needs to reach heimq (DOCKER_BOOTSTRAP) which is on the OrbStack VM
