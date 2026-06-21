@@ -30,6 +30,7 @@ pub const SUPPORTED_TOPIC_CONFIGS: &[(&str, &str)] = &[
     ("compression.type", "producer"),
     ("min.insync.replicas", "1"),
     ("max.message.bytes", "1048588"),
+    ("unclean.leader.election.enable", "false"),
 ];
 
 pub fn is_supported(key: &str) -> bool {

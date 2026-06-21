@@ -1928,6 +1928,17 @@ fn alter_configs_round_trips_and_rejects_unknown() {
         "AlterConfigs value must round-trip through DescribeConfigs"
     );
 
+    // ksqlDB's command topic validation updates this topic-level config on
+    // startup; heimq records and reflects it even though leadership election is
+    // not meaningful for the single-node backend.
+    let body = alter_configs_body("my-topic", "unclean.leader.election.enable", "false");
+    let response = alter_configs::handle(0, &body, &store).unwrap();
+    assert_eq!(response.responses[0].error_code, 0);
+    assert_eq!(
+        describe_config_value(&store, "my-topic", "unclean.leader.election.enable").as_deref(),
+        Some("false")
+    );
+
     // Unsupported key: rejected with INVALID_CONFIG (40), not silent success.
     let body = alter_configs_body("my-topic", "bogus.unknown.key", "1");
     let response = alter_configs::handle(0, &body, &store).unwrap();
