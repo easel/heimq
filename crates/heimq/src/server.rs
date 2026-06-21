@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::config_store::ConfigStore;
 use crate::consumer_group::{ConsumerGroupManager, GroupCoordinatorBackend};
-use crate::error::Result;
+use crate::error::{HeimqError, Result};
 use crate::producer_state::ProducerStateManager;
 use crate::protocol::{compute_supported_apis, Router};
 use crate::storage::{
@@ -11,12 +11,11 @@ use crate::storage::{
     LogBackend, OffsetStore, SingleNodeClusterView,
 };
 use crate::transaction_state::TransactionManager;
-use bytes::{Buf, Bytes, BytesMut};
-use std::net::SocketAddr;
+use bytes::Bytes;
+use heimq_wire::{FrameError, FrameHandler, WireError, WireServer};
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-use tracing::{debug, error, info, warn};
+use tokio::net::TcpListener;
+use tracing::{info, warn};
 
 /// The heimq server
 pub struct Server {
@@ -28,8 +27,8 @@ pub struct Server {
     /// startup by intersecting static protocol support with each backend's
     /// capability descriptor.
     advertised_apis: Arc<Vec<(i16, i16, i16)>>,
-    /// Shared idempotent producer state; one instance per server, cloned
-    /// into each per-connection Router so producer IDs are globally unique.
+    /// Shared idempotent producer state; one instance per server so producer
+    /// IDs are globally unique across wire connections.
     producer_state: Arc<ProducerStateManager>,
     /// Shared transaction manager; one instance per server for EOS semantics.
     transaction_manager: Arc<TransactionManager>,
@@ -216,6 +215,14 @@ impl Server {
         listener: TcpListener,
         max_connections: Option<usize>,
     ) -> Result<()> {
+        self.spawn_maintenance_tasks();
+        WireServer::new(self.router())
+            .run_with_listener(listener, max_connections)
+            .await
+            .map_err(map_wire_error)
+    }
+
+    fn spawn_maintenance_tasks(&self) {
         let groups = self.consumer_groups.clone();
         let storage = self.storage.clone();
         let config_store = self.config_store.clone();
@@ -244,191 +251,62 @@ impl Server {
                 }
             }
         });
-
-        let mut served = 0usize;
-        loop {
-            let result = listener.accept().await;
-            if !self.handle_accept_result(result, max_connections, &mut served) {
-                break;
-            }
-        }
-        Ok(())
     }
 
-    fn handle_accept_result(
-        &self,
-        result: std::io::Result<(TcpStream, SocketAddr)>,
-        max_connections: Option<usize>,
-        served: &mut usize,
-    ) -> bool {
-        match result {
-            Ok((socket, addr)) => {
-                debug!(peer = %addr, "New connection");
-                if let Err(e) = socket.set_nodelay(true) {
-                    debug!(error = %e, "Failed to set TCP_NODELAY");
-                }
-
-                let router = Router::with_advertised_apis(
-                    self.storage.clone(),
-                    self.consumer_groups.clone(),
-                    self.cluster_view.clone(),
-                    self.advertised_apis.clone(),
-                )
-                .with_producer_state(self.producer_state.clone())
-                .with_transaction_manager(self.transaction_manager.clone())
-                .with_append_notify(self.append_notify.clone())
-                .with_config_store(self.config_store.clone())
-                .with_default_retention_ms(self.config.retention_ms);
-
-                tokio::spawn(async move {
-                    if let Err(e) = handle_connection(Box::new(socket), router).await {
-                        debug!(error = %e, "Connection error");
-                    }
-                });
-                *served += 1;
-                if max_connections.is_some_and(|limit| *served >= limit) {
-                    return false;
-                }
-            }
-            Err(e) => {
-                error!(error = %e, "Accept error");
-            }
-        }
-        true
+    fn router(&self) -> Router {
+        Router::with_advertised_apis(
+            self.storage.clone(),
+            self.consumer_groups.clone(),
+            self.cluster_view.clone(),
+            self.advertised_apis.clone(),
+        )
+        .with_producer_state(self.producer_state.clone())
+        .with_transaction_manager(self.transaction_manager.clone())
+        .with_append_notify(self.append_notify.clone())
+        .with_config_store(self.config_store.clone())
+        .with_default_retention_ms(self.config.retention_ms)
     }
 }
 
-/// Maximum frame size per WIRE-001 §1: frames larger than this are
-/// connection-fatal (no response sent, connection closed).
-pub const MAX_FRAME_BYTES: usize = 100 * 1024 * 1024; // 100 MiB
-/// Bounded channel depth per WIRE-001 §2.
-const CHANNEL_DEPTH: usize = 64;
-/// Consecutive routing-error limit per WIRE-001 §3.
-const MAX_CONSECUTIVE_ERRORS: usize = 10;
-
-trait AsyncStream: AsyncRead + AsyncWrite + Unpin + Send {}
-impl<T> AsyncStream for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
-
-/// Build a minimal Kafka error response for `correlation_id` with `error_code`.
-/// Format: 4-byte length prefix || 4-byte correlation_id || 2-byte error_code.
-fn make_error_frame(correlation_id: i32, error_code: i16) -> Bytes {
-    let mut body = BytesMut::with_capacity(6);
-    body.extend_from_slice(&correlation_id.to_be_bytes());
-    body.extend_from_slice(&error_code.to_be_bytes());
-    let mut frame = BytesMut::with_capacity(10);
-    frame.extend_from_slice(&(body.len() as i32).to_be_bytes());
-    frame.extend_from_slice(&body);
-    frame.freeze()
-}
-
-/// Try to extract correlation_id from the first 8 bytes of a request body
-/// (api_key: i16, api_version: i16, correlation_id: i32).
-fn peek_correlation_id(msg: &[u8]) -> Option<i32> {
-    if msg.len() >= 8 {
-        Some(i32::from_be_bytes([msg[4], msg[5], msg[6], msg[7]]))
-    } else {
-        None
+#[async_trait::async_trait]
+impl FrameHandler for Router {
+    async fn handle(&self, frame: Bytes) -> std::result::Result<Bytes, FrameError> {
+        let response = self
+            .route_async(&frame)
+            .await
+            .map_err(|e| FrameError::Handler(e.to_string()))?;
+        strip_router_length_prefix(response)
     }
 }
 
-/// Handle a single connection using a reader/writer split per WIRE-001 §2.
-///
-/// A reader task reads frames and forwards them via a bounded channel; the
-/// writer task dispatches to handlers and sends responses in FIFO order.
-async fn handle_connection(stream: Box<dyn AsyncStream>, router: Router) -> Result<()> {
-    use tokio::sync::mpsc;
-    let (read_half, write_half) = tokio::io::split(stream);
-    let (tx, rx) = mpsc::channel::<Bytes>(CHANNEL_DEPTH);
-
-    let reader_handle = tokio::spawn(run_reader(read_half, tx));
-    let writer_result = run_writer(write_half, rx, router).await;
-
-    // Writer exited: abort reader, then propagate whichever error occurred first.
-    reader_handle.abort();
-    let reader_result = reader_handle.await;
-
-    match writer_result {
-        Err(e) => Err(e),
-        Ok(()) => match reader_result {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => Err(e),
-            Err(_join_err) => Ok(()), // Aborted normally or panicked; treat as clean exit
-        },
+fn strip_router_length_prefix(response: Bytes) -> std::result::Result<Bytes, FrameError> {
+    if response.is_empty() {
+        return Ok(response);
     }
+    if response.len() < 4 {
+        return Err(FrameError::Handler(format!(
+            "router response too short: {} bytes",
+            response.len()
+        )));
+    }
+
+    let body_len =
+        i32::from_be_bytes([response[0], response[1], response[2], response[3]]) as usize;
+    let actual_len = response.len() - 4;
+    if body_len != actual_len {
+        return Err(FrameError::Handler(format!(
+            "router response length mismatch: prefix={body_len} actual={actual_len}"
+        )));
+    }
+    Ok(response.slice(4..))
 }
 
-/// Reader half: reads length-prefixed frames, enforces frame-size cap, and
-/// forwards raw frame bytes to the writer via the bounded channel.
-async fn run_reader(
-    mut stream: tokio::io::ReadHalf<Box<dyn AsyncStream>>,
-    tx: tokio::sync::mpsc::Sender<Bytes>,
-) -> Result<()> {
-    let mut buffer = BytesMut::with_capacity(64 * 1024);
-    loop {
-        let n = stream.read_buf(&mut buffer).await?;
-        if n == 0 {
-            if buffer.is_empty() {
-                return Ok(()); // Clean disconnect
-            }
-            return Err(crate::error::HeimqError::Protocol(
-                "Connection closed with pending data".to_string(),
-            ));
-        }
-        while buffer.len() >= 4 {
-            let msg_len = u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
-            // WIRE-001 §1: frame-size cap
-            if msg_len > MAX_FRAME_BYTES {
-                return Err(crate::error::HeimqError::Protocol(format!(
-                    "frame size {msg_len} exceeds max_frame_bytes {MAX_FRAME_BYTES}"
-                )));
-            }
-            if buffer.len() < 4 + msg_len {
-                break;
-            }
-            buffer.advance(4);
-            let frame = buffer.split_to(msg_len).freeze();
-            if tx.send(frame).await.is_err() {
-                return Ok(()); // Writer closed; exit cleanly
-            }
-        }
+fn map_wire_error(error: WireError) -> HeimqError {
+    match error {
+        WireError::Io(e) => HeimqError::Io(e),
+        WireError::Protocol(e) => HeimqError::Protocol(e),
+        WireError::Handler(e) => HeimqError::Protocol(e),
     }
-}
-
-/// Writer half: receives frames from the reader, routes them, writes responses
-/// in FIFO order, and enforces the consecutive-error limit (WIRE-001 §3).
-async fn run_writer(
-    mut stream: tokio::io::WriteHalf<Box<dyn AsyncStream>>,
-    mut rx: tokio::sync::mpsc::Receiver<Bytes>,
-    router: Router,
-) -> Result<()> {
-    let mut consecutive_errors: usize = 0;
-    while let Some(frame) = rx.recv().await {
-        match router.route_async(&frame).await {
-            Ok(response) => {
-                // Empty response = acks=0 produce or other no-reply sentinel:
-                // no bytes written (Kafka protocol requirement).
-                if !response.is_empty() {
-                    stream.write_all(&response).await?;
-                }
-                consecutive_errors = 0;
-            }
-            Err(e) => {
-                // WIRE-001 §3: typed error frame, then count
-                warn!(error = %e, "Request handling error");
-                if let Some(correlation_id) = peek_correlation_id(&frame) {
-                    let error_frame = make_error_frame(correlation_id, 10); // UNKNOWN_SERVER_ERROR
-                    let _ = stream.write_all(&error_frame).await;
-                    consecutive_errors += 1;
-                    if consecutive_errors >= MAX_CONSECUTIVE_ERRORS {
-                        return Err(e);
-                    }
-                } else {
-                    return Err(e);
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -438,14 +316,16 @@ mod tests {
     use crate::consumer_group::MemoryOffsetStore;
     use crate::storage::{BrokerInfo, ClusterViewError};
     use crate::test_support::{init_tracing, test_config, test_consumer_groups, test_storage};
-    use bytes::BufMut;
+    use bytes::{Buf, BufMut, BytesMut};
     use clap::Parser;
+    use heimq_wire::{make_error_frame, peek_correlation_id, serve_connection, MAX_FRAME_BYTES};
     use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
     use kafka_protocol::protocol::Encodable;
     use std::pin::Pin;
     use std::task::{Context, Poll};
-    use tokio::io::AsyncWriteExt;
     use tokio::io::ReadBuf;
+    use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream};
 
     struct FixedClusterView {
         broker: BrokerInfo,
@@ -599,6 +479,16 @@ mod tests {
         framed.put_i32(request.len() as i32);
         framed.extend_from_slice(&request);
         framed.to_vec()
+    }
+
+    async fn serve_router_connection<S>(stream: S, router: Router) -> Result<()>
+    where
+        S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+    {
+        let peer = "127.0.0.1:0".parse().unwrap();
+        serve_connection(stream, peer, Arc::new(router))
+            .await
+            .map_err(super::map_wire_error)
     }
 
     #[tokio::test]
@@ -799,62 +689,6 @@ mod tests {
         std::env::remove_var("HEIMQ_MAX_CONNECTIONS");
     }
 
-    #[test]
-    fn test_handle_accept_error() {
-        init_tracing();
-        let config = Config::parse_from(["heimq"]);
-        let server = Server::new(config).unwrap();
-        let mut served = 0usize;
-        let error = std::io::Error::other("accept failed");
-        let should_continue = server.handle_accept_result(Err(error), Some(1), &mut served);
-        assert!(should_continue);
-        assert_eq!(served, 0);
-    }
-
-    #[tokio::test]
-    async fn test_handle_accept_result_no_limit() {
-        init_tracing();
-        let config = Config::parse_from(["heimq"]);
-        let server = Server::new(config).unwrap();
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-        let client_task = tokio::spawn(async move { TcpStream::connect(addr).await.unwrap() });
-
-        let (socket, peer) = listener.accept().await.unwrap();
-        client_task.await.unwrap();
-
-        let mut served = 0usize;
-        let should_continue = server.handle_accept_result(Ok((socket, peer)), None, &mut served);
-        assert!(should_continue);
-        assert_eq!(served, 1);
-    }
-
-    #[tokio::test]
-    async fn test_handle_accept_result_limit_and_spawn_error() {
-        init_tracing();
-        let config = Config::parse_from(["heimq"]);
-        let server = Server::new(config).unwrap();
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-
-        let client_task = tokio::spawn(async move {
-            let mut client = TcpStream::connect(addr).await.unwrap();
-            client.write_all(&[1, 2, 3]).await.unwrap();
-        });
-
-        let (socket, peer) = listener.accept().await.unwrap();
-        client_task.await.unwrap();
-
-        let mut served = 0usize;
-        let should_continue = server.handle_accept_result(Ok((socket, peer)), Some(1), &mut served);
-        assert!(!should_continue);
-        assert_eq!(served, 1);
-
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-    }
-
     #[tokio::test]
     async fn test_handle_connection_clean_disconnect() {
         init_tracing();
@@ -868,7 +702,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            handle_connection(Box::new(socket), router).await
+            serve_router_connection(socket, router).await
         });
 
         let stream = TcpStream::connect(addr).await.unwrap();
@@ -891,7 +725,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            handle_connection(Box::new(socket), router).await
+            serve_router_connection(socket, router).await
         });
 
         let mut stream = TcpStream::connect(addr).await.unwrap();
@@ -918,7 +752,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            handle_connection(Box::new(socket), router).await
+            serve_router_connection(socket, router).await
         });
 
         let mut stream = TcpStream::connect(addr).await.unwrap();
@@ -944,7 +778,7 @@ mod tests {
 
         let request = framed_request(18, 0, 1, &[]);
         let stream = ScriptedStream::new(request);
-        let result = handle_connection(Box::new(stream), router).await;
+        let result = serve_router_connection(stream, router).await;
         assert!(result.is_ok());
     }
 
@@ -965,7 +799,7 @@ mod tests {
         let router = Router::new(storage, consumer_groups, cluster_view);
 
         let stream = ScriptedStream::with_read_error();
-        let result = handle_connection(Box::new(stream), router).await;
+        let result = serve_router_connection(stream, router).await;
         assert!(result.is_err());
     }
 
@@ -980,7 +814,7 @@ mod tests {
 
         let request = framed_request(18, 0, 1, &[]);
         let stream = ScriptedStream::with_write_error(request);
-        let result = handle_connection(Box::new(stream), router).await;
+        let result = serve_router_connection(stream, router).await;
         assert!(result.is_err());
     }
 
@@ -998,12 +832,12 @@ mod tests {
         let mut oversized = BytesMut::new();
         oversized.put_u32((MAX_FRAME_BYTES + 1) as u32);
         let stream = ScriptedStream::new(oversized.to_vec());
-        let result = handle_connection(Box::new(stream), router).await;
+        let result = serve_router_connection(stream, router).await;
         assert!(result.is_err());
         let msg = format!("{}", result.unwrap_err());
         assert!(
-            msg.contains("max_frame_bytes"),
-            "error should mention max_frame_bytes: {}",
+            msg.contains("exceeds max"),
+            "error should mention frame cap: {}",
             msg
         );
     }
@@ -1061,7 +895,7 @@ mod tests {
 
         let mut captured = Vec::new();
         let stream = CapturingStream::new(framed.to_vec(), &mut captured as *mut Vec<u8>);
-        let result = handle_connection(Box::new(stream), router).await;
+        let result = serve_router_connection(stream, router).await;
         // Either Ok (handler returned error response) or Err (handler panicked/failed)
         // Either way, if Err: verify the error frame was written with corr_id=42
         if result.is_err() && captured.len() >= 10 {
@@ -1088,7 +922,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            handle_connection(Box::new(socket), router).await
+            serve_router_connection(socket, router).await
         });
 
         let mut client = TcpStream::connect(addr).await.unwrap();
@@ -1143,32 +977,6 @@ mod tests {
         let _ = server_task.await; // may be Ok or Err(BrokenPipe) depending on timing
     }
 
-    // WIRE-001 §2: TCP_NODELAY is set on each accepted connection.
-    #[tokio::test]
-    async fn test_tcp_nodelay_set_on_accept() {
-        init_tracing();
-        let config = Config::parse_from(["heimq"]);
-        let server = Server::new(config).unwrap();
-
-        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let addr = listener.local_addr().unwrap();
-
-        // Connect a client to trigger accept
-        let _client = TcpStream::connect(addr).await.unwrap();
-        let (accepted, _) = listener.accept().await.unwrap();
-
-        // TCP_NODELAY should be set by handle_accept_result
-        let (tx, rx) = tokio::sync::mpsc::channel::<bool>(1);
-        let nodelay_result = accepted.nodelay();
-        // We test that our server code CAN set it (not that we intercepted the real call)
-        // verify: set_nodelay(true) succeeds on a TcpStream
-        assert!(accepted.set_nodelay(true).is_ok());
-        drop(nodelay_result);
-        drop(tx);
-        drop(rx);
-        let _ = server;
-    }
-
     // WIRE-001 §3: connection closes after MAX_CONSECUTIVE_ERRORS consecutive errors;
     // each failed request still receives an error frame before close.
     #[tokio::test]
@@ -1184,7 +992,7 @@ mod tests {
         let addr = listener.local_addr().unwrap();
         let server_task = tokio::spawn(async move {
             let (socket, _) = listener.accept().await.unwrap();
-            handle_connection(Box::new(socket), router).await
+            serve_router_connection(socket, router).await
         });
 
         let mut client = TcpStream::connect(addr).await.unwrap();
@@ -1256,7 +1064,7 @@ impl CapturingStream {
 unsafe impl Send for CapturingStream {}
 
 #[cfg(test)]
-impl AsyncRead for CapturingStream {
+impl tokio::io::AsyncRead for CapturingStream {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,
@@ -1275,7 +1083,7 @@ impl AsyncRead for CapturingStream {
 }
 
 #[cfg(test)]
-impl AsyncWrite for CapturingStream {
+impl tokio::io::AsyncWrite for CapturingStream {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,
         _cx: &mut std::task::Context<'_>,

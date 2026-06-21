@@ -12,9 +12,11 @@ categories = ["network-programming", "asynchronous"]
 
 [dependencies]
 heimq-broker = { path = "../heimq-broker" }
+heimq-wire = { path = "../heimq-wire" }
 
 # Async runtime
 tokio = { version = "1.44", features = ["full"] }
+async-trait = "0.1"
 
 # Kafka protocol - code-generated wire protocol support
 kafka-protocol = "0.15"
@@ -78,7 +80,6 @@ kafka = { version = "0.10", default-features = false, features = ["gzip", "snapp
 # Parity harness - container orchestration and serialization
 testcontainers = "0.23"
 toml = "0.8"
-async-trait = "0.1"
 
 [features]
 default = []

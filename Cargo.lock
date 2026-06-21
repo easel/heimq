@@ -882,6 +882,7 @@ dependencies = [
  "flate2",
  "heimq",
  "heimq-broker",
+ "heimq-wire",
  "kafka",
  "kafka-protocol",
  "lz4",

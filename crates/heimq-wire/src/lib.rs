@@ -217,7 +217,16 @@ where
     let reader_handle = tokio::spawn(run_reader(read_half, tx));
     let writer_result = run_writer(write_half, rx, handler).await;
     reader_handle.abort();
-    writer_result
+    let reader_result = reader_handle.await;
+
+    match writer_result {
+        Err(e) => Err(e),
+        Ok(()) => match reader_result {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(_join_err) => Ok(()),
+        },
+    }
 }
 
 async fn run_reader<R: AsyncRead + Unpin + Send + 'static>(
@@ -263,6 +272,9 @@ async fn run_writer<W: AsyncWrite + Unpin, H: FrameHandler>(
     while let Some(frame) = rx.recv().await {
         match handler.handle(frame.clone()).await {
             Ok(response) => {
+                if response.is_empty() {
+                    continue;
+                }
                 let framed = prepend_length(response);
                 stream.write_all(&framed).await?;
                 consecutive_errors = 0;
@@ -392,6 +404,37 @@ mod tests {
         let resp_len = i32::from_be_bytes([response[0], response[1], response[2], response[3]]);
         assert_eq!(resp_len, payload.len() as i32);
         assert_eq!(&response[4..], payload);
+    }
+
+    struct EmptyHandler;
+
+    #[async_trait]
+    impl FrameHandler for EmptyHandler {
+        async fn handle(&self, _frame: Bytes) -> Result<Bytes, FrameError> {
+            Ok(Bytes::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_empty_handler_response_writes_no_frame() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use tokio::net::TcpStream;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = WireServer::new(EmptyHandler);
+        tokio::spawn(async move {
+            server.run_with_listener(listener, Some(1)).await.unwrap();
+        });
+
+        let mut client = TcpStream::connect(addr).await.unwrap();
+        client.write_all(&0i32.to_be_bytes()).await.unwrap();
+        client.shutdown().await.unwrap();
+
+        let mut response = [0u8; 4];
+        let read = client.read(&mut response).await.unwrap();
+        assert_eq!(read, 0);
     }
 
     struct CountingFactory {
