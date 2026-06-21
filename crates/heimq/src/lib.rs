@@ -2,6 +2,8 @@
 //!
 //! Focused on transport, simplicity, and speed at the expense of durability.
 
+#![allow(clippy::uninlined_format_args)]
+
 pub mod config;
 pub mod config_store;
 pub mod consumer_group;

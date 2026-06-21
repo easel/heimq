@@ -3,6 +3,8 @@
 //! These tests use raw Kafka protocol requests to validate API compliance
 //! for supported endpoints.
 
+#![allow(clippy::uninlined_format_args)]
+
 use bytes::{Buf, BufMut, BytesMut};
 use heimq::protocol::{is_flexible, SUPPORTED_APIS};
 use heimq::test_support::{unique_group, unique_topic, TestServer};
