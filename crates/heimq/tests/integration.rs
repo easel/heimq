@@ -7,7 +7,8 @@
 #![allow(
     clippy::collapsible_match,
     clippy::needless_borrows_for_generic_args,
-    clippy::type_complexity
+    clippy::type_complexity,
+    clippy::uninlined_format_args
 )]
 
 use heimq::test_support::TestServer;
