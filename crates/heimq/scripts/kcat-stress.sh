@@ -14,7 +14,7 @@ GROUPS_PER_TOPIC="${GROUPS_PER_TOPIC:-1}"  # independent groups per topic
 BROKER="127.0.0.1:9092"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_DIR="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 KCAT="${KCAT:-kcat}"
 command -v "$KCAT" >/dev/null || { echo "error: $KCAT not found"; exit 1; }
@@ -53,10 +53,21 @@ cleanup() {
 }
 trap cleanup EXIT
 
+BROKER_READY=0
 for _ in $(seq 1 50); do
-  if "$KCAT" -b "$BROKER" -L -m 1 >/dev/null 2>&1; then break; fi
+  if "$KCAT" -b "$BROKER" -L -m 1 >/dev/null 2>&1; then
+    BROKER_READY=1
+    break
+  fi
   sleep 0.2
 done
+
+if [ "$BROKER_READY" != "1" ]; then
+  fail "heimq did not become reachable at $BROKER"
+  echo "  heimq log:" >&2
+  tail -50 /tmp/heimq-stress.log >&2 || true
+  exit 1
+fi
 
 WORK=/tmp/kcat-stress-work
 rm -rf "$WORK"; mkdir -p "$WORK"

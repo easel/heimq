@@ -691,7 +691,7 @@ fn create_topics(ctx: &TestContext, topics: &[TopicSpec]) -> Result<()> {
     for result in results {
         match result {
             Ok(_) => {}
-            Err((topic, code)) if code == RDKafkaErrorCode::TopicAlreadyExists => {
+            Err((topic, RDKafkaErrorCode::TopicAlreadyExists)) => {
                 eprintln!("topic already exists during e2e setup: {topic}");
             }
             Err((topic, code)) => bail!("create topic {topic} failed: {code:?}"),
@@ -1327,8 +1327,9 @@ fn json_escape(value: &str) -> String {
 
 macro_rules! ensure {
     ($condition:expr, $($arg:tt)*) => {
-        if !$condition {
-            anyhow::bail!($($arg)*);
+        match $condition {
+            true => {}
+            false => anyhow::bail!($($arg)*),
         }
     };
 }

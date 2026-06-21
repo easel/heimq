@@ -16,7 +16,7 @@ echo "==> [2/8] librdkafka Go (confluent-kafka-go)"
 docker run --rm --network host \
     -e BOOTSTRAP="$DOCKER_BOOTSTRAP" \
     -e TOPIC="$TOPIC" \
-    golang:1.22-bookworm \
+    golang:1.25-bookworm \
     bash -c '
 set -e
 apt-get update -q && apt-get install -y -q librdkafka-dev 2>/dev/null
