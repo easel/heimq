@@ -65,7 +65,7 @@ SOURCE_RESP=$(curl -sf -X POST "${CONNECT_URL}/connectors" \
     -d "{
   \"name\": \"eco-source-${RUN_ID}\",
   \"config\": {
-    \"connector.class\": \"FileStreamSource\",
+    \"connector.class\": \"org.apache.kafka.connect.file.FileStreamSourceConnector\",
     \"file\": \"/tmp/connect-data/source.txt\",
     \"topic\": \"${TOPIC}\"
   }
@@ -95,7 +95,7 @@ SINK_RESP=$(curl -sf -X POST "${CONNECT_URL}/connectors" \
     -d "{
   \"name\": \"eco-sink-${RUN_ID}\",
   \"config\": {
-    \"connector.class\": \"FileStreamSink\",
+    \"connector.class\": \"org.apache.kafka.connect.file.FileStreamSinkConnector\",
     \"file\": \"/tmp/connect-data/sink.txt\",
     \"topics\": \"${TOPIC}\"
   }

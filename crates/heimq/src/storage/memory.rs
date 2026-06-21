@@ -148,8 +148,7 @@ impl LogBackend for MemoryLog {
     fn create_topic(&self, name: &str, num_partitions: i32) -> Result<Arc<dyn TopicLog>> {
         if self.topics.contains_key(name) {
             return Err(HeimqError::Protocol(format!(
-                "Topic '{}' already exists",
-                name
+                "Topic '{name}' already exists"
             )));
         }
 
@@ -205,8 +204,7 @@ impl LogBackend for MemoryLog {
         let current = existing.num_partitions();
         if new_count <= current {
             return Err(crate::error::HeimqError::Protocol(format!(
-                "topic '{}' already has {} partitions; new count {} must be greater",
-                name, current, new_count
+                "topic '{name}' already has {current} partitions; new count {new_count} must be greater"
             )));
         }
         let expanded = Arc::new(MemoryTopicLog::new_expanded(
@@ -268,8 +266,7 @@ impl LogBackend for MemoryLog {
                 counter!("heimq_storage_full_errors_total").increment(1);
                 self.set_total_bytes_metric();
                 return Err(HeimqError::StorageFull(format!(
-                    "in-memory cap {} bytes reached and no expired data to reclaim",
-                    cap
+                    "in-memory cap {cap} bytes reached and no expired data to reclaim"
                 )));
             }
         }

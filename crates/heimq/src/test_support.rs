@@ -33,13 +33,13 @@ pub fn next_port() -> u16 {
 /// Generate a unique topic name with the given prefix
 pub fn unique_topic(prefix: &str) -> String {
     let id = TOPIC_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("{}-{}", prefix, id)
+    format!("{prefix}-{id}")
 }
 
 /// Generate a unique consumer group name with the given prefix
 pub fn unique_group(prefix: &str) -> String {
     let id = GROUP_COUNTER.fetch_add(1, Ordering::SeqCst);
-    format!("{}-{}", prefix, id)
+    format!("{prefix}-{id}")
 }
 
 /// Test server wrapper that manages a heimq process lifecycle

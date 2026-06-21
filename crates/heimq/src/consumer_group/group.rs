@@ -370,7 +370,7 @@ fn uuid_simple() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    format!("{:x}", now)
+    format!("{now:x}")
 }
 
 #[cfg(test)]

@@ -69,7 +69,7 @@ docker run -d --name "$DBZ_CID" --network "$DBZ_NET" \
     -e OFFSET_STORAGE_REPLICATION_FACTOR=1 \
     -e STATUS_STORAGE_REPLICATION_FACTOR=1 \
     -e OFFSET_STORAGE_PARTITIONS=1 \
-    debezium/connect:3.0 >/dev/null
+    quay.io/debezium/connect:3.0 >/dev/null
 
 # Get Debezium container's IP on the bridge network
 DBZ_IP=$(docker inspect "$DBZ_CID" --format "{{(index .NetworkSettings.Networks \"${DBZ_NET}\").IPAddress}}" 2>/dev/null)

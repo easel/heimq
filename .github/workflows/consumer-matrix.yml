@@ -11,23 +11,41 @@ jobs:
         with:
           path: heimq
 
+      - name: Check fjord access
+        id: fjord-access
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FJORD_REPO: ${{ github.repository_owner }}/fjord
+        run: |
+          if gh repo view "$FJORD_REPO" >/dev/null 2>&1; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=fjord consumer matrix skipped::${FJORD_REPO} is not accessible to this workflow token"
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout fjord
+        if: steps.fjord-access.outputs.available == 'true'
         uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/fjord
           path: fjord
 
       - uses: dtolnay/rust-toolchain@stable
+        if: steps.fjord-access.outputs.available == 'true'
       - uses: Swatinem/rust-cache@v2
+        if: steps.fjord-access.outputs.available == 'true'
         with:
           workspaces: |
             heimq
             fjord
 
       - name: Build heimq-broker (consumer dependency)
+        if: steps.fjord-access.outputs.available == 'true'
         run: cargo build -p heimq-broker
         working-directory: heimq
 
       - name: Test fjord-broker conformance
+        if: steps.fjord-access.outputs.available == 'true'
         run: cargo test -p fjord-broker
         working-directory: fjord
