@@ -53,6 +53,18 @@ if ! wait_for_http "${CONNECT_URL}/connectors" 120; then
 fi
 echo "  Kafka Connect is up; deploying FileStream source connector..."
 
+CONNECT_PLUGINS=$(curl -sf "${CONNECT_URL}/connector-plugins")
+PLUGIN_NAMES=$(echo "$CONNECT_PLUGINS" | python3 -c '
+import json, sys
+print(", ".join(sorted(p.get("class", "") for p in json.load(sys.stdin))))
+')
+echo "  connector plugins: $PLUGIN_NAMES"
+if ! echo "$CONNECT_PLUGINS" | grep -q "org.apache.kafka.connect.file.FileStreamSourceConnector"; then
+    eco_skip "Kafka Connect: FileStream connectors unavailable in cp-kafka-connect:7.6.0"
+    eco_summary
+    exit 0
+fi
+
 post_connector_config() {
     local label="$1" payload="$2"
     local deadline=$((SECONDS + 60))

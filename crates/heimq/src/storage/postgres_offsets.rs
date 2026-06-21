@@ -19,6 +19,14 @@ const PG_CAPABILITIES: OffsetStoreCapabilities = OffsetStoreCapabilities {
     survives_restart: true,
 };
 
+fn run_sync_postgres<T>(operation: impl FnOnce() -> T) -> T {
+    if tokio::runtime::Handle::try_current().is_ok() {
+        tokio::task::block_in_place(operation)
+    } else {
+        operation()
+    }
+}
+
 /// Postgres-backed offset store.
 pub struct PostgresOffsetStore {
     client: Mutex<Client>,
@@ -34,9 +42,10 @@ impl PostgresOffsetStore {
     /// before the URL is handed to the Postgres driver.
     pub fn connect(url: &str) -> Result<Arc<dyn OffsetStore>> {
         let (cleaned_url, schema) = parse_postgres_url(url)?;
-        let mut client = Client::connect(&cleaned_url, NoTls).map_err(|e| {
-            HeimqError::Storage(format!("postgres connect failed for `{}`: {}", url, e))
-        })?;
+        let mut client =
+            run_sync_postgres(|| Client::connect(&cleaned_url, NoTls)).map_err(|e| {
+                HeimqError::Storage(format!("postgres connect failed for `{}`: {}", url, e))
+            })?;
         Self::initialize(&mut client, &schema)?;
         Ok(Arc::new(Self {
             client: Mutex::new(client),
@@ -59,7 +68,7 @@ impl PostgresOffsetStore {
              )",
             schema = schema
         );
-        client.batch_execute(&stmt).map_err(|e| {
+        run_sync_postgres(|| client.batch_execute(&stmt)).map_err(|e| {
             HeimqError::Storage(format!("postgres schema initialize failed: {}", e))
         })?;
         Ok(())
@@ -87,13 +96,17 @@ impl OffsetStore for PostgresOffsetStore {
             schema = self.schema
         );
         let mut client = self.client.lock();
-        client
-            .execute(sql.as_str(), &[&group_id, &topic, &partition, &offset, &metadata])
-            .map(|_| ())
-            .map_err(|e| {
-                error!(error = %e, group = group_id, topic, partition, "postgres offset commit failed");
-                crate::error::HeimqError::Storage(format!("postgres offset commit failed: {}", e))
-            })
+        run_sync_postgres(|| {
+            client.execute(
+                sql.as_str(),
+                &[&group_id, &topic, &partition, &offset, &metadata],
+            )
+        })
+        .map(|_| ())
+        .map_err(|e| {
+            error!(error = %e, group = group_id, topic, partition, "postgres offset commit failed");
+            crate::error::HeimqError::Storage(format!("postgres offset commit failed: {}", e))
+        })
     }
 
     fn fetch(&self, group_id: &str, topic: &str, partition: i32) -> Option<CommittedOffset> {
@@ -105,7 +118,8 @@ impl OffsetStore for PostgresOffsetStore {
             schema = self.schema
         );
         let mut client = self.client.lock();
-        match client.query_opt(sql.as_str(), &[&group_id, &topic, &partition]) {
+        match run_sync_postgres(|| client.query_opt(sql.as_str(), &[&group_id, &topic, &partition]))
+        {
             Ok(Some(row)) => Some(CommittedOffset {
                 offset: row.get(0),
                 leader_epoch: 0,
@@ -129,7 +143,7 @@ impl OffsetStore for PostgresOffsetStore {
             schema = self.schema
         );
         let mut client = self.client.lock();
-        let rows = match client.query(sql.as_str(), &[&group_id]) {
+        let rows = match run_sync_postgres(|| client.query(sql.as_str(), &[&group_id])) {
             Ok(rows) => rows,
             Err(e) => {
                 error!(error = %e, group = group_id, "postgres fetch_all_for_group failed");
@@ -162,7 +176,7 @@ impl OffsetStore for PostgresOffsetStore {
             schema = self.schema
         );
         let mut client = self.client.lock();
-        if let Err(e) = client.execute(sql.as_str(), &[&group_id]) {
+        if let Err(e) = run_sync_postgres(|| client.execute(sql.as_str(), &[&group_id])) {
             error!(error = %e, group = group_id, "postgres delete_group failed");
         }
     }
@@ -175,7 +189,9 @@ impl OffsetStore for PostgresOffsetStore {
         );
         let partition_i64 = partition as i64;
         let mut client = self.client.lock();
-        if let Err(e) = client.execute(sql.as_str(), &[&group_id, &topic, &partition_i64]) {
+        if let Err(e) =
+            run_sync_postgres(|| client.execute(sql.as_str(), &[&group_id, &topic, &partition_i64]))
+        {
             error!(error = %e, group = group_id, topic, partition, "postgres delete_offset failed");
         }
     }
