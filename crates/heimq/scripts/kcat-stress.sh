@@ -39,7 +39,12 @@ echo "==> params: TOPICS=$TOPICS MSGS_PER_TOPIC=$MSGS_PER_TOPIC PRODUCERS=$PRODU
 echo "==> total target: $((TOPICS * MSGS_PER_TOPIC * PRODUCERS)) messages"
 
 echo "==> building heimq (release)"
-( cd "$REPO_DIR" && cargo build --release --quiet ) || { echo "build failed"; exit 1; }
+if [ -n "${HEIMQ_FEATURES:-}" ]; then
+  echo "==> cargo features: $HEIMQ_FEATURES"
+  ( cd "$REPO_DIR" && cargo build --release --quiet --features "$HEIMQ_FEATURES" ) || { echo "build failed"; exit 1; }
+else
+  ( cd "$REPO_DIR" && cargo build --release --quiet ) || { echo "build failed"; exit 1; }
+fi
 
 echo "==> starting heimq with pre-created topics: $TOPIC_SPECS_CSV"
 HEIMQ_CREATE_TOPICS="$TOPIC_SPECS_CSV" \

@@ -27,10 +27,10 @@ export PRODUCERS="${PRODUCERS:-1}"
 export CONSUMERS="${CONSUMERS:-1}"
 export GROUPS_PER_TOPIC="${GROUPS_PER_TOPIC:-1}"
 
-# Matrix rows: "label|log|offsets|groups|requires_pg"
+# Matrix rows: "label|log|offsets|groups|requires_pg|features"
 ROWS=(
-  "memory-only|memory://|memory://|memory://|0"
-  "pg-offsets|memory://|__POSTGRES__|memory://|1"
+  "memory-only|memory://|memory://|memory://|0|"
+  "pg-offsets|memory://|__POSTGRES__|memory://|1|backend-postgres"
 )
 
 PG_URL="${POSTGRES_URL:-}"
@@ -40,7 +40,7 @@ FAIL_ROWS=()
 SKIP_ROWS=()
 
 run_row() {
-  local label="$1" log="$2" offsets="$3" groups="$4" requires_pg="$5"
+  local label="$1" log="$2" offsets="$3" groups="$4" requires_pg="$5" features="$6"
 
   if [ "$requires_pg" = "1" ]; then
     if [ -z "$PG_URL" ]; then
@@ -67,6 +67,7 @@ run_row() {
   if HEIMQ_STORAGE_LOG="$log" \
      HEIMQ_STORAGE_OFFSETS="$offsets" \
      HEIMQ_STORAGE_GROUPS="$groups" \
+     HEIMQ_FEATURES="$features" \
      "$STRESS"; then
     PASS_ROWS+=("$label")
     return 0
@@ -78,8 +79,8 @@ run_row() {
 
 OVERALL=0
 for row in "${ROWS[@]}"; do
-  IFS='|' read -r label log offsets groups requires_pg <<<"$row"
-  run_row "$label" "$log" "$offsets" "$groups" "$requires_pg" || OVERALL=1
+  IFS='|' read -r label log offsets groups requires_pg features <<<"$row"
+  run_row "$label" "$log" "$offsets" "$groups" "$requires_pg" "$features" || OVERALL=1
 done
 
 echo
