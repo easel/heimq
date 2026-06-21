@@ -38,10 +38,9 @@ async function main() {
             "dr_cb": true,
         });
         producer.connect();
-        let sent = 0;
         producer.on("ready", () => {
             for (let i = 0; i < N; i++) {
-                producer.produce(topic, -1, Buffer.from(`msg-${i}`), null);
+                producer.produce(topic, 0, Buffer.from(`msg-${i}`), null);
             }
             producer.flush(10000, (err) => {
                 producer.disconnect();
@@ -61,9 +60,8 @@ async function main() {
         }, {});
         consumer.connect();
         let received = 0;
-        const deadline = Date.now() + 15000;
         consumer.on("ready", () => {
-            consumer.subscribe([topic]);
+            consumer.assign([{ topic, partition: 0, offset: 0 }]);
             consumer.consume();
         });
         consumer.on("data", (msg) => {

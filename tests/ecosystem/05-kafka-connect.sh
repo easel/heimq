@@ -53,6 +53,34 @@ if ! wait_for_http "${CONNECT_URL}/connectors" 120; then
 fi
 echo "  Kafka Connect is up; deploying FileStream source connector..."
 
+post_connector_config() {
+    local label="$1" payload="$2"
+    local deadline=$((SECONDS + 60))
+    local body_file status body
+
+    while true; do
+        body_file=$(mktemp)
+        status=$(curl -sS -o "$body_file" -w "%{http_code}" -X POST "${CONNECT_URL}/connectors" \
+            -H "Content-Type: application/json" \
+            -d "$payload") || status="000"
+        body=$(tr '\n' ' ' < "$body_file")
+        rm -f "$body_file"
+
+        if [[ "$status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "$body"
+            return 0
+        fi
+
+        echo "  ${label}: create returned HTTP ${status}: ${body}" >&2
+        if [ $SECONDS -ge $deadline ]; then
+            echo "FAIL: ${label} did not create within 60s" >&2
+            docker logs "$CONNECT_CID" 2>&1 | tail -50 >&2
+            return 1
+        fi
+        sleep 2
+    done
+}
+
 # Write source data inside the Connect container
 docker exec "$CONNECT_CID" bash -c "
     mkdir -p /tmp/connect-data
@@ -60,9 +88,7 @@ docker exec "$CONNECT_CID" bash -c "
 "
 
 # Deploy FileStreamSourceConnector
-SOURCE_RESP=$(curl -sf -X POST "${CONNECT_URL}/connectors" \
-    -H "Content-Type: application/json" \
-    -d "{
+SOURCE_RESP=$(post_connector_config "source connector" "{
   \"name\": \"eco-source-${RUN_ID}\",
   \"config\": {
     \"connector.class\": \"org.apache.kafka.connect.file.FileStreamSourceConnector\",
@@ -90,9 +116,7 @@ fi
 echo "  source connector RUNNING"
 
 # Deploy FileStreamSinkConnector
-SINK_RESP=$(curl -sf -X POST "${CONNECT_URL}/connectors" \
-    -H "Content-Type: application/json" \
-    -d "{
+SINK_RESP=$(post_connector_config "sink connector" "{
   \"name\": \"eco-sink-${RUN_ID}\",
   \"config\": {
     \"connector.class\": \"org.apache.kafka.connect.file.FileStreamSinkConnector\",
