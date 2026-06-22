@@ -3,6 +3,11 @@ ddx:
   id: US-010
   depends_on:
     - FEAT-005
+  review:
+    self_hash: d4c990816e9d3ffd0ee45dd5da9b0a5a2fb80724c546527945a0eba02f9c7f02
+    deps:
+      FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-010 — Debezium emits CDC into heimq
 

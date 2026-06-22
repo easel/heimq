@@ -3,6 +3,10 @@ ddx:
   id: helix.parking-lot
   type: registry
   activity: frame
+  review:
+    self_hash: 7074f737bd9c8e4a5485ce175010036e86f9a1c4ebbb4cbb81b80dc8a9edcc79
+    deps: {}
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # Parking Lot (Deferred / Future Work)

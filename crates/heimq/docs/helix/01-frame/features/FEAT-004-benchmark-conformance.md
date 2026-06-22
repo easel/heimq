@@ -6,6 +6,14 @@ ddx:
     - FEAT-001
     - FEAT-002
     - FEAT-006
+  review:
+    self_hash: 15d88aa986503176f2e6b5020d55ec106bc1f7d6c05c7a1ea322d2bb9003f91e
+    deps:
+      FEAT-001: 7133c264bc364ec4535c1d6b6187a90c9ba66d1fa3df30731ade260c2e092479
+      FEAT-002: 164350929c7bbc09a589f3cd1a80b685e88cce1054445fe5373aec566464636f
+      FEAT-006: e59d3b8965ebd35b4bbe9c5302f4218432ad83ec27691989dfd4c345ac2ae004
+      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # Feature Specification: FEAT-004 — Standard Kafka Benchmark Conformance
 

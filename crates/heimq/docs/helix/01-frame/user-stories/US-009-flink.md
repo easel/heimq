@@ -3,6 +3,11 @@ ddx:
   id: US-009
   depends_on:
     - FEAT-005
+  review:
+    self_hash: 3fbf5f7cc7e25c696f69855dbf196df0260d48c851d4e4622ea2e76147c30bf3
+    deps:
+      FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-009 — Flink Kafka source/sink against heimq
 

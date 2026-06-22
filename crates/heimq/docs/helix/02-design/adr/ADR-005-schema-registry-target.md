@@ -2,6 +2,10 @@
 ddx:
   id: ADR-005
   status: accepted
+  review:
+    self_hash: 3004cc4ce8a153265d6fb5f44e16679f84b3c5abe7940b2d3bd7e1223afead56
+    deps: {}
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # ADR-005: Schema Registry Compatibility Target

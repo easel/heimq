@@ -2,6 +2,10 @@
 ddx:
   id: ADR-003
   status: accepted
+  review:
+    self_hash: c06761cf28323ddb6162d309cfcfe4db1037f915a2c05a716ad4262222193145
+    deps: {}
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # ADR-003: Flexible-Version Kafka Protocol Codec Strategy

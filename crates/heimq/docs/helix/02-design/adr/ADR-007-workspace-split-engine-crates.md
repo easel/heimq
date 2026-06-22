@@ -2,6 +2,10 @@
 ddx:
   id: ADR-007
   status: accepted
+  review:
+    self_hash: 44b47ae3485b6c355c48380610ad1ae6d2cb3779c8ea5d2f0b96910993826500
+    deps: {}
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # ADR-007: Four-Crate Workspace Split and Engine Consumption Model

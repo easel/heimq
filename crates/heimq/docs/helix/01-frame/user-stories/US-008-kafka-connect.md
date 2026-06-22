@@ -3,6 +3,11 @@ ddx:
   id: US-008
   depends_on:
     - FEAT-005
+  review:
+    self_hash: fd681a21fd3e5c0d0383d82fec67c1571f3efc2c572df672ddc8c95b86d69061
+    deps:
+      FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-008 — Kafka Connect runs against heimq
 

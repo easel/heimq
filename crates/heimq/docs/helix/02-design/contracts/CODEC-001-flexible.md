@@ -8,6 +8,13 @@ ddx:
     - FEAT-006
     - API-001
     - ADR-003
+  review:
+    self_hash: c6d7122c6717a77692e3af031be383978036f7c85d57813998b33c51cd81c9ff
+    deps:
+      ADR-003: c06761cf28323ddb6162d309cfcfe4db1037f915a2c05a716ad4262222193145
+      API-001: d85884155fba0fe46b242b6bdc939b612c55ea033bc2d68b6cf0c50c114d18b4
+      FEAT-006: e59d3b8965ebd35b4bbe9c5302f4218432ad83ec27691989dfd4c345ac2ae004
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # CODEC-001: Flexible-Version Codec Module Surface
@@ -130,6 +137,12 @@ The `RequestHeader` struct is unchanged. The body bytes passed to each handler
 contain only the API-specific payload; the header (including tagged fields) is
 fully consumed by `decode_request`.
 
+`decode_request_bytes(data: Bytes)` is the owned-buffer companion to
+`decode_request(data: &[u8])`. It performs the same header-format-aware decode
+but returns the body as a slice of the original `Bytes`, allowing `heimq-wire`
+and `Router::route_async_bytes` to preserve large request bodies for downstream
+handlers without an additional copy.
+
 ---
 
 ### Response Header Encoding
@@ -198,6 +211,11 @@ No new routing paths are added. The existing handler closures continue to
 receive `api_version` and a `body: &[u8]` slice; the `kafka-protocol` crate
 handles flexible decode inside its generated `decode` functions for the
 API-specific request type.
+
+The async wire path may call `Router::route_async_bytes(Bytes)` when it already
+owns the frame. This is equivalent to `route_async(&[u8])` for routing and
+response semantics, but it preserves body slices for handlers such as Produce
+that can forward owned record-batch bytes into storage.
 
 ---
 

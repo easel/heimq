@@ -3,6 +3,11 @@ ddx:
   id: US-014
   depends_on:
     - FEAT-005
+  review:
+    self_hash: 93cd8d9e3a0539a6584a9dade7bdde41c77f8160282d0b34ab52bebb18f1256d
+    deps:
+      FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-014 — ksqlDB runs against heimq
 

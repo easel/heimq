@@ -9,6 +9,13 @@ ddx:
     - helix.prd
     - ADR-006
     - ADR-007
+  review:
+    self_hash: 34a65294dc8ed94e0fb07b0f1c247f23a2ffacf24b42164b375320148462d3c3
+    deps:
+      ADR-006: 881bf5e99cfef0f38fec536b48898ee1d3bf40b1be8bd2fbfc036f48aabfc385
+      ADR-007: 44b47ae3485b6c355c48380610ad1ae6d2cb3779c8ea5d2f0b96910993826500
+      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # TRAIT-001: Backend Trait Families
@@ -91,7 +98,17 @@ pub trait LogBackend: Send + Sync {
     fn default_num_partitions(&self) -> i32;
     fn auto_create_topics(&self) -> bool;
     fn append(&self, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
+    fn append_with_context(&self, ctx: &RequestContext, topic_name: &str, partition: i32, records: &[u8]) -> Result<(i64, i64)>;
+    fn append_async_with_context_and_retention_policy<'a>(
+        &'a self,
+        ctx: &'a RequestContext,
+        topic_name: &'a str,
+        partition: i32,
+        records: &'a [u8],
+        retention: Option<RetentionPolicy>,
+    ) -> AppendFuture<'a>;
     fn fetch(&self, topic_name: &str, partition: i32, offset: i64, max_bytes: i32) -> Result<(Vec<u8>, i64)>;
+    fn fetch_with_context(&self, ctx: &RequestContext, topic_name: &str, partition: i32, offset: i64, max_bytes: i32) -> Result<(Vec<u8>, i64)>;
     fn high_watermark(&self, topic_name: &str, partition: i32) -> Result<i64>;
     fn log_start_offset(&self, topic_name: &str, partition: i32) -> Result<i64>;
 }

@@ -9,6 +9,13 @@ ddx:
     - helix.prd
     - CODEC-001
     - API-001
+  review:
+    self_hash: de364438fe7c52ed13c6debb0f5a76ac7f4e7ee50ad3e3a27852c7dbe601eaa9
+    deps:
+      API-001: d85884155fba0fe46b242b6bdc939b612c55ea033bc2d68b6cf0c50c114d18b4
+      CODEC-001: c6d7122c6717a77692e3af031be383978036f7c85d57813998b33c51cd81c9ff
+      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # WIRE-001: Wire Scaffolding Contract
@@ -154,8 +161,10 @@ async fn handle(
 A handler MAY return either:
 1. A **typed response** (encoded by the gateway; see §5).
 2. A **deferred ack future** (`Future<Output = TypedResponse>`) that the
-   gateway awaits without blocking pipelined requests (ING-6). The gateway MUST
-   send the response in FIFO order when the future resolves.
+   writer awaits while the reader continues accepting and queueing later frames
+   (ING-6). The gateway MUST preserve per-connection request order: later
+   request handlers MUST NOT observe state before earlier no-reply Produce side
+   effects complete, and responses MUST be sent in FIFO order.
 
 #### 4.5 Backpressure Mapping
 
@@ -273,7 +282,7 @@ Deferred ack (ING-6):
 - [x] §3 Malformed request: error frame helpers verified; typed error frame sent on routing failure (`test_make_error_frame_structure`, `test_peek_correlation_id_happy_path`, `test_malformed_request_typed_error_frame`).
 - [x] §3 Consecutive-error limit: exactly 10 consecutive errors close the connection; fewer do not (`test_consecutive_error_limit`).
 - [ ] §4 Typed handler: typed handler receives decoded request struct; gateway encodes response header and length prefix (`test_typed_handler_receives_decoded_request`). Deferred to Slice 3 — current router dispatches typed handlers; end-to-end decode+encode path verified by `route_supported_apis_and_unsupported` suite.
-- [ ] §4 Deferred ack: handler-level deferred ack futures (ING-6) deferred to Slice 3. Infrastructure (reader/writer split + FIFO pipeline) demonstrated by `test_pipelined_requests_fifo_order`; WAL-shape adapter test (`test_niflheim_shape_wal_adapter`) shows the backend shape that will consume deferred acks.
+- [x] §4 Deferred ack: handler-level futures are awaited by the writer while the reader can continue queueing frames; FIFO/state ordering is covered by `test_pipelined_requests_fifo_order` and `contract_produce_acks0_no_response_sent`, and WAL-shape backend shape is covered by `test_niflheim_shape_wal_adapter`.
 - [ ] §4 Backpressure: `HandlerError::Overload` mapping deferred to Slice 3 (no current handler returns Overload; error path covered by `test_handle_connection_warn_on_route_error`).
 - [x] §5 Encoding ownership: gateway adds length prefix and response header; handler returns typed struct. Verified by `encode_response` unit tests and the full router test suite.
 - [x] §6 Gate OFF: SaslHandshake/SaslAuthenticate absent from ApiVersions response (`test_sasl_gate_off_no_advertise`).

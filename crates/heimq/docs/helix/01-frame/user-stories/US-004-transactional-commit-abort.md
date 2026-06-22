@@ -3,6 +3,11 @@ ddx:
   id: US-004
   depends_on:
     - FEAT-002
+  review:
+    self_hash: 347fdc2f017d655b6dd9e06ea4657baaba492f3269a0894e23f3cb8883bfde16
+    deps:
+      FEAT-002: 164350929c7bbc09a589f3cd1a80b685e88cce1054445fe5373aec566464636f
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-004 — Transactional commit and abort
 

@@ -3,6 +3,11 @@ ddx:
   id: US-013
   depends_on:
     - FEAT-006
+  review:
+    self_hash: 7ed2a25a6a8ddb99b7be414e6625c161ee01f3388ad13ec5981cb2a645db74fc
+    deps:
+      FEAT-006: e59d3b8965ebd35b4bbe9c5302f4218432ad83ec27691989dfd4c345ac2ae004
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-013 — Modern Kafka client connects without forcing legacy versions
 

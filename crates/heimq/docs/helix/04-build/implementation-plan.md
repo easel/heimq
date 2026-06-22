@@ -6,6 +6,12 @@ ddx:
   depends_on:
     - helix.prd
     - helix.product-vision
+  review:
+    self_hash: 329b4d9ab3db67b9977ed0bf2c489426542a9e510e26154558f87ba51913fee4
+    deps:
+      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+      helix.product-vision: 8fda503ba36c48175e42be03782c96af196de39d6e87b6edab88d853ee1857ca
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # Implementation Plan: heimq Engine Restructuring Program
 

@@ -3,6 +3,11 @@ ddx:
   id: FEAT-001
   depends_on:
     - helix.prd
+  review:
+    self_hash: 7133c264bc364ec4535c1d6b6187a90c9ba66d1fa3df30731ade260c2e092479
+    deps:
+      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # Feature Specification: FEAT-001 — Kafka Wire-Protocol Compatibility
 

@@ -6,7 +6,7 @@
 mod codec;
 mod router;
 
-pub use codec::{decode_request, encode_response, RequestHeader};
+pub use codec::{decode_request, decode_request_bytes, encode_response, RequestHeader};
 pub use flexible::is_flexible;
 pub use router::Router;
 

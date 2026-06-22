@@ -3,6 +3,11 @@ ddx:
   id: US-011
   depends_on:
     - FEAT-005
+  review:
+    self_hash: ab6e0ae60d62bfd32fbae3aa0f4caeaaf105ee38e81d63c3ddeb9811f1ccfb08
+    deps:
+      FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-011 — Schema Registry round-trip against heimq
 

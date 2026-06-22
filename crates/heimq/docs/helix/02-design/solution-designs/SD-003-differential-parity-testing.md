@@ -8,6 +8,13 @@ ddx:
     - helix.prd
     - FEAT-003
     - US-005
+  review:
+    self_hash: a415d412e130ef7e35646deeba1ce0fd5a3e84b8d86104a7ae7b734212eab843
+    deps:
+      FEAT-003: d134a5740222f1b59ecda81b318c7b28de9968bba9f640bb6280310c1e906233
+      US-005: 168616bd29809066f578398a7c34ba64f23005e237d58eac1381dde83a4ef2fd
+      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # Design: Differential Parity Harness [SD-003]

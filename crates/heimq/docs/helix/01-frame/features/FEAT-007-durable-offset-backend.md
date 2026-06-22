@@ -3,6 +3,11 @@ ddx:
   id: FEAT-007
   depends_on:
     - helix.prd
+  review:
+    self_hash: e947608aa0633732bde029cdf025cb8875286da1fed7bf9480548917157390ad
+    deps:
+      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # Feature Specification: FEAT-007 — Durable Offset Backend (Postgres)
 

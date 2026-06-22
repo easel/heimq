@@ -5,7 +5,7 @@ use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::handler::*;
 use crate::producer_state::ProducerStateManager;
-use crate::protocol::{decode_request, encode_response, RequestHeader};
+use crate::protocol::{decode_request, decode_request_bytes, encode_response, RequestHeader};
 use crate::storage::{ClusterView, LogBackend, RequestContext};
 use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
@@ -100,16 +100,22 @@ impl Router {
     ///
     /// For all other API keys this behaves identically to [`route`].
     pub async fn route_async(&self, data: &[u8]) -> Result<Bytes> {
+        self.route_async_bytes(Bytes::copy_from_slice(data)).await
+    }
+
+    /// Route an owned request frame, preserving body slices for handlers that
+    /// can forward large payloads without copying.
+    pub async fn route_async_bytes(&self, data: Bytes) -> Result<Bytes> {
         // Decode once; pass decoded header+body to handle_fetch_long_poll to avoid
         // re-decoding the same frame in the long-poll path.
-        if let Ok((header, body)) = decode_request(data) {
+        if let Ok((header, body)) = decode_request_bytes(data.clone()) {
             match header.api_key {
-                0 => return self.handle_produce_async(&header, &body).await,
+                0 => return self.handle_produce_async(&header, body).await,
                 1 => return self.handle_fetch_long_poll(header, body).await,
                 _ => {}
             }
         }
-        self.route(data)
+        self.route(data.as_ref())
     }
 
     /// Long-poll implementation for Fetch (API 1).
@@ -362,14 +368,14 @@ impl Router {
         result
     }
 
-    async fn handle_produce_async(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
+    async fn handle_produce_async(&self, header: &RequestHeader, body: Bytes) -> Result<Bytes> {
         use kafka_protocol::messages::produce_request::ProduceRequest;
 
         // Decode acks up front: acks=0 means fire-and-forget — the broker must
         // NOT send a response. We still store the records; we just return empty
         // bytes to signal "no reply" to run_writer.
         let acks_zero = {
-            let mut buf = bytes::Bytes::copy_from_slice(body);
+            let mut buf = body.clone();
             ProduceRequest::decode(&mut buf, header.api_version)
                 .map(|req| req.acks == 0)
                 .unwrap_or(false)
@@ -380,7 +386,7 @@ impl Router {
         let ctx = self.request_context(header);
         let response = produce::handle_async_with_context_and_config_store(
             header.api_version,
-            body,
+            body.as_ref(),
             &self.storage,
             &ps,
             &tm,

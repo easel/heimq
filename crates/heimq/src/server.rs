@@ -272,7 +272,7 @@ impl Server {
 impl FrameHandler for Router {
     async fn handle(&self, frame: Bytes) -> std::result::Result<Bytes, FrameError> {
         let response = self
-            .route_async(&frame)
+            .route_async_bytes(frame)
             .await
             .map_err(|e| FrameError::Handler(e.to_string()))?;
         strip_router_length_prefix(response)

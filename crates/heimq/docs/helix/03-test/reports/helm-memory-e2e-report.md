@@ -5,6 +5,10 @@ ddx:
   status: complete
   owner: heimq
   updated: 2026-06-17
+  review:
+    self_hash: 034f36919001d5cbe9dd4a56c85342a7ac774d16e2622fdc7de778c97fcbfac1
+    deps: {}
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # Helm Fixed-Memory E2E Report

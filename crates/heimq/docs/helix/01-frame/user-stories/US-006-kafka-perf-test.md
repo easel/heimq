@@ -3,6 +3,11 @@ ddx:
   id: US-006
   depends_on:
     - FEAT-004
+  review:
+    self_hash: ea037831114a863a64e1b8462648e7258daa055320a3a3f2356281e065e7ad5a
+    deps:
+      FEAT-004: 15d88aa986503176f2e6b5020d55ec106bc1f7d6c05c7a1ea322d2bb9003f91e
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-006 — Run kafka-producer-perf-test and kafka-consumer-perf-test against heimq
 

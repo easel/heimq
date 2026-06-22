@@ -3,6 +3,11 @@ ddx:
   id: helix.prd
   depends_on:
     - helix.product-vision
+  review:
+    self_hash: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+    deps:
+      helix.product-vision: 8fda503ba36c48175e42be03782c96af196de39d6e87b6edab88d853ee1857ca
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # Product Requirements Document
 

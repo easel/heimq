@@ -1,6 +1,10 @@
 ---
 ddx:
   id: helix.product-vision
+  review:
+    self_hash: 8fda503ba36c48175e42be03782c96af196de39d6e87b6edab88d853ee1857ca
+    deps: {}
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # Product Vision
 

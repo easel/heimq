@@ -3,6 +3,11 @@ ddx:
   id: US-015
   depends_on:
     - FEAT-007
+  review:
+    self_hash: 2e5fa6adc59b1e69ed0b8be84483707fe98b10907be6beefc9c39b7b62d14174
+    deps:
+      FEAT-007: e947608aa0633732bde029cdf025cb8875286da1fed7bf9480548917157390ad
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-015 — Durable offsets via Postgres
 

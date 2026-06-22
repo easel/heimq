@@ -11,6 +11,7 @@
 set -euo pipefail
 
 IMAGE_REF="${1:-heimq:local}"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 BOOTSTRAP="127.0.0.1:9092"
 TOPIC="docker-image-smoke-$$"
 CONTAINER="heimq-image-smoke-$$"
@@ -30,7 +31,7 @@ docker run -d --rm \
 
 if ! docker run --rm \
     --network "container:${CONTAINER}" \
-    -v "$PWD:/repo" \
+    -v "${ROOT_DIR}:/repo" \
     -w /repo/crates/heimq/tests/compat/sarama_oracle \
     golang:1.24-bookworm \
     bash -lc "set -euo pipefail

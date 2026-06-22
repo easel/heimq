@@ -3,6 +3,11 @@ ddx:
   id: US-007
   depends_on:
     - FEAT-004
+  review:
+    self_hash: d5b7edf3b50f6b1189c2f6178df7b842b9371c5a46f8dda9de91d96aba28bb37
+    deps:
+      FEAT-004: 15d88aa986503176f2e6b5020d55ec106bc1f7d6c05c7a1ea322d2bb9003f91e
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-007 — Run OpenMessaging Benchmark against heimq
 

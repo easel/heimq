@@ -3,6 +3,11 @@ ddx:
   id: US-002
   depends_on:
     - FEAT-002
+  review:
+    self_hash: bd708ab171bb664271aa9da8cd6d24c41fe241191b1a98607544e77c75d8967a
+    deps:
+      FEAT-002: 164350929c7bbc09a589f3cd1a80b685e88cce1054445fe5373aec566464636f
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 # US-002 — Consumer group rebalance correctness
 

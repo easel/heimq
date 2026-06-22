@@ -2,6 +2,10 @@
 ddx:
   id: ADR-004
   status: accepted
+  review:
+    self_hash: a56e385e34701cc479f3d7ade7959461b3b46777305a0cda3fca01c3a69d0edf
+    deps: {}
+    reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
 # ADR-004: OpenMessaging Benchmark Version Targeting

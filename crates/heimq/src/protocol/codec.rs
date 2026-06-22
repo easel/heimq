@@ -69,6 +69,13 @@ pub struct RequestHeader {
 ///
 /// Returns the header and the remaining bytes (request body)
 pub fn decode_request(data: &[u8]) -> std::io::Result<(RequestHeader, Bytes)> {
+    decode_request_bytes(Bytes::copy_from_slice(data))
+}
+
+/// Decode a request from an owned byte buffer without copying the body.
+///
+/// Returns the header and a slice of the original buffer for the request body.
+pub fn decode_request_bytes(data: Bytes) -> std::io::Result<(RequestHeader, Bytes)> {
     if data.len() < 8 {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -76,7 +83,7 @@ pub fn decode_request(data: &[u8]) -> std::io::Result<(RequestHeader, Bytes)> {
         ));
     }
 
-    let mut cursor = Cursor::new(data);
+    let mut cursor = Cursor::new(data.as_ref());
 
     // Read header fields
     let api_key = cursor.get_i16();
@@ -113,7 +120,7 @@ pub fn decode_request(data: &[u8]) -> std::io::Result<(RequestHeader, Bytes)> {
 
     // Return remaining bytes as the body
     let pos = cursor.position() as usize;
-    let body = Bytes::copy_from_slice(&data[pos..]);
+    let body = data.slice(pos..);
 
     trace!(
         api_key = header.api_key,
