@@ -1011,9 +1011,9 @@ dependencies = [
  "flate2",
  "heimq",
  "heimq-broker",
+ "heimq-protocol",
  "heimq-wire",
  "kafka",
- "kafka-protocol",
  "lz4",
  "memmap2",
  "metrics",
@@ -1043,11 +1043,28 @@ dependencies = [
  "bytes",
  "crc32c",
  "flate2",
- "kafka-protocol",
+ "heimq-protocol",
  "lz4",
  "parking_lot",
  "snap",
  "thiserror 2.0.18",
+ "zstd",
+]
+
+[[package]]
+name = "heimq-protocol"
+version = "0.15.1"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "crc",
+ "crc32c",
+ "flate2",
+ "indexmap 2.14.0",
+ "lz4",
+ "paste",
+ "snap",
+ "uuid",
  "zstd",
 ]
 
@@ -1057,7 +1074,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "heimq",
- "kafka-protocol",
+ "heimq-protocol",
  "testcontainers",
  "tokio",
 ]
@@ -1471,24 +1488,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tracing",
  "twox-hash",
-]
-
-[[package]]
-name = "kafka-protocol"
-version = "0.15.1"
-source = "git+https://github.com/easel/kafka-protocol-rs?rev=b721c98f71b969ae991416a1642de110712bf318#b721c98f71b969ae991416a1642de110712bf318"
-dependencies = [
- "anyhow",
- "bytes",
- "crc",
- "crc32c",
- "flate2",
- "indexmap 2.14.0",
- "lz4",
- "paste",
- "snap",
- "uuid",
- "zstd",
 ]
 
 [[package]]

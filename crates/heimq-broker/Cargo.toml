@@ -28,4 +28,5 @@ zstd = "0.13"
 # Encodes record-batch fixtures so the decoder tests are differential against
 # the reference implementation. Cargo does not resolve dev-dependencies of
 # non-workspace packages, so this never reaches embedders' lockfiles.
-kafka-protocol = "0.15"
+# Vendored crate; lib name `kafka_protocol`, so `use kafka_protocol::` is unchanged.
+heimq-protocol = { path = "../heimq-protocol", version = "0.15.1" }

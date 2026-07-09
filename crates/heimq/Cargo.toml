@@ -18,8 +18,9 @@ heimq-wire = { path = "../heimq-wire", version = "0.1.0" }
 tokio = { version = "1.44", features = ["full"] }
 async-trait = "0.1"
 
-# Kafka protocol - code-generated wire protocol support
-kafka-protocol = "0.15"
+# Kafka protocol - code-generated wire protocol support.
+# Vendored (lib name `kafka_protocol`, so `use kafka_protocol::` is unchanged).
+heimq-protocol = { path = "../heimq-protocol", version = "0.15.1" }
 
 # Serialization
 bytes = "1.10"

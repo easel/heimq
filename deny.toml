@@ -9,7 +9,7 @@ yanked = "deny"
 unmaintained = "all"
 unused-ignored-advisory = "deny"
 ignore = [
-    { id = "RUSTSEC-2024-0436", reason = "paste is pulled transitively by kafka-protocol. RustSec lists no patched version; remove this ignore when kafka-protocol no longer resolves paste." },
+    { id = "RUSTSEC-2024-0436", reason = "paste is a dependency of the vendored heimq-protocol crate (kafka-protocol 0.15.1). RustSec lists no patched version; remove this ignore when heimq-protocol no longer resolves paste." },
 ]
 
 [licenses]
@@ -41,9 +41,6 @@ unknown-registry = "deny"
 unknown-git = "deny"
 required-git-spec = "rev"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = [
-    # Pinned fork of kafka-protocol carrying the bounded Array/CompactArray
-    # decode fix. Dev-dependency of heimq-broker, normal dependency of heimq.
-    # Remove once the fix lands upstream — see docs/upstream/kafka-protocol/.
-    "https://github.com/easel/kafka-protocol-rs",
-]
+# No git sources: the kafka-protocol fix is vendored as crates/heimq-protocol
+# (a path dependency), not consumed from a git fork.
+allow-git = []
