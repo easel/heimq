@@ -4,7 +4,7 @@
 
 use heimq::storage::LogBackend;
 use heimq::test_support::encode_record_batch;
-use kafka_protocol::records::Record;
+use heimq_protocol::records::Record;
 
 fn one_record_batch() -> Vec<u8> {
     let record = Record {
@@ -13,7 +13,7 @@ fn one_record_batch() -> Vec<u8> {
         partition_leader_epoch: 0,
         producer_id: -1,
         producer_epoch: -1,
-        timestamp_type: kafka_protocol::records::TimestampType::Creation,
+        timestamp_type: heimq_protocol::records::TimestampType::Creation,
         timestamp: 0,
         sequence: 0,
         offset: 0,

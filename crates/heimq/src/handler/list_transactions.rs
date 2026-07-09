@@ -4,7 +4,7 @@
 //! state beyond what is needed to fence duplicate producers.
 
 use crate::error::Result;
-use kafka_protocol::messages::ListTransactionsResponse;
+use heimq_protocol::messages::ListTransactionsResponse;
 
 pub fn handle(_api_version: i16, _body: &[u8]) -> Result<ListTransactionsResponse> {
     let mut response = ListTransactionsResponse::default();

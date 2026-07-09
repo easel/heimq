@@ -7,40 +7,40 @@ use crate::test_support::{
 };
 use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
-use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
-use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
-use kafka_protocol::messages::describe_topic_partitions_request::{
+use heimq_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
+use heimq_protocol::messages::delete_topics_request::DeleteTopicsRequest;
+use heimq_protocol::messages::describe_topic_partitions_request::{
     DescribeTopicPartitionsRequest, TopicRequest as DtpTopicRequest,
 };
-use kafka_protocol::messages::elect_leaders_request::{
+use heimq_protocol::messages::elect_leaders_request::{
     ElectLeadersRequest, TopicPartitions as ElectLeadersTopicPartitions,
 };
-use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
-use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
-use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
-use kafka_protocol::messages::join_group_request::{JoinGroupRequest, JoinGroupRequestProtocol};
-use kafka_protocol::messages::leave_group_request::{LeaveGroupRequest, MemberIdentity};
-use kafka_protocol::messages::list_offsets_request::{
+use heimq_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+use heimq_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
+use heimq_protocol::messages::heartbeat_request::HeartbeatRequest;
+use heimq_protocol::messages::join_group_request::{JoinGroupRequest, JoinGroupRequestProtocol};
+use heimq_protocol::messages::leave_group_request::{LeaveGroupRequest, MemberIdentity};
+use heimq_protocol::messages::list_offsets_request::{
     ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic,
 };
-use kafka_protocol::messages::list_transactions_request::ListTransactionsRequest;
-use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
-use kafka_protocol::messages::offset_commit_request::{
+use heimq_protocol::messages::list_transactions_request::ListTransactionsRequest;
+use heimq_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
+use heimq_protocol::messages::offset_commit_request::{
     OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic,
 };
-use kafka_protocol::messages::offset_fetch_request::{
+use heimq_protocol::messages::offset_fetch_request::{
     OffsetFetchRequest, OffsetFetchRequestGroup, OffsetFetchRequestTopic, OffsetFetchRequestTopics,
 };
-use kafka_protocol::messages::offset_for_leader_epoch_request::{
+use heimq_protocol::messages::offset_for_leader_epoch_request::{
     OffsetForLeaderEpochRequest, OffsetForLeaderPartition, OffsetForLeaderTopic,
 };
-use kafka_protocol::messages::produce_request::{
+use heimq_protocol::messages::produce_request::{
     PartitionProduceData, ProduceRequest, TopicProduceData,
 };
-use kafka_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
-use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
-use kafka_protocol::protocol::StrBytes;
-use kafka_protocol::records::Record;
+use heimq_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
+use heimq_protocol::messages::{BrokerId, GroupId, TopicName};
+use heimq_protocol::protocol::StrBytes;
+use heimq_protocol::records::Record;
 use std::sync::Arc;
 
 fn new_record(offset: i64) -> Record {
@@ -50,7 +50,7 @@ fn new_record(offset: i64) -> Record {
         partition_leader_epoch: 0,
         producer_id: -1,
         producer_epoch: -1,
-        timestamp_type: kafka_protocol::records::TimestampType::Creation,
+        timestamp_type: heimq_protocol::records::TimestampType::Creation,
         timestamp: offset,
         sequence: offset as i32,
         offset,
@@ -701,7 +701,7 @@ fn find_coordinator_request_ignored() {
 
 #[test]
 fn find_coordinator_v4_populates_coordinators_array() {
-    use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
+    use heimq_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
     let config = test_config(true);
     let mut request = FindCoordinatorRequest::default();
     request.coordinator_keys = vec![StrBytes::from_string("my-group".to_string())];
@@ -1225,7 +1225,7 @@ fn offset_fetch_truncated_and_missing_offsets() {
 #[test]
 fn offset_fetch_v8_groups_response_path() {
     use crate::handler::offset_commit;
-    use kafka_protocol::messages::offset_commit_request::{
+    use heimq_protocol::messages::offset_commit_request::{
         OffsetCommitRequestPartition, OffsetCommitRequestTopic,
     };
 
@@ -1289,7 +1289,7 @@ fn offset_fetch_v8_groups_response_path() {
 #[test]
 fn produce_oversize_batch_rejected_with_message_too_large() {
     use crate::storage::{BackendCapabilities, LogBackend, MemoryLog};
-    use kafka_protocol::messages::TransactionalId;
+    use heimq_protocol::messages::TransactionalId;
 
     let caps = BackendCapabilities {
         name: "in-memory",
@@ -1803,7 +1803,7 @@ fn describe_topic_partitions_unknown_topic() {
 
 #[test]
 fn init_producer_id_assigns_id() {
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
     let txn_mgr = TransactionManager::new();
     let req = InitProducerIdRequest::default();
     let body = encode_body(&req, 0);
@@ -1817,8 +1817,8 @@ fn init_producer_id_assigns_id() {
 
 #[test]
 fn init_producer_id_transactional_assigns_id() {
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::TransactionalId;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::TransactionalId;
     let txn_mgr = TransactionManager::new();
     let mut req = InitProducerIdRequest::default();
     req.transactional_id = Some(TransactionalId(StrBytes::from_static_str("my-txn")));
@@ -1834,7 +1834,7 @@ fn init_producer_id_transactional_assigns_id() {
 
 #[test]
 fn describe_cluster_returns_broker_list() {
-    use kafka_protocol::messages::describe_cluster_request::DescribeClusterRequest;
+    use heimq_protocol::messages::describe_cluster_request::DescribeClusterRequest;
     let config = test_config(false);
     let cluster_view = SingleNodeClusterView::new(&config);
     let req = DescribeClusterRequest::default();
@@ -1853,7 +1853,7 @@ fn describe_cluster_returns_broker_list() {
 
 #[test]
 fn describe_configs_returns_entries() {
-    use kafka_protocol::messages::describe_configs_request::{
+    use heimq_protocol::messages::describe_configs_request::{
         DescribeConfigsRequest, DescribeConfigsResource,
     };
     let mut req = DescribeConfigsRequest::default();
@@ -1880,7 +1880,7 @@ fn describe_config_value(
     topic: &str,
     key: &str,
 ) -> Option<String> {
-    use kafka_protocol::messages::describe_configs_request::{
+    use heimq_protocol::messages::describe_configs_request::{
         DescribeConfigsRequest, DescribeConfigsResource,
     };
     let mut req = DescribeConfigsRequest::default();
@@ -1898,7 +1898,7 @@ fn describe_config_value(
 }
 
 fn alter_configs_body(topic: &str, key: &str, value: &str) -> Vec<u8> {
-    use kafka_protocol::messages::alter_configs_request::{
+    use heimq_protocol::messages::alter_configs_request::{
         AlterConfigsRequest, AlterConfigsResource, AlterableConfig,
     };
     let mut req = AlterConfigsRequest::default();
@@ -1949,7 +1949,7 @@ fn alter_configs_round_trips_and_rejects_unknown() {
 }
 
 fn incremental_alter_body(topic: &str, key: &str, op: i8, value: Option<&str>) -> Vec<u8> {
-    use kafka_protocol::messages::incremental_alter_configs_request::{
+    use heimq_protocol::messages::incremental_alter_configs_request::{
         AlterConfigsResource, AlterableConfig, IncrementalAlterConfigsRequest,
     };
     let mut req = IncrementalAlterConfigsRequest::default();
@@ -1993,7 +1993,7 @@ fn incremental_alter_configs_set_then_delete_round_trips() {
 fn list_groups_empty() {
     let config = test_config(false);
     let coordinator = test_consumer_groups(config);
-    use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
+    use heimq_protocol::messages::list_groups_request::ListGroupsRequest;
     let req = ListGroupsRequest::default();
     let body = encode_body(&req, 0);
     let response = list_groups::handle(0, &body, coordinator.as_ref()).unwrap();
@@ -2008,8 +2008,8 @@ fn list_groups_empty() {
 fn describe_groups_unknown_returns_error() {
     let config = test_config(false);
     let coordinator = test_consumer_groups(config);
-    use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
-    use kafka_protocol::messages::GroupId;
+    use heimq_protocol::messages::describe_groups_request::DescribeGroupsRequest;
+    use heimq_protocol::messages::GroupId;
     let mut req = DescribeGroupsRequest::default();
     req.groups = vec![GroupId(StrBytes::from_static_str("no-such-group"))];
     let body = encode_body(&req, 0);
@@ -2023,7 +2023,7 @@ fn describe_groups_unknown_returns_error() {
 
 #[test]
 fn describe_log_dirs_known_topic() {
-    use kafka_protocol::messages::describe_log_dirs_request::DescribeLogDirsRequest;
+    use heimq_protocol::messages::describe_log_dirs_request::DescribeLogDirsRequest;
     let storage = test_storage(false);
     storage.create_topic("logdirs-test", 1).unwrap();
     // topics = None means "all topics"; the default gives Some([]) so set it explicitly.
@@ -2041,7 +2041,7 @@ fn describe_log_dirs_known_topic() {
 
 #[test]
 fn create_partitions_expands_topic() {
-    use kafka_protocol::messages::create_partitions_request::{
+    use heimq_protocol::messages::create_partitions_request::{
         CreatePartitionsRequest, CreatePartitionsTopic,
     };
     let storage = test_storage(false);
@@ -2063,7 +2063,7 @@ fn create_partitions_expands_topic() {
 
 #[test]
 fn delete_records_updates_low_watermark() {
-    use kafka_protocol::messages::delete_records_request::{
+    use heimq_protocol::messages::delete_records_request::{
         DeleteRecordsPartition, DeleteRecordsRequest, DeleteRecordsTopic,
     };
     let storage = test_storage(false);
@@ -2092,8 +2092,8 @@ fn delete_records_updates_low_watermark() {
 
 #[test]
 fn end_txn_unknown_txn_returns_invalid_epoch() {
-    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
-    use kafka_protocol::messages::{ProducerId, TransactionalId};
+    use heimq_protocol::messages::end_txn_request::EndTxnRequest;
+    use heimq_protocol::messages::{ProducerId, TransactionalId};
     let storage = test_storage(false);
     let offset_store: Arc<dyn crate::storage::OffsetStore> = Arc::new(MemoryOffsetStore::new());
     let txn_mgr = TransactionManager::new();
@@ -2112,10 +2112,10 @@ fn end_txn_unknown_txn_returns_invalid_epoch() {
 
 #[test]
 fn add_partitions_to_txn_unknown_returns_error() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{
+    use heimq_protocol::messages::add_partitions_to_txn_request::{
         AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
     };
-    use kafka_protocol::messages::{ProducerId, TransactionalId};
+    use heimq_protocol::messages::{ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     let mut req = AddPartitionsToTxnRequest::default();
     req.v3_and_below_transactional_id = TransactionalId(StrBytes::from_static_str("no-such-txn"));
@@ -2138,10 +2138,10 @@ fn add_partitions_to_txn_unknown_returns_error() {
 
 #[test]
 fn add_partitions_to_txn_valid_txn_succeeds() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{
+    use heimq_protocol::messages::add_partitions_to_txn_request::{
         AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
     };
-    use kafka_protocol::messages::{ProducerId, TransactionalId};
+    use heimq_protocol::messages::{ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     // Initialise a real transaction first.
     let (pid, epoch) = txn_mgr.init_transactional_producer("txn-apts");
@@ -2163,8 +2163,8 @@ fn add_partitions_to_txn_valid_txn_succeeds() {
 
 #[test]
 fn add_offsets_to_txn_unknown_returns_error() {
-    use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
-    use kafka_protocol::messages::{GroupId, ProducerId, TransactionalId};
+    use heimq_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+    use heimq_protocol::messages::{GroupId, ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     let mut req = AddOffsetsToTxnRequest::default();
     req.transactional_id = TransactionalId(StrBytes::from_static_str("no-such-txn"));
@@ -2181,8 +2181,8 @@ fn add_offsets_to_txn_unknown_returns_error() {
 
 #[test]
 fn add_offsets_to_txn_valid_txn_succeeds() {
-    use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
-    use kafka_protocol::messages::{GroupId, ProducerId, TransactionalId};
+    use heimq_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+    use heimq_protocol::messages::{GroupId, ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     let (pid, epoch) = txn_mgr.init_transactional_producer("txn-aotxn");
     let mut req = AddOffsetsToTxnRequest::default();
@@ -2197,10 +2197,10 @@ fn add_offsets_to_txn_valid_txn_succeeds() {
 
 #[test]
 fn txn_offset_commit_unknown_txn_returns_error() {
-    use kafka_protocol::messages::txn_offset_commit_request::{
+    use heimq_protocol::messages::txn_offset_commit_request::{
         TxnOffsetCommitRequest, TxnOffsetCommitRequestPartition, TxnOffsetCommitRequestTopic,
     };
-    use kafka_protocol::messages::{GroupId, ProducerId, TransactionalId};
+    use heimq_protocol::messages::{GroupId, ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     let mut req = TxnOffsetCommitRequest::default();
     req.transactional_id = TransactionalId(StrBytes::from_static_str("no-such-txn"));
@@ -2226,10 +2226,10 @@ fn txn_offset_commit_unknown_txn_returns_error() {
 
 #[test]
 fn write_txn_markers_appends_control_record() {
-    use kafka_protocol::messages::write_txn_markers_request::{
+    use heimq_protocol::messages::write_txn_markers_request::{
         WritableTxnMarker, WritableTxnMarkerTopic, WriteTxnMarkersRequest,
     };
-    use kafka_protocol::messages::ProducerId;
+    use heimq_protocol::messages::ProducerId;
     let storage = test_storage(false);
     storage.create_topic("markers-test", 1).unwrap();
     let txn_mgr = TransactionManager::new();
@@ -2252,7 +2252,7 @@ fn write_txn_markers_appends_control_record() {
 
 #[test]
 fn offset_delete_removes_group_offsets() {
-    use kafka_protocol::messages::offset_delete_request::{
+    use heimq_protocol::messages::offset_delete_request::{
         OffsetDeleteRequest, OffsetDeleteRequestPartition, OffsetDeleteRequestTopic,
     };
     let offset_store: Arc<dyn crate::storage::OffsetStore> = Arc::new(MemoryOffsetStore::new());
@@ -2273,7 +2273,7 @@ fn offset_delete_removes_group_offsets() {
 
 #[test]
 fn delete_groups_removes_empty_group() {
-    use kafka_protocol::messages::delete_groups_request::DeleteGroupsRequest;
+    use heimq_protocol::messages::delete_groups_request::DeleteGroupsRequest;
     let config = test_config(false);
     let coordinator = test_consumer_groups(config);
     let mut req = DeleteGroupsRequest::default();

@@ -3,12 +3,12 @@
 use crate::error::Result;
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
-use kafka_protocol::messages::add_partitions_to_txn_request::AddPartitionsToTxnRequest;
-use kafka_protocol::messages::add_partitions_to_txn_response::{
+use heimq_protocol::messages::add_partitions_to_txn_request::AddPartitionsToTxnRequest;
+use heimq_protocol::messages::add_partitions_to_txn_response::{
     AddPartitionsToTxnPartitionResult, AddPartitionsToTxnResponse, AddPartitionsToTxnTopicResult,
 };
-use kafka_protocol::messages::TopicName;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::TopicName;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::debug;
 

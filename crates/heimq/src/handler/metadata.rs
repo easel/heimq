@@ -3,12 +3,12 @@
 use crate::error::Result;
 use crate::storage::{ClusterView, LogBackend};
 use bytes::Bytes;
-use kafka_protocol::messages::metadata_request::MetadataRequest;
-use kafka_protocol::messages::metadata_response::{
+use heimq_protocol::messages::metadata_request::MetadataRequest;
+use heimq_protocol::messages::metadata_response::{
     MetadataResponseBroker, MetadataResponsePartition, MetadataResponseTopic,
 };
-use kafka_protocol::messages::{BrokerId, MetadataResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::{BrokerId, MetadataResponse, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 pub fn handle(

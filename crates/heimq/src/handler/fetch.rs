@@ -4,12 +4,12 @@ use crate::error::{ErrorCode, Result};
 use crate::storage::{LogBackend, RequestContext};
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
-use kafka_protocol::messages::fetch_request::FetchRequest;
-use kafka_protocol::messages::fetch_response::{
+use heimq_protocol::messages::fetch_request::FetchRequest;
+use heimq_protocol::messages::fetch_response::{
     AbortedTransaction, FetchableTopicResponse, PartitionData,
 };
-use kafka_protocol::messages::{FetchResponse, ProducerId, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::{FetchResponse, ProducerId, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::debug;
 

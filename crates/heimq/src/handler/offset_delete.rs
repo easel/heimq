@@ -6,12 +6,12 @@
 use crate::error::Result;
 use crate::storage::{OffsetStore, RequestContext};
 use bytes::Bytes;
-use kafka_protocol::messages::offset_delete_request::OffsetDeleteRequest;
-use kafka_protocol::messages::offset_delete_response::{
+use heimq_protocol::messages::offset_delete_request::OffsetDeleteRequest;
+use heimq_protocol::messages::offset_delete_response::{
     OffsetDeleteResponsePartition, OffsetDeleteResponseTopic,
 };
-use kafka_protocol::messages::OffsetDeleteResponse;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::OffsetDeleteResponse;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 pub fn handle(
@@ -54,7 +54,7 @@ pub fn handle_with_context(
         }
         let mut rt = OffsetDeleteResponseTopic::default();
         rt.name =
-            kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
+            heimq_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
         rt.partitions = response_partitions;
         response.topics.push(rt);
     }

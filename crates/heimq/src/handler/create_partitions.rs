@@ -6,10 +6,10 @@
 use crate::error::Result;
 use crate::storage::LogBackend;
 use bytes::Bytes;
-use kafka_protocol::messages::create_partitions_request::CreatePartitionsRequest;
-use kafka_protocol::messages::create_partitions_response::CreatePartitionsTopicResult;
-use kafka_protocol::messages::CreatePartitionsResponse;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::create_partitions_request::CreatePartitionsRequest;
+use heimq_protocol::messages::create_partitions_response::CreatePartitionsTopicResult;
+use heimq_protocol::messages::CreatePartitionsResponse;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 /// Upper bound on partitions per topic (see create_topics): prevents an
@@ -33,7 +33,7 @@ pub fn handle(
         let topic_name = topic.name.0.as_str();
         let mut result = CreatePartitionsTopicResult::default();
         result.name =
-            kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
+            heimq_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
 
         // Reject an absurd target count before allocating per-partition state.
         if topic.count > MAX_PARTITIONS {

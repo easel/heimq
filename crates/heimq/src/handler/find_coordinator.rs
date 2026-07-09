@@ -3,10 +3,10 @@
 use crate::error::Result;
 use crate::storage::ClusterView;
 use bytes::Bytes;
-use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
-use kafka_protocol::messages::find_coordinator_response::Coordinator;
-use kafka_protocol::messages::{BrokerId, FindCoordinatorResponse};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
+use heimq_protocol::messages::find_coordinator_response::Coordinator;
+use heimq_protocol::messages::{BrokerId, FindCoordinatorResponse};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 
 pub fn handle(
     api_version: i16,

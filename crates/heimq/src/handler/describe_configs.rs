@@ -9,12 +9,12 @@
 use crate::config_store::ConfigStore;
 use crate::error::Result;
 use bytes::Bytes;
-use kafka_protocol::messages::describe_configs_request::DescribeConfigsRequest;
-use kafka_protocol::messages::describe_configs_response::{
+use heimq_protocol::messages::describe_configs_request::DescribeConfigsRequest;
+use heimq_protocol::messages::describe_configs_response::{
     DescribeConfigsResourceResult, DescribeConfigsResult,
 };
-use kafka_protocol::messages::DescribeConfigsResponse;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::DescribeConfigsResponse;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 
 // CONFIG_SOURCE_DYNAMIC_TOPIC_CONFIG (1) — set via AlterConfigs.
 const CONFIG_SOURCE_DYNAMIC_TOPIC: i8 = 1;

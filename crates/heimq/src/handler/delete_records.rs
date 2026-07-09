@@ -7,12 +7,12 @@
 use crate::error::Result;
 use crate::storage::LogBackend;
 use bytes::Bytes;
-use kafka_protocol::messages::delete_records_request::DeleteRecordsRequest;
-use kafka_protocol::messages::delete_records_response::{
+use heimq_protocol::messages::delete_records_request::DeleteRecordsRequest;
+use heimq_protocol::messages::delete_records_response::{
     DeleteRecordsPartitionResult, DeleteRecordsTopicResult,
 };
-use kafka_protocol::messages::DeleteRecordsResponse;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::DeleteRecordsResponse;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 pub fn handle(
@@ -32,7 +32,7 @@ pub fn handle(
         let topic_name = topic.name.0.as_str();
         let mut topic_result = DeleteRecordsTopicResult::default();
         topic_result.name =
-            kafka_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
+            heimq_protocol::messages::TopicName(StrBytes::from_string(topic_name.to_string()));
 
         for partition in &topic.partitions {
             let mut pr = DeleteRecordsPartitionResult::default();

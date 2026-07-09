@@ -21,7 +21,7 @@ repository = "https://github.com/easel/heimq"
 readme = false
 
 [lib]
-name = "kafka_protocol"
+name = "heimq_protocol"
 # Doc examples reference the upstream crate name; not worth maintaining for a vendored dep.
 doctest = false
 

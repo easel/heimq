@@ -10,10 +10,10 @@ use heimq_broker::produce::{
     append_records, append_records_async, ProduceAppend, ProduceAppendError, ProduceAppendStatus,
     SequenceDecision, SequenceValidator,
 };
-use kafka_protocol::messages::produce_request::ProduceRequest;
-use kafka_protocol::messages::produce_response::{PartitionProduceResponse, TopicProduceResponse};
-use kafka_protocol::messages::{ProduceResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::produce_request::ProduceRequest;
+use heimq_protocol::messages::produce_response::{PartitionProduceResponse, TopicProduceResponse};
+use heimq_protocol::messages::{ProduceResponse, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::{debug, warn};
 

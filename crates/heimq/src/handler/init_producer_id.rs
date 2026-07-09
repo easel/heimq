@@ -4,10 +4,10 @@ use crate::error::Result;
 use crate::producer_state::ProducerStateManager;
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
-use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-use kafka_protocol::messages::ProducerId;
-use kafka_protocol::protocol::Decodable;
+use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+use heimq_protocol::messages::ProducerId;
+use heimq_protocol::protocol::Decodable;
 use std::sync::Arc;
 use tracing::debug;
 

@@ -4,14 +4,14 @@ use crate::error::Result;
 use crate::storage::LogBackend;
 use crate::transaction_state::TransactionManager;
 use bytes::{Bytes, BytesMut};
-use kafka_protocol::messages::write_txn_markers_request::WriteTxnMarkersRequest;
-use kafka_protocol::messages::write_txn_markers_response::{
+use heimq_protocol::messages::write_txn_markers_request::WriteTxnMarkersRequest;
+use heimq_protocol::messages::write_txn_markers_response::{
     WritableTxnMarkerPartitionResult, WritableTxnMarkerResult, WritableTxnMarkerTopicResult,
     WriteTxnMarkersResponse,
 };
-use kafka_protocol::messages::{ProducerId, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
-use kafka_protocol::records::{
+use heimq_protocol::messages::{ProducerId, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::records::{
     Compression, Record, RecordBatchEncoder, RecordEncodeOptions, TimestampType,
 };
 use std::sync::Arc;

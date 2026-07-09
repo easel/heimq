@@ -499,13 +499,13 @@ mod tests {
     // non-workspace packages, so embedders never see it.
     use super::*;
     use bytes::BytesMut;
-    use kafka_protocol::protocol::StrBytes;
-    use kafka_protocol::records::{
+    use heimq_protocol::protocol::StrBytes;
+    use heimq_protocol::records::{
         Compression, Record, RecordBatchEncoder, RecordEncodeOptions, TimestampType,
     };
 
     fn make_record(offset: i64, timestamp: i64, key: &[u8], value: &[u8]) -> Record {
-        let mut headers = kafka_protocol::indexmap::IndexMap::new();
+        let mut headers = heimq_protocol::indexmap::IndexMap::new();
         headers.insert(
             StrBytes::from_static_str("h1"),
             Some(Bytes::copy_from_slice(b"hv")),
@@ -605,7 +605,7 @@ mod tests {
     }
 
     #[test]
-    fn public_api_iterates_decoded_records_without_kafka_protocol_types() {
+    fn public_api_iterates_decoded_records_without_heimq_protocol_types() {
         let records = vec![make_record(0, 1_000, b"alpha", b"one")];
         let raw = encode(&records, Compression::None);
         let view = RecordBatchView::from_bytes(&raw).expect("decode view");
@@ -664,7 +664,7 @@ mod tests {
         let mut record = make_record(0, 1_000, b"k", b"v");
         record.key = None;
         record.value = None;
-        record.headers = kafka_protocol::indexmap::IndexMap::new();
+        record.headers = heimq_protocol::indexmap::IndexMap::new();
         let raw = encode(&[record], Compression::None);
 
         let view = RecordBatchView::from_bytes(&raw).expect("decode view");

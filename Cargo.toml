@@ -21,7 +21,7 @@ license = "MIT"
 repository = "https://github.com/easel/heimq"
 
 # The patched kafka-protocol lives in `crates/heimq-protocol` (a vendored fork,
-# lib name `kafka_protocol`) rather than behind a `[patch.crates-io]`, because a
+# lib name `heimq_protocol`) rather than behind a `[patch.crates-io]`, because a
 # patch is not transitive — every downstream workspace would have to replicate
 # it. As a normal renamed dependency the OOM-decode fix travels with heimq. See
 # that crate's Cargo.toml for provenance. Tracked: heimq-bb299c68.

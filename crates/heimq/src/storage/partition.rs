@@ -187,9 +187,9 @@ impl PartitionLog for MemoryPartitionLog {
 mod tests {
     use super::*;
     use bytes::{Bytes, BytesMut};
-    use kafka_protocol::indexmap::IndexMap;
-    use kafka_protocol::protocol::StrBytes;
-    use kafka_protocol::records::{
+    use heimq_protocol::indexmap::IndexMap;
+    use heimq_protocol::protocol::StrBytes;
+    use heimq_protocol::records::{
         Compression, Record, RecordBatchEncoder, RecordEncodeOptions, TimestampType,
     };
     use proptest::prelude::*;

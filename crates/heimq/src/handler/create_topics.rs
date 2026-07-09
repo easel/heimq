@@ -3,10 +3,10 @@
 use crate::error::Result;
 use crate::storage::LogBackend;
 use bytes::Bytes;
-use kafka_protocol::messages::create_topics_request::CreateTopicsRequest;
-use kafka_protocol::messages::create_topics_response::CreatableTopicResult;
-use kafka_protocol::messages::{CreateTopicsResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::create_topics_request::CreateTopicsRequest;
+use heimq_protocol::messages::create_topics_response::CreatableTopicResult;
+use heimq_protocol::messages::{CreateTopicsResponse, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::{info, warn};
 

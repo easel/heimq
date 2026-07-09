@@ -3,10 +3,10 @@
 use crate::error::Result;
 use crate::storage::LogBackend;
 use bytes::Bytes;
-use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
-use kafka_protocol::messages::delete_topics_response::DeletableTopicResult;
-use kafka_protocol::messages::{DeleteTopicsResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::delete_topics_request::DeleteTopicsRequest;
+use heimq_protocol::messages::delete_topics_response::DeletableTopicResult;
+use heimq_protocol::messages::{DeleteTopicsResponse, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::info;
 

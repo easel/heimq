@@ -1,7 +1,7 @@
 //! ApiVersions request handler (API Key 18)
 
-use kafka_protocol::messages::api_versions_response::ApiVersion;
-use kafka_protocol::messages::ApiVersionsResponse;
+use heimq_protocol::messages::api_versions_response::ApiVersion;
+use heimq_protocol::messages::ApiVersionsResponse;
 
 /// Handle ApiVersions request given the effective set of advertised APIs.
 ///

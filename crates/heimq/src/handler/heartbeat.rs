@@ -4,9 +4,9 @@ use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::storage::RequestContext;
 use bytes::Bytes;
-use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
-use kafka_protocol::messages::HeartbeatResponse;
-use kafka_protocol::protocol::Decodable;
+use heimq_protocol::messages::heartbeat_request::HeartbeatRequest;
+use heimq_protocol::messages::HeartbeatResponse;
+use heimq_protocol::protocol::Decodable;
 
 pub fn handle(
     api_version: i16,

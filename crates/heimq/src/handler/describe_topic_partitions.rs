@@ -8,13 +8,13 @@
 use crate::error::Result;
 use crate::storage::{ClusterView, LogBackend};
 use bytes::Bytes;
-use kafka_protocol::messages::describe_topic_partitions_request::DescribeTopicPartitionsRequest;
-use kafka_protocol::messages::describe_topic_partitions_response::{
+use heimq_protocol::messages::describe_topic_partitions_request::DescribeTopicPartitionsRequest;
+use heimq_protocol::messages::describe_topic_partitions_response::{
     DescribeTopicPartitionsResponse, DescribeTopicPartitionsResponsePartition,
     DescribeTopicPartitionsResponseTopic,
 };
-use kafka_protocol::messages::{BrokerId, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::{BrokerId, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 pub fn handle(

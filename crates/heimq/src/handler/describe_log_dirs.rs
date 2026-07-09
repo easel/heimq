@@ -7,13 +7,13 @@
 use crate::error::Result;
 use crate::storage::LogBackend;
 use bytes::Bytes;
-use kafka_protocol::messages::describe_log_dirs_request::DescribeLogDirsRequest;
-use kafka_protocol::messages::describe_log_dirs_response::{
+use heimq_protocol::messages::describe_log_dirs_request::DescribeLogDirsRequest;
+use heimq_protocol::messages::describe_log_dirs_response::{
     DescribeLogDirsPartition, DescribeLogDirsResult, DescribeLogDirsTopic,
 };
-use kafka_protocol::messages::DescribeLogDirsResponse;
-use kafka_protocol::messages::TopicName;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::DescribeLogDirsResponse;
+use heimq_protocol::messages::TopicName;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 const MEMORY_LOG_DIR: &str = "memory://";

@@ -12,16 +12,16 @@
 #![cfg(feature = "backend-postgres")]
 
 use bytes::{Buf, BufMut, BytesMut};
-use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
-use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
-use kafka_protocol::messages::offset_commit_request::{
+use heimq_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
+use heimq_protocol::messages::create_topics_response::CreateTopicsResponse;
+use heimq_protocol::messages::offset_commit_request::{
     OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic,
 };
-use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
-use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
-use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
-use kafka_protocol::messages::{GroupId, TopicName};
-use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
+use heimq_protocol::messages::offset_commit_response::OffsetCommitResponse;
+use heimq_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
+use heimq_protocol::messages::offset_fetch_response::OffsetFetchResponse;
+use heimq_protocol::messages::{GroupId, TopicName};
+use heimq_protocol::protocol::{Decodable, Encodable, StrBytes};
 use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::process::{Child, Command, Stdio};

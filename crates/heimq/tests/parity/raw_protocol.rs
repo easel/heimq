@@ -1,16 +1,16 @@
 use anyhow::{Context, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
-use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
-use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-use kafka_protocol::messages::produce_request::{
+use heimq_protocol::messages::api_versions_request::ApiVersionsRequest;
+use heimq_protocol::messages::api_versions_response::ApiVersionsResponse;
+use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+use heimq_protocol::messages::produce_request::{
     PartitionProduceData, ProduceRequest, TopicProduceData,
 };
-use kafka_protocol::messages::produce_response::ProduceResponse;
-use kafka_protocol::messages::{ProducerId, TopicName};
-use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
-use kafka_protocol::records::{
+use heimq_protocol::messages::produce_response::ProduceResponse;
+use heimq_protocol::messages::{ProducerId, TopicName};
+use heimq_protocol::protocol::{Decodable, Encodable, StrBytes};
+use heimq_protocol::records::{
     Compression, Record, RecordBatchEncoder, RecordEncodeOptions, TimestampType,
 };
 use std::io::{Read, Write};

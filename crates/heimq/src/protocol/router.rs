@@ -9,8 +9,8 @@ use crate::protocol::{decode_request, decode_request_bytes, encode_response, Req
 use crate::storage::{ClusterView, LogBackend, RequestContext};
 use crate::transaction_state::TransactionManager;
 use bytes::{BufMut, Bytes, BytesMut};
-use kafka_protocol::messages::fetch_request::FetchRequest;
-use kafka_protocol::protocol::{Decodable, Encodable};
+use heimq_protocol::messages::fetch_request::FetchRequest;
+use heimq_protocol::protocol::{Decodable, Encodable};
 use std::sync::Arc;
 use tracing::{debug, warn};
 
@@ -313,7 +313,7 @@ impl Router {
     }
 
     fn handle_produce(&self, header: &RequestHeader, body: &[u8]) -> Result<Bytes> {
-        use kafka_protocol::messages::produce_request::ProduceRequest;
+        use heimq_protocol::messages::produce_request::ProduceRequest;
 
         // Decode acks up front: acks=0 means fire-and-forget — the broker must
         // NOT send a response. We still store the records; we just return empty
@@ -369,7 +369,7 @@ impl Router {
     }
 
     async fn handle_produce_async(&self, header: &RequestHeader, body: Bytes) -> Result<Bytes> {
-        use kafka_protocol::messages::produce_request::ProduceRequest;
+        use heimq_protocol::messages::produce_request::ProduceRequest;
 
         // Decode acks up front: acks=0 means fire-and-forget — the broker must
         // NOT send a response. We still store the records; we just return empty
@@ -749,47 +749,47 @@ mod tests {
     };
     use anyhow::anyhow;
     use bytes::{Buf, BufMut, BytesMut};
-    use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
-    use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
-    use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
-    use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
-    use kafka_protocol::messages::delete_groups_request::DeleteGroupsRequest;
-    use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
-    use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
-    use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
-    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
-    use kafka_protocol::messages::fetch_response::FetchResponse;
-    use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
-    use kafka_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
-    use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
-    use kafka_protocol::messages::heartbeat_response::HeartbeatResponse;
-    use kafka_protocol::messages::join_group_request::{
+    use heimq_protocol::messages::api_versions_request::ApiVersionsRequest;
+    use heimq_protocol::messages::api_versions_response::ApiVersionsResponse;
+    use heimq_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
+    use heimq_protocol::messages::create_topics_response::CreateTopicsResponse;
+    use heimq_protocol::messages::delete_groups_request::DeleteGroupsRequest;
+    use heimq_protocol::messages::delete_topics_request::DeleteTopicsRequest;
+    use heimq_protocol::messages::delete_topics_response::DeleteTopicsResponse;
+    use heimq_protocol::messages::describe_groups_request::DescribeGroupsRequest;
+    use heimq_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+    use heimq_protocol::messages::fetch_response::FetchResponse;
+    use heimq_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
+    use heimq_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
+    use heimq_protocol::messages::heartbeat_request::HeartbeatRequest;
+    use heimq_protocol::messages::heartbeat_response::HeartbeatResponse;
+    use heimq_protocol::messages::join_group_request::{
         JoinGroupRequest, JoinGroupRequestProtocol,
     };
-    use kafka_protocol::messages::join_group_response::JoinGroupResponse;
-    use kafka_protocol::messages::leave_group_request::LeaveGroupRequest;
-    use kafka_protocol::messages::leave_group_response::LeaveGroupResponse;
-    use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
-    use kafka_protocol::messages::list_offsets_request::{
+    use heimq_protocol::messages::join_group_response::JoinGroupResponse;
+    use heimq_protocol::messages::leave_group_request::LeaveGroupRequest;
+    use heimq_protocol::messages::leave_group_response::LeaveGroupResponse;
+    use heimq_protocol::messages::list_groups_request::ListGroupsRequest;
+    use heimq_protocol::messages::list_offsets_request::{
         ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic,
     };
-    use kafka_protocol::messages::list_offsets_response::ListOffsetsResponse;
-    use kafka_protocol::messages::metadata_request::MetadataRequest;
-    use kafka_protocol::messages::metadata_response::MetadataResponse;
-    use kafka_protocol::messages::offset_commit_request::{
+    use heimq_protocol::messages::list_offsets_response::ListOffsetsResponse;
+    use heimq_protocol::messages::metadata_request::MetadataRequest;
+    use heimq_protocol::messages::metadata_response::MetadataResponse;
+    use heimq_protocol::messages::offset_commit_request::{
         OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic,
     };
-    use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
-    use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequest;
-    use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
-    use kafka_protocol::messages::produce_request::{
+    use heimq_protocol::messages::offset_commit_response::OffsetCommitResponse;
+    use heimq_protocol::messages::offset_fetch_request::OffsetFetchRequest;
+    use heimq_protocol::messages::offset_fetch_response::OffsetFetchResponse;
+    use heimq_protocol::messages::produce_request::{
         PartitionProduceData, ProduceRequest, TopicProduceData,
     };
-    use kafka_protocol::messages::produce_response::ProduceResponse;
-    use kafka_protocol::messages::sync_group_request::SyncGroupRequest;
-    use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
-    use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
-    use kafka_protocol::protocol::{Encodable, StrBytes};
+    use heimq_protocol::messages::produce_response::ProduceResponse;
+    use heimq_protocol::messages::sync_group_request::SyncGroupRequest;
+    use heimq_protocol::messages::sync_group_response::SyncGroupResponse;
+    use heimq_protocol::messages::{BrokerId, GroupId, TopicName};
+    use heimq_protocol::protocol::{Encodable, StrBytes};
 
     fn build_request(api_key: i16, api_version: i16, correlation_id: i32, body: &[u8]) -> Vec<u8> {
         let mut buf = BytesMut::new();
@@ -810,7 +810,7 @@ mod tests {
     struct FailingEncode;
 
     impl Encodable for FailingEncode {
-        fn encode<B: kafka_protocol::protocol::buf::ByteBufMut>(
+        fn encode<B: heimq_protocol::protocol::buf::ByteBufMut>(
             &self,
             _buf: &mut B,
             _version: i16,
@@ -844,13 +844,13 @@ mod tests {
         let resp = router.route(&req).unwrap();
         assert_eq!(response_correlation_id(resp), correlation_id);
 
-        let record = kafka_protocol::records::Record {
+        let record = heimq_protocol::records::Record {
             transactional: false,
             control: false,
             partition_leader_epoch: 0,
             producer_id: -1,
             producer_epoch: -1,
-            timestamp_type: kafka_protocol::records::TimestampType::Creation,
+            timestamp_type: heimq_protocol::records::TimestampType::Creation,
             timestamp: 0,
             sequence: 0,
             offset: 0,
@@ -1105,7 +1105,7 @@ mod tests {
     // ApiVersions response.
     #[test]
     fn test_sasl_gate_off_no_advertise() {
-        use kafka_protocol::protocol::Decodable;
+        use heimq_protocol::protocol::Decodable;
         let config = test_config(true);
         let storage = test_storage(true);
         let consumer_groups = test_consumer_groups(config.clone());
@@ -1215,13 +1215,13 @@ mod tests {
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
         let router = Router::new(backend, consumer_groups, cluster_view);
 
-        let batch = encode_record_batch(&[kafka_protocol::records::Record {
+        let batch = encode_record_batch(&[heimq_protocol::records::Record {
             transactional: false,
             control: false,
             partition_leader_epoch: 0,
             producer_id: -1,
             producer_epoch: -1,
-            timestamp_type: kafka_protocol::records::TimestampType::Creation,
+            timestamp_type: heimq_protocol::records::TimestampType::Creation,
             timestamp: 0,
             sequence: 0,
             offset: 0,
@@ -1335,13 +1335,13 @@ mod tests {
         let cluster_view = SingleNodeClusterView::arc_from_config(&config);
         let router = Router::new(backend, consumer_groups, cluster_view);
 
-        let batch = encode_record_batch(&[kafka_protocol::records::Record {
+        let batch = encode_record_batch(&[heimq_protocol::records::Record {
             transactional: false,
             control: false,
             partition_leader_epoch: 0,
             producer_id: -1,
             producer_epoch: -1,
-            timestamp_type: kafka_protocol::records::TimestampType::Creation,
+            timestamp_type: heimq_protocol::records::TimestampType::Creation,
             timestamp: 0,
             sequence: 0,
             offset: 0,

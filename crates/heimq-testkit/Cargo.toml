@@ -11,7 +11,7 @@ description = "Per-trait conformance suites and differential parity harness for 
 [dependencies]
 heimq = { path = "../heimq", version = "0.1.0", features = ["test-support"] }
 anyhow = "1.0"
-# Vendored crate; lib name `kafka_protocol`, so `use kafka_protocol::` is unchanged.
+# Vendored fork of kafka-protocol 0.15.1; imported as `heimq_protocol`.
 heimq-protocol = { path = "../heimq-protocol", version = "0.15.1" }
 
 [dev-dependencies]

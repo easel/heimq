@@ -4,9 +4,9 @@ use crate::consumer_group::{GroupCoordinatorBackend, SyncRequest};
 use crate::error::Result;
 use crate::storage::RequestContext;
 use bytes::Bytes;
-use kafka_protocol::messages::sync_group_request::SyncGroupRequest;
-use kafka_protocol::messages::SyncGroupResponse;
-use kafka_protocol::protocol::Decodable;
+use heimq_protocol::messages::sync_group_request::SyncGroupRequest;
+use heimq_protocol::messages::SyncGroupResponse;
+use heimq_protocol::protocol::Decodable;
 use tracing::debug;
 
 pub fn handle(

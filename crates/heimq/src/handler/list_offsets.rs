@@ -3,12 +3,12 @@
 use crate::error::{ErrorCode, Result};
 use crate::storage::LogBackend;
 use bytes::Bytes;
-use kafka_protocol::messages::list_offsets_request::ListOffsetsRequest;
-use kafka_protocol::messages::list_offsets_response::{
+use heimq_protocol::messages::list_offsets_request::ListOffsetsRequest;
+use heimq_protocol::messages::list_offsets_response::{
     ListOffsetsPartitionResponse, ListOffsetsTopicResponse,
 };
-use kafka_protocol::messages::{ListOffsetsResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::{ListOffsetsResponse, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 pub fn handle(

@@ -3,12 +3,12 @@
 use crate::error::Result;
 use crate::storage::{OffsetStore, RequestContext};
 use bytes::Bytes;
-use kafka_protocol::messages::offset_commit_request::OffsetCommitRequest;
-use kafka_protocol::messages::offset_commit_response::{
+use heimq_protocol::messages::offset_commit_request::OffsetCommitRequest;
+use heimq_protocol::messages::offset_commit_response::{
     OffsetCommitResponsePartition, OffsetCommitResponseTopic,
 };
-use kafka_protocol::messages::{OffsetCommitResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::{OffsetCommitResponse, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 use tracing::debug;
 

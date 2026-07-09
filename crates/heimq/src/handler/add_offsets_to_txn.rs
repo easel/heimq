@@ -3,9 +3,9 @@
 use crate::error::Result;
 use crate::transaction_state::TransactionManager;
 use bytes::Bytes;
-use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
-use kafka_protocol::messages::add_offsets_to_txn_response::AddOffsetsToTxnResponse;
-use kafka_protocol::protocol::Decodable;
+use heimq_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+use heimq_protocol::messages::add_offsets_to_txn_response::AddOffsetsToTxnResponse;
+use heimq_protocol::protocol::Decodable;
 use std::sync::Arc;
 use tracing::debug;
 

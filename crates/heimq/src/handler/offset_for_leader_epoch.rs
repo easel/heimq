@@ -8,12 +8,12 @@
 use crate::error::Result;
 use crate::storage::LogBackend;
 use bytes::Bytes;
-use kafka_protocol::messages::offset_for_leader_epoch_request::OffsetForLeaderEpochRequest;
-use kafka_protocol::messages::offset_for_leader_epoch_response::{
+use heimq_protocol::messages::offset_for_leader_epoch_request::OffsetForLeaderEpochRequest;
+use heimq_protocol::messages::offset_for_leader_epoch_response::{
     EpochEndOffset, OffsetForLeaderEpochResponse, OffsetForLeaderTopicResult,
 };
-use kafka_protocol::messages::TopicName;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::TopicName;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 pub fn handle(

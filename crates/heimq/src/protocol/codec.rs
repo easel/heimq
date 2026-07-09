@@ -2,7 +2,7 @@
 
 use crate::protocol::is_flexible;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use kafka_protocol::protocol::Encodable;
+use heimq_protocol::protocol::Encodable;
 use std::io::Cursor;
 use tracing::trace;
 
@@ -197,7 +197,7 @@ mod tests {
     struct FailingEncode;
 
     impl Encodable for FailingEncode {
-        fn encode<B: kafka_protocol::protocol::buf::ByteBufMut>(
+        fn encode<B: heimq_protocol::protocol::buf::ByteBufMut>(
             &self,
             _buf: &mut B,
             _version: i16,
@@ -244,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_encode_response_body() {
-        use kafka_protocol::messages::ApiVersionsResponse;
+        use heimq_protocol::messages::ApiVersionsResponse;
         let response = ApiVersionsResponse::default();
         let buf = encode_response_body(5, 0, &response).unwrap();
         assert!(buf.len() >= 4);
@@ -302,20 +302,20 @@ mod tests {
 
     #[test]
     fn test_encode_response_invalid_versions_error() {
-        use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
-        use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
-        use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
-        use kafka_protocol::messages::fetch_response::FetchResponse;
-        use kafka_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
-        use kafka_protocol::messages::heartbeat_response::HeartbeatResponse;
-        use kafka_protocol::messages::join_group_response::JoinGroupResponse;
-        use kafka_protocol::messages::leave_group_response::LeaveGroupResponse;
-        use kafka_protocol::messages::list_offsets_response::ListOffsetsResponse;
-        use kafka_protocol::messages::metadata_response::MetadataResponse;
-        use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
-        use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
-        use kafka_protocol::messages::produce_response::ProduceResponse;
-        use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
+        use heimq_protocol::messages::api_versions_response::ApiVersionsResponse;
+        use heimq_protocol::messages::create_topics_response::CreateTopicsResponse;
+        use heimq_protocol::messages::delete_topics_response::DeleteTopicsResponse;
+        use heimq_protocol::messages::fetch_response::FetchResponse;
+        use heimq_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
+        use heimq_protocol::messages::heartbeat_response::HeartbeatResponse;
+        use heimq_protocol::messages::join_group_response::JoinGroupResponse;
+        use heimq_protocol::messages::leave_group_response::LeaveGroupResponse;
+        use heimq_protocol::messages::list_offsets_response::ListOffsetsResponse;
+        use heimq_protocol::messages::metadata_response::MetadataResponse;
+        use heimq_protocol::messages::offset_commit_response::OffsetCommitResponse;
+        use heimq_protocol::messages::offset_fetch_response::OffsetFetchResponse;
+        use heimq_protocol::messages::produce_response::ProduceResponse;
+        use heimq_protocol::messages::sync_group_response::SyncGroupResponse;
 
         let invalid_version = i16::MAX;
         let err =
@@ -361,7 +361,7 @@ mod tests {
 
     #[test]
     fn test_encode_response_body_invalid_version_error() {
-        use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
+        use heimq_protocol::messages::api_versions_response::ApiVersionsResponse;
         let err = encode_response_body(1, i16::MAX, &ApiVersionsResponse::default()).unwrap_err();
         assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
     }
@@ -381,8 +381,8 @@ mod flexible_tests {
     use super::*;
     use crate::protocol::is_flexible;
     use bytes::BytesMut;
-    use kafka_protocol::messages::TopicName;
-    use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
+    use heimq_protocol::messages::TopicName;
+    use heimq_protocol::protocol::{Decodable, Encodable, StrBytes};
     use proptest::prelude::*;
 
     fn topic_name(s: &str) -> TopicName {
@@ -399,7 +399,7 @@ mod flexible_tests {
         /// Null-sentinel: varint(0) encodes null; empty string is distinct (varint(1) + 0 bytes).
         #[test]
         fn prop_compact_string_roundtrip(s in "[\\x20-\\x7e]{0,200}") {
-            use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
+            use heimq_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
             let mut topic = MetadataRequestTopic::default();
             topic.name = Some(topic_name(&s));
             let mut req = MetadataRequest::default();
@@ -415,7 +415,7 @@ mod flexible_tests {
         /// compact_string null sentinel: None encodes as varint(0) and decodes as None.
         #[test]
         fn prop_compact_string_null_roundtrip(_unused in 0u8..1) {
-            use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
+            use heimq_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
             let mut topic = MetadataRequestTopic::default();
             topic.name = None;
             let mut req = MetadataRequest::default();
@@ -432,7 +432,7 @@ mod flexible_tests {
         /// sentinel varint) to 32, exercising compact_array length encoding.
         #[test]
         fn prop_compact_array_roundtrip(count in 0usize..=32) {
-            use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
+            use heimq_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
             let topics: Vec<MetadataRequestTopic> = (0..count)
                 .map(|i| {
                     let mut t = MetadataRequestTopic::default();
@@ -456,7 +456,7 @@ mod flexible_tests {
         fn prop_compact_string_varint_boundary(len in prop::sample::select(vec![
             0usize, 1, 126, 127, 128, 200,
         ])) {
-            use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
+            use heimq_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
             let s: String = "a".repeat(len);
             let mut topic = MetadataRequestTopic::default();
             topic.name = Some(topic_name(&s));
@@ -474,7 +474,7 @@ mod flexible_tests {
         /// tagged-fields block (varint 0).  Verify the round-trip is lossless.
         #[test]
         fn prop_tagged_fields_empty_block_roundtrip(_unused in 0u8..1) {
-            use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
+            use heimq_protocol::messages::api_versions_request::ApiVersionsRequest;
             let req = ApiVersionsRequest::default();
             let mut buf = BytesMut::new();
             req.encode(&mut buf, 3).expect("encode ApiVersionsRequest v3 (flexible)");
@@ -487,7 +487,7 @@ mod flexible_tests {
         /// varint encoding path across multiple values including the 1<<7 threshold.
         #[test]
         fn prop_unsigned_varint_via_compact_array(count in 0usize..=16) {
-            use kafka_protocol::messages::list_offsets_request::{
+            use heimq_protocol::messages::list_offsets_request::{
                 ListOffsetsRequest, ListOffsetsTopic, ListOffsetsPartition,
             };
             let partitions: Vec<ListOffsetsPartition> = (0..count)
@@ -502,7 +502,7 @@ mod flexible_tests {
             topic.name = topic_name("bench");
             topic.partitions = partitions;
             let mut req = ListOffsetsRequest::default();
-            use kafka_protocol::messages::BrokerId;
+            use heimq_protocol::messages::BrokerId;
             req.replica_id = BrokerId(-1);
             req.topics = vec![topic];
             let mut buf = BytesMut::new();
@@ -593,7 +593,7 @@ mod flexible_tests {
     /// encode_response_body for flexible versions (the tagged-fields trailer).
     #[test]
     fn test_encode_response_flexible_header() {
-        use kafka_protocol::messages::metadata_response::MetadataResponse;
+        use heimq_protocol::messages::metadata_response::MetadataResponse;
         let response = MetadataResponse::default();
         // Metadata v9 is flexible per CODEC-001.
         let body_only =
@@ -620,7 +620,7 @@ mod flexible_tests {
     /// total length = 8 + body_len with no +1 trailer byte.
     #[test]
     fn test_encode_response_apiversions_no_flexible_header() {
-        use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
+        use heimq_protocol::messages::api_versions_response::ApiVersionsResponse;
         let response = ApiVersionsResponse::default();
         let body_only =
             encode_response_body(1, 3, &response).expect("encode_response_body must succeed");

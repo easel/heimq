@@ -4,9 +4,9 @@ use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::storage::RequestContext;
 use bytes::Bytes;
-use kafka_protocol::messages::leave_group_request::LeaveGroupRequest;
-use kafka_protocol::messages::LeaveGroupResponse;
-use kafka_protocol::protocol::Decodable;
+use heimq_protocol::messages::leave_group_request::LeaveGroupRequest;
+use heimq_protocol::messages::LeaveGroupResponse;
+use heimq_protocol::protocol::Decodable;
 use tracing::debug;
 
 pub fn handle(

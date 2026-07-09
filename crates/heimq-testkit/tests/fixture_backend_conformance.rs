@@ -24,7 +24,7 @@ fn wal_shape_partition_log_suite() {
 fn wal_shape_records_in_wal_before_ack() {
     use heimq::storage::{PartitionLog, RecordBatchView};
     use heimq::test_support::encode_record_batch;
-    use kafka_protocol::records::Record;
+    use heimq_protocol::records::Record;
 
     let log = WalShapePartitionLog::new(0);
     let wal = log.wal();
@@ -35,7 +35,7 @@ fn wal_shape_records_in_wal_before_ack() {
         partition_leader_epoch: 0,
         producer_id: -1,
         producer_epoch: -1,
-        timestamp_type: kafka_protocol::records::TimestampType::Creation,
+        timestamp_type: heimq_protocol::records::TimestampType::Creation,
         timestamp: 0,
         sequence: 0,
         offset: 0,
@@ -68,7 +68,7 @@ fn queue_sink_partition_log_suite() {
 fn queue_sink_delivers_to_channel() {
     use heimq::storage::{PartitionLog, RecordBatchView};
     use heimq::test_support::encode_record_batch;
-    use kafka_protocol::records::Record;
+    use heimq_protocol::records::Record;
 
     let (log, rx) = QueueSinkPartitionLog::new(0);
 
@@ -78,7 +78,7 @@ fn queue_sink_delivers_to_channel() {
         partition_leader_epoch: 0,
         producer_id: -1,
         producer_epoch: -1,
-        timestamp_type: kafka_protocol::records::TimestampType::Creation,
+        timestamp_type: heimq_protocol::records::TimestampType::Creation,
         timestamp: 0,
         sequence: 0,
         offset: 0,
@@ -106,7 +106,7 @@ fn object_store_shape_partition_log_suite() {
 fn object_store_shape_records_in_manifest() {
     use heimq::storage::{PartitionLog, RecordBatchView};
     use heimq::test_support::encode_record_batch;
-    use kafka_protocol::records::Record;
+    use heimq_protocol::records::Record;
 
     let log = ObjectStoreShapePartitionLog::new(0);
     let manifest = log.manifest();
@@ -117,7 +117,7 @@ fn object_store_shape_records_in_manifest() {
         partition_leader_epoch: 0,
         producer_id: -1,
         producer_epoch: -1,
-        timestamp_type: kafka_protocol::records::TimestampType::Creation,
+        timestamp_type: heimq_protocol::records::TimestampType::Creation,
         timestamp: 0,
         sequence: 0,
         offset: 0,

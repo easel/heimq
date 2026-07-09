@@ -5,11 +5,11 @@
 use crate::error::Result;
 use crate::storage::ClusterView;
 use bytes::Bytes;
-use kafka_protocol::messages::describe_cluster_request::DescribeClusterRequest;
-use kafka_protocol::messages::describe_cluster_response::DescribeClusterBroker;
-use kafka_protocol::messages::BrokerId;
-use kafka_protocol::messages::DescribeClusterResponse;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::describe_cluster_request::DescribeClusterRequest;
+use heimq_protocol::messages::describe_cluster_response::DescribeClusterBroker;
+use heimq_protocol::messages::BrokerId;
+use heimq_protocol::messages::DescribeClusterResponse;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 
 pub fn handle(
     api_version: i16,

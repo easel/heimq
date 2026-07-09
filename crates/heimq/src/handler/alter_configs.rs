@@ -8,10 +8,10 @@
 use crate::config_store::ConfigStore;
 use crate::error::Result;
 use bytes::Bytes;
-use kafka_protocol::messages::alter_configs_request::AlterConfigsRequest;
-use kafka_protocol::messages::alter_configs_response::AlterConfigsResourceResponse;
-use kafka_protocol::messages::AlterConfigsResponse;
-use kafka_protocol::protocol::Decodable;
+use heimq_protocol::messages::alter_configs_request::AlterConfigsRequest;
+use heimq_protocol::messages::alter_configs_response::AlterConfigsResourceResponse;
+use heimq_protocol::messages::AlterConfigsResponse;
+use heimq_protocol::protocol::Decodable;
 
 const RESOURCE_TYPE_TOPIC: i8 = 2;
 

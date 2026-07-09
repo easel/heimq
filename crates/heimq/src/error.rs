@@ -1,6 +1,6 @@
 //! Error types for heimq
 
-use kafka_protocol::protocol::StrBytes;
+use heimq_protocol::protocol::StrBytes;
 
 // Re-export core error types from heimq-broker so all crates use one error type.
 pub use heimq_broker::error::{HeimqError, Result};

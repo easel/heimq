@@ -8,10 +8,10 @@
 use crate::config_store::{ConfigStore, IncrementalOp};
 use crate::error::Result;
 use bytes::Bytes;
-use kafka_protocol::messages::incremental_alter_configs_request::IncrementalAlterConfigsRequest;
-use kafka_protocol::messages::incremental_alter_configs_response::AlterConfigsResourceResponse;
-use kafka_protocol::messages::IncrementalAlterConfigsResponse;
-use kafka_protocol::protocol::Decodable;
+use heimq_protocol::messages::incremental_alter_configs_request::IncrementalAlterConfigsRequest;
+use heimq_protocol::messages::incremental_alter_configs_response::AlterConfigsResourceResponse;
+use heimq_protocol::messages::IncrementalAlterConfigsResponse;
+use heimq_protocol::protocol::Decodable;
 
 const RESOURCE_TYPE_TOPIC: i8 = 2;
 

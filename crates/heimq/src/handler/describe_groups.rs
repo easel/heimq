@@ -4,10 +4,10 @@ use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::storage::RequestContext;
 use bytes::Bytes;
-use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
-use kafka_protocol::messages::describe_groups_response::{DescribedGroup, DescribedGroupMember};
-use kafka_protocol::messages::DescribeGroupsResponse;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::describe_groups_request::DescribeGroupsRequest;
+use heimq_protocol::messages::describe_groups_response::{DescribedGroup, DescribedGroupMember};
+use heimq_protocol::messages::DescribeGroupsResponse;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 
 pub fn handle(
     api_version: i16,
@@ -40,7 +40,7 @@ pub fn handle_with_context(
             Some(d) => {
                 let mut dg = DescribedGroup::default();
                 dg.group_id =
-                    kafka_protocol::messages::GroupId(StrBytes::from_string(d.group_id.clone()));
+                    heimq_protocol::messages::GroupId(StrBytes::from_string(d.group_id.clone()));
                 dg.group_state = StrBytes::from_string(d.group_state);
                 dg.protocol_type = StrBytes::from_string(d.protocol_type);
                 dg.protocol_data = StrBytes::from_string(d.protocol_name);
@@ -65,6 +65,6 @@ pub fn handle_with_context(
 fn error_group(group_id: &str, error_code: i16) -> DescribedGroup {
     let mut dg = DescribedGroup::default();
     dg.error_code = error_code;
-    dg.group_id = kafka_protocol::messages::GroupId(StrBytes::from_string(group_id.to_string()));
+    dg.group_id = heimq_protocol::messages::GroupId(StrBytes::from_string(group_id.to_string()));
     dg
 }

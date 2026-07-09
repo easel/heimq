@@ -4,10 +4,10 @@ use crate::consumer_group::GroupCoordinatorBackend;
 use crate::error::Result;
 use crate::storage::RequestContext;
 use bytes::Bytes;
-use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
-use kafka_protocol::messages::list_groups_response::ListedGroup;
-use kafka_protocol::messages::ListGroupsResponse;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::list_groups_request::ListGroupsRequest;
+use heimq_protocol::messages::list_groups_response::ListedGroup;
+use heimq_protocol::messages::ListGroupsResponse;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 
 pub fn handle(
     api_version: i16,
@@ -33,7 +33,7 @@ pub fn handle_with_context(
         let desc = coordinator.describe_group_with_context(ctx, &group_id);
         let protocol_type = desc.map(|d| d.protocol_type).unwrap_or_default();
         let mut listed = ListedGroup::default();
-        listed.group_id = kafka_protocol::messages::GroupId(StrBytes::from_string(group_id));
+        listed.group_id = heimq_protocol::messages::GroupId(StrBytes::from_string(group_id));
         listed.protocol_type = StrBytes::from_string(protocol_type);
         response.groups.push(listed);
     }

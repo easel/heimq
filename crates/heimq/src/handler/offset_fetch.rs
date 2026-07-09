@@ -3,13 +3,13 @@
 use crate::error::Result;
 use crate::storage::{OffsetStore, RequestContext};
 use bytes::Bytes;
-use kafka_protocol::messages::offset_fetch_request::OffsetFetchRequest;
-use kafka_protocol::messages::offset_fetch_response::{
+use heimq_protocol::messages::offset_fetch_request::OffsetFetchRequest;
+use heimq_protocol::messages::offset_fetch_response::{
     OffsetFetchResponseGroup, OffsetFetchResponsePartition, OffsetFetchResponsePartitions,
     OffsetFetchResponseTopic, OffsetFetchResponseTopics,
 };
-use kafka_protocol::messages::{GroupId, OffsetFetchResponse, TopicName};
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::{GroupId, OffsetFetchResponse, TopicName};
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
 pub fn handle(
@@ -72,7 +72,7 @@ pub fn handle_with_context(
 
 fn build_group_topics_v8(
     group_id: &str,
-    topics: Option<&[kafka_protocol::messages::offset_fetch_request::OffsetFetchRequestTopics]>,
+    topics: Option<&[heimq_protocol::messages::offset_fetch_request::OffsetFetchRequestTopics]>,
     offset_store: &Arc<dyn OffsetStore>,
     ctx: &RequestContext,
     resp_group: &mut OffsetFetchResponseGroup,

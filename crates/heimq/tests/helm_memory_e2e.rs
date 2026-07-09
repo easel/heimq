@@ -8,11 +8,11 @@
 use anyhow::{anyhow, bail, Context, Result};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use heimq::protocol::is_flexible;
-use kafka_protocol::messages::incremental_alter_configs_request::{
+use heimq_protocol::messages::incremental_alter_configs_request::{
     AlterConfigsResource, AlterableConfig, IncrementalAlterConfigsRequest,
 };
-use kafka_protocol::messages::incremental_alter_configs_response::IncrementalAlterConfigsResponse;
-use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
+use heimq_protocol::messages::incremental_alter_configs_response::IncrementalAlterConfigsResponse;
+use heimq_protocol::protocol::{Decodable, Encodable, StrBytes};
 use rdkafka::admin::{AdminClient, AdminOptions, NewTopic, TopicReplication};
 use rdkafka::client::DefaultClientContext;
 use rdkafka::consumer::{BaseConsumer, Consumer};

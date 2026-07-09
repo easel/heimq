@@ -5,12 +5,12 @@
 
 use crate::error::Result;
 use bytes::Bytes;
-use kafka_protocol::messages::elect_leaders_request::ElectLeadersRequest;
-use kafka_protocol::messages::elect_leaders_response::{
+use heimq_protocol::messages::elect_leaders_request::ElectLeadersRequest;
+use heimq_protocol::messages::elect_leaders_response::{
     ElectLeadersResponse, PartitionResult, ReplicaElectionResult,
 };
-use kafka_protocol::messages::TopicName;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::TopicName;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 
 pub fn handle(api_version: i16, body: &[u8]) -> Result<ElectLeadersResponse> {
     let mut buf = Bytes::copy_from_slice(body);

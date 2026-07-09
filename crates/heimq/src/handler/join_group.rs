@@ -4,10 +4,10 @@ use crate::consumer_group::{GroupCoordinatorBackend, JoinRequest};
 use crate::error::Result;
 use crate::storage::RequestContext;
 use bytes::Bytes;
-use kafka_protocol::messages::join_group_request::JoinGroupRequest;
-use kafka_protocol::messages::join_group_response::JoinGroupResponseMember;
-use kafka_protocol::messages::JoinGroupResponse;
-use kafka_protocol::protocol::{Decodable, StrBytes};
+use heimq_protocol::messages::join_group_request::JoinGroupRequest;
+use heimq_protocol::messages::join_group_response::JoinGroupResponseMember;
+use heimq_protocol::messages::JoinGroupResponse;
+use heimq_protocol::protocol::{Decodable, StrBytes};
 use tracing::debug;
 
 pub fn handle(

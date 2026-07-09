@@ -4,10 +4,10 @@ use crate::error::Result;
 use crate::storage::{LogBackend, OffsetStore};
 use crate::transaction_state::TransactionManager;
 use bytes::{Bytes, BytesMut};
-use kafka_protocol::messages::end_txn_request::EndTxnRequest;
-use kafka_protocol::messages::end_txn_response::EndTxnResponse;
-use kafka_protocol::protocol::Decodable;
-use kafka_protocol::records::{
+use heimq_protocol::messages::end_txn_request::EndTxnRequest;
+use heimq_protocol::messages::end_txn_response::EndTxnResponse;
+use heimq_protocol::protocol::Decodable;
+use heimq_protocol::records::{
     Compression, Record, RecordBatchEncoder, RecordEncodeOptions, TimestampType,
 };
 use std::sync::Arc;

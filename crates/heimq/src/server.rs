@@ -318,9 +318,9 @@ mod tests {
     use crate::test_support::{init_tracing, test_config, test_consumer_groups, test_storage};
     use bytes::{Buf, BufMut, BytesMut};
     use clap::Parser;
+    use heimq_protocol::messages::api_versions_request::ApiVersionsRequest;
+    use heimq_protocol::protocol::Encodable;
     use heimq_wire::{make_error_frame, peek_correlation_id, serve_connection, MAX_FRAME_BYTES};
-    use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
-    use kafka_protocol::protocol::Encodable;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::io::ReadBuf;

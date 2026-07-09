@@ -8,67 +8,67 @@
 use bytes::{Buf, BufMut, BytesMut};
 use heimq::protocol::{is_flexible, SUPPORTED_APIS};
 use heimq::test_support::{unique_group, unique_topic, TestServer};
-use kafka_protocol::messages::api_versions_request::ApiVersionsRequest;
-use kafka_protocol::messages::api_versions_response::ApiVersionsResponse;
-use kafka_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
-use kafka_protocol::messages::create_topics_response::CreateTopicsResponse;
-use kafka_protocol::messages::delete_groups_request::DeleteGroupsRequest;
-use kafka_protocol::messages::delete_groups_response::DeleteGroupsResponse;
-use kafka_protocol::messages::delete_topics_request::DeleteTopicsRequest;
-use kafka_protocol::messages::delete_topics_response::DeleteTopicsResponse;
-use kafka_protocol::messages::describe_cluster_request::DescribeClusterRequest;
-use kafka_protocol::messages::describe_cluster_response::DescribeClusterResponse;
-use kafka_protocol::messages::describe_topic_partitions_request::{
+use heimq_protocol::messages::api_versions_request::ApiVersionsRequest;
+use heimq_protocol::messages::api_versions_response::ApiVersionsResponse;
+use heimq_protocol::messages::create_topics_request::{CreatableTopic, CreateTopicsRequest};
+use heimq_protocol::messages::create_topics_response::CreateTopicsResponse;
+use heimq_protocol::messages::delete_groups_request::DeleteGroupsRequest;
+use heimq_protocol::messages::delete_groups_response::DeleteGroupsResponse;
+use heimq_protocol::messages::delete_topics_request::DeleteTopicsRequest;
+use heimq_protocol::messages::delete_topics_response::DeleteTopicsResponse;
+use heimq_protocol::messages::describe_cluster_request::DescribeClusterRequest;
+use heimq_protocol::messages::describe_cluster_response::DescribeClusterResponse;
+use heimq_protocol::messages::describe_topic_partitions_request::{
     DescribeTopicPartitionsRequest, TopicRequest,
 };
-use kafka_protocol::messages::describe_topic_partitions_response::DescribeTopicPartitionsResponse;
-use kafka_protocol::messages::elect_leaders_request::{
+use heimq_protocol::messages::describe_topic_partitions_response::DescribeTopicPartitionsResponse;
+use heimq_protocol::messages::elect_leaders_request::{
     ElectLeadersRequest, TopicPartitions as ElectLeadersTopicPartitions,
 };
-use kafka_protocol::messages::elect_leaders_response::ElectLeadersResponse;
-use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
-use kafka_protocol::messages::fetch_response::FetchResponse;
-use kafka_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
-use kafka_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
-use kafka_protocol::messages::heartbeat_request::HeartbeatRequest;
-use kafka_protocol::messages::heartbeat_response::HeartbeatResponse;
-use kafka_protocol::messages::incremental_alter_configs_request::{
+use heimq_protocol::messages::elect_leaders_response::ElectLeadersResponse;
+use heimq_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+use heimq_protocol::messages::fetch_response::FetchResponse;
+use heimq_protocol::messages::find_coordinator_request::FindCoordinatorRequest;
+use heimq_protocol::messages::find_coordinator_response::FindCoordinatorResponse;
+use heimq_protocol::messages::heartbeat_request::HeartbeatRequest;
+use heimq_protocol::messages::heartbeat_response::HeartbeatResponse;
+use heimq_protocol::messages::incremental_alter_configs_request::{
     AlterConfigsResource, AlterableConfig, IncrementalAlterConfigsRequest,
 };
-use kafka_protocol::messages::incremental_alter_configs_response::IncrementalAlterConfigsResponse;
-use kafka_protocol::messages::join_group_request::{JoinGroupRequest, JoinGroupRequestProtocol};
-use kafka_protocol::messages::join_group_response::JoinGroupResponse;
-use kafka_protocol::messages::leave_group_request::LeaveGroupRequest;
-use kafka_protocol::messages::leave_group_response::LeaveGroupResponse;
-use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
-use kafka_protocol::messages::list_groups_response::ListGroupsResponse;
-use kafka_protocol::messages::list_offsets_request::{
+use heimq_protocol::messages::incremental_alter_configs_response::IncrementalAlterConfigsResponse;
+use heimq_protocol::messages::join_group_request::{JoinGroupRequest, JoinGroupRequestProtocol};
+use heimq_protocol::messages::join_group_response::JoinGroupResponse;
+use heimq_protocol::messages::leave_group_request::LeaveGroupRequest;
+use heimq_protocol::messages::leave_group_response::LeaveGroupResponse;
+use heimq_protocol::messages::list_groups_request::ListGroupsRequest;
+use heimq_protocol::messages::list_groups_response::ListGroupsResponse;
+use heimq_protocol::messages::list_offsets_request::{
     ListOffsetsPartition, ListOffsetsRequest, ListOffsetsTopic,
 };
-use kafka_protocol::messages::list_offsets_response::ListOffsetsResponse;
-use kafka_protocol::messages::list_transactions_request::ListTransactionsRequest;
-use kafka_protocol::messages::list_transactions_response::ListTransactionsResponse;
-use kafka_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
-use kafka_protocol::messages::metadata_response::MetadataResponse;
-use kafka_protocol::messages::offset_commit_request::{
+use heimq_protocol::messages::list_offsets_response::ListOffsetsResponse;
+use heimq_protocol::messages::list_transactions_request::ListTransactionsRequest;
+use heimq_protocol::messages::list_transactions_response::ListTransactionsResponse;
+use heimq_protocol::messages::metadata_request::{MetadataRequest, MetadataRequestTopic};
+use heimq_protocol::messages::metadata_response::MetadataResponse;
+use heimq_protocol::messages::offset_commit_request::{
     OffsetCommitRequest, OffsetCommitRequestPartition, OffsetCommitRequestTopic,
 };
-use kafka_protocol::messages::offset_commit_response::OffsetCommitResponse;
-use kafka_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
-use kafka_protocol::messages::offset_fetch_response::OffsetFetchResponse;
-use kafka_protocol::messages::offset_for_leader_epoch_request::{
+use heimq_protocol::messages::offset_commit_response::OffsetCommitResponse;
+use heimq_protocol::messages::offset_fetch_request::{OffsetFetchRequest, OffsetFetchRequestTopic};
+use heimq_protocol::messages::offset_fetch_response::OffsetFetchResponse;
+use heimq_protocol::messages::offset_for_leader_epoch_request::{
     OffsetForLeaderEpochRequest, OffsetForLeaderPartition, OffsetForLeaderTopic,
 };
-use kafka_protocol::messages::offset_for_leader_epoch_response::OffsetForLeaderEpochResponse;
-use kafka_protocol::messages::produce_request::{
+use heimq_protocol::messages::offset_for_leader_epoch_response::OffsetForLeaderEpochResponse;
+use heimq_protocol::messages::produce_request::{
     PartitionProduceData, ProduceRequest, TopicProduceData,
 };
-use kafka_protocol::messages::produce_response::ProduceResponse;
-use kafka_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
-use kafka_protocol::messages::sync_group_response::SyncGroupResponse;
-use kafka_protocol::messages::{BrokerId, GroupId, TopicName};
-use kafka_protocol::protocol::{Decodable, Encodable, StrBytes};
-use kafka_protocol::records::{
+use heimq_protocol::messages::produce_response::ProduceResponse;
+use heimq_protocol::messages::sync_group_request::{SyncGroupRequest, SyncGroupRequestAssignment};
+use heimq_protocol::messages::sync_group_response::SyncGroupResponse;
+use heimq_protocol::messages::{BrokerId, GroupId, TopicName};
+use heimq_protocol::protocol::{Decodable, Encodable, StrBytes};
+use heimq_protocol::records::{
     Compression, Record, RecordBatchDecoder, RecordBatchEncoder, RecordEncodeOptions, TimestampType,
 };
 use std::io::{Read, Write};
@@ -1152,8 +1152,8 @@ fn new_idempotent_record(offset: i64, producer_id: i64, producer_epoch: i16) -> 
 // @covers US-003-AC1
 #[test]
 fn contract_init_producer_id_returns_valid_id() {
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
 
     let server = TestServer::start();
     let request = InitProducerIdRequest::default();
@@ -1181,8 +1181,8 @@ fn contract_out_of_order_sequence_returns_error() {
     let server = TestServer::start();
     let topic = unique_topic("contract-idempotent-ooo");
 
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
 
     // Get a producer ID.
     let pid_resp: InitProducerIdResponse =
@@ -1235,14 +1235,14 @@ fn contract_out_of_order_sequence_returns_error() {
 // @covers US-004-AC1
 #[test]
 fn contract_init_producer_id_with_transactional_id() {
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
 
     let mut request = InitProducerIdRequest::default();
-    request.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    request.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("test-txn-id-1".to_string()),
     ));
     request.transaction_timeout_ms = 60000;
@@ -1277,13 +1277,13 @@ fn contract_init_producer_id_with_transactional_id() {
 // @covers US-004-AC2 US-004-AC9
 #[test]
 fn contract_add_partitions_to_txn_basic() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{
+    use heimq_protocol::messages::add_partitions_to_txn_request::{
         AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
     };
-    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-txn-partitions");
@@ -1291,7 +1291,7 @@ fn contract_add_partitions_to_txn_basic() {
 
     // Init transactional producer
     let mut init_req = InitProducerIdRequest::default();
-    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    init_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-add-parts".to_string()),
     ));
     init_req.transaction_timeout_ms = 60000;
@@ -1306,7 +1306,7 @@ fn contract_add_partitions_to_txn_basic() {
     add_topic.partitions = vec![0];
 
     let mut add_req = AddPartitionsToTxnRequest::default();
-    add_req.v3_and_below_transactional_id = kafka_protocol::messages::TransactionalId(
+    add_req.v3_and_below_transactional_id = heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-add-parts".to_string()),
     );
     add_req.v3_and_below_producer_id = producer_id;
@@ -1323,16 +1323,16 @@ fn contract_add_partitions_to_txn_basic() {
 // @covers US-004 EndTxn basic flow
 #[test]
 fn contract_end_txn_basic() {
-    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
-    use kafka_protocol::messages::end_txn_response::EndTxnResponse;
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::end_txn_request::EndTxnRequest;
+    use heimq_protocol::messages::end_txn_response::EndTxnResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
 
     let mut init_req = InitProducerIdRequest::default();
-    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    init_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-end-basic".to_string()),
     ));
     init_req.transaction_timeout_ms = 60000;
@@ -1340,7 +1340,7 @@ fn contract_end_txn_basic() {
     assert_eq!(init_resp.error_code, 0);
 
     let mut end_req = EndTxnRequest::default();
-    end_req.transactional_id = kafka_protocol::messages::TransactionalId(StrBytes::from_string(
+    end_req.transactional_id = heimq_protocol::messages::TransactionalId(StrBytes::from_string(
         "txn-end-basic".to_string(),
     ));
     end_req.producer_id = init_resp.producer_id;
@@ -1354,16 +1354,16 @@ fn contract_end_txn_basic() {
 // @covers US-004 AddOffsetsToTxn basic flow
 #[test]
 fn contract_add_offsets_to_txn_basic() {
-    use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
-    use kafka_protocol::messages::add_offsets_to_txn_response::AddOffsetsToTxnResponse;
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+    use heimq_protocol::messages::add_offsets_to_txn_response::AddOffsetsToTxnResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
 
     let mut init_req = InitProducerIdRequest::default();
-    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    init_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-add-offsets".to_string()),
     ));
     init_req.transaction_timeout_ms = 60000;
@@ -1371,13 +1371,13 @@ fn contract_add_offsets_to_txn_basic() {
     assert_eq!(init_resp.error_code, 0);
 
     let mut req = AddOffsetsToTxnRequest::default();
-    req.transactional_id = kafka_protocol::messages::TransactionalId(StrBytes::from_string(
+    req.transactional_id = heimq_protocol::messages::TransactionalId(StrBytes::from_string(
         "txn-add-offsets".to_string(),
     ));
     req.producer_id = init_resp.producer_id;
     req.producer_epoch = init_resp.producer_epoch;
     req.group_id =
-        kafka_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
+        heimq_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
 
     let resp: AddOffsetsToTxnResponse = send_request(&server, 25, 0, &req);
     assert_eq!(resp.error_code, 0, "AddOffsetsToTxn should succeed");
@@ -1386,22 +1386,22 @@ fn contract_add_offsets_to_txn_basic() {
 // @covers US-004 TxnOffsetCommit basic flow
 #[test]
 fn contract_txn_offset_commit_basic() {
-    use kafka_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
-    use kafka_protocol::messages::add_offsets_to_txn_response::AddOffsetsToTxnResponse;
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::messages::txn_offset_commit_request::{
+    use heimq_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
+    use heimq_protocol::messages::add_offsets_to_txn_response::AddOffsetsToTxnResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::messages::txn_offset_commit_request::{
         TxnOffsetCommitRequest, TxnOffsetCommitRequestPartition, TxnOffsetCommitRequestTopic,
     };
-    use kafka_protocol::messages::txn_offset_commit_response::TxnOffsetCommitResponse;
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::txn_offset_commit_response::TxnOffsetCommitResponse;
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-txn-offset");
     create_topic(&server, &topic, 1);
 
     let mut init_req = InitProducerIdRequest::default();
-    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    init_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-offset-commit".to_string()),
     ));
     init_req.transaction_timeout_ms = 60000;
@@ -1410,13 +1410,13 @@ fn contract_txn_offset_commit_basic() {
 
     // AddOffsetsToTxn moves the transaction to Ongoing, required before TxnOffsetCommit.
     let mut add_offsets_req = AddOffsetsToTxnRequest::default();
-    add_offsets_req.transactional_id = kafka_protocol::messages::TransactionalId(
+    add_offsets_req.transactional_id = heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-offset-commit".to_string()),
     );
     add_offsets_req.producer_id = init_resp.producer_id;
     add_offsets_req.producer_epoch = init_resp.producer_epoch;
     add_offsets_req.group_id =
-        kafka_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
+        heimq_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
     let add_offsets_resp: AddOffsetsToTxnResponse = send_request(&server, 25, 0, &add_offsets_req);
     assert_eq!(
         add_offsets_resp.error_code, 0,
@@ -1432,11 +1432,11 @@ fn contract_txn_offset_commit_basic() {
     txn_topic.partitions = vec![part];
 
     let mut req = TxnOffsetCommitRequest::default();
-    req.transactional_id = kafka_protocol::messages::TransactionalId(StrBytes::from_string(
+    req.transactional_id = heimq_protocol::messages::TransactionalId(StrBytes::from_string(
         "txn-offset-commit".to_string(),
     ));
     req.group_id =
-        kafka_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
+        heimq_protocol::messages::GroupId(StrBytes::from_string("test-group".to_string()));
     req.producer_id = init_resp.producer_id;
     req.producer_epoch = init_resp.producer_epoch;
     req.topics = vec![txn_topic];
@@ -1451,13 +1451,13 @@ fn contract_txn_offset_commit_basic() {
 // @covers US-004 WriteTxnMarkers basic flow
 #[test]
 fn contract_write_txn_markers_basic() {
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::messages::write_txn_markers_request::{
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::messages::write_txn_markers_request::{
         WritableTxnMarker, WritableTxnMarkerTopic, WriteTxnMarkersRequest,
     };
-    use kafka_protocol::messages::write_txn_markers_response::WriteTxnMarkersResponse;
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::write_txn_markers_response::WriteTxnMarkersResponse;
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-txn-markers");
@@ -1490,18 +1490,18 @@ fn contract_write_txn_markers_basic() {
 // @covers US-004-AC6
 #[test]
 fn contract_transactional_produce_commit_fetch() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{
+    use heimq_protocol::messages::add_partitions_to_txn_request::{
         AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
     };
-    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
-    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
-    use kafka_protocol::messages::end_txn_response::EndTxnResponse;
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
-    use kafka_protocol::messages::ProduceRequest;
-    use kafka_protocol::messages::ProduceResponse;
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use heimq_protocol::messages::end_txn_request::EndTxnRequest;
+    use heimq_protocol::messages::end_txn_response::EndTxnResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
+    use heimq_protocol::messages::ProduceRequest;
+    use heimq_protocol::messages::ProduceResponse;
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-txn-e2e");
@@ -1509,7 +1509,7 @@ fn contract_transactional_produce_commit_fetch() {
 
     // Step 1: InitProducerId
     let mut init_req = InitProducerIdRequest::default();
-    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    init_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-e2e".to_string()),
     ));
     init_req.transaction_timeout_ms = 60000;
@@ -1525,7 +1525,7 @@ fn contract_transactional_produce_commit_fetch() {
 
     let mut add_req = AddPartitionsToTxnRequest::default();
     add_req.v3_and_below_transactional_id =
-        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-e2e".to_string()));
+        heimq_protocol::messages::TransactionalId(StrBytes::from_string("txn-e2e".to_string()));
     add_req.v3_and_below_producer_id = init_resp.producer_id;
     add_req.v3_and_below_producer_epoch = epoch;
     add_req.v3_and_below_topics = vec![add_topic];
@@ -1574,7 +1574,7 @@ fn contract_transactional_produce_commit_fetch() {
     let mut produce_req = ProduceRequest::default();
     produce_req.acks = 1;
     produce_req.timeout_ms = 1000;
-    produce_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    produce_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-e2e".to_string()),
     ));
     produce_req.topic_data = vec![topic_data];
@@ -1589,7 +1589,7 @@ fn contract_transactional_produce_commit_fetch() {
     // Step 4: EndTxn (commit)
     let mut end_req = EndTxnRequest::default();
     end_req.transactional_id =
-        kafka_protocol::messages::TransactionalId(StrBytes::from_string("txn-e2e".to_string()));
+        heimq_protocol::messages::TransactionalId(StrBytes::from_string("txn-e2e".to_string()));
     end_req.producer_id = init_resp.producer_id;
     end_req.producer_epoch = epoch;
     end_req.committed = true;
@@ -1629,8 +1629,8 @@ fn contract_transactional_produce_commit_fetch() {
 // @covers US-003-AC3 (duplicate retry is de-duplicated)
 #[test]
 fn contract_duplicate_sequence_is_deduplicated() {
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-idempotent-dup");
@@ -1685,20 +1685,20 @@ fn contract_duplicate_sequence_is_deduplicated() {
 // @covers US-004 (stale producer epoch fencing)
 #[test]
 fn contract_stale_epoch_returns_invalid_producer_epoch() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{
+    use heimq_protocol::messages::add_partitions_to_txn_request::{
         AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
     };
-    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-stale-epoch");
     create_topic(&server, &topic, 1);
 
     let mut init_req = InitProducerIdRequest::default();
-    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    init_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-stale-epoch".to_string()),
     ));
     init_req.transaction_timeout_ms = 60000;
@@ -1720,7 +1720,7 @@ fn contract_stale_epoch_returns_invalid_producer_epoch() {
     add_topic.partitions = vec![0];
 
     let mut add_req = AddPartitionsToTxnRequest::default();
-    add_req.v3_and_below_transactional_id = kafka_protocol::messages::TransactionalId(
+    add_req.v3_and_below_transactional_id = heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-stale-epoch".to_string()),
     );
     add_req.v3_and_below_producer_id = resp0.producer_id;
@@ -1738,16 +1738,16 @@ fn contract_stale_epoch_returns_invalid_producer_epoch() {
 // @covers US-004 (aborted transaction invisible to read_committed)
 #[test]
 fn contract_aborted_transaction_invisible_to_read_committed() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{
+    use heimq_protocol::messages::add_partitions_to_txn_request::{
         AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
     };
-    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
-    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
-    use kafka_protocol::messages::end_txn_response::EndTxnResponse;
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use heimq_protocol::messages::end_txn_request::EndTxnRequest;
+    use heimq_protocol::messages::end_txn_response::EndTxnResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-txn-abort");
@@ -1755,7 +1755,7 @@ fn contract_aborted_transaction_invisible_to_read_committed() {
 
     // InitProducerId
     let mut init_req = InitProducerIdRequest::default();
-    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    init_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-abort-test".to_string()),
     ));
     init_req.transaction_timeout_ms = 60000;
@@ -1769,7 +1769,7 @@ fn contract_aborted_transaction_invisible_to_read_committed() {
     add_topic.name = TopicName(StrBytes::from_string(topic.clone()));
     add_topic.partitions = vec![0];
     let mut add_req = AddPartitionsToTxnRequest::default();
-    add_req.v3_and_below_transactional_id = kafka_protocol::messages::TransactionalId(
+    add_req.v3_and_below_transactional_id = heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-abort-test".to_string()),
     );
     add_req.v3_and_below_producer_id = init_resp.producer_id;
@@ -1816,7 +1816,7 @@ fn contract_aborted_transaction_invisible_to_read_committed() {
     let mut produce_req = ProduceRequest::default();
     produce_req.acks = 1;
     produce_req.timeout_ms = 1000;
-    produce_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    produce_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-abort-test".to_string()),
     ));
     produce_req.topic_data = vec![tdata];
@@ -1828,7 +1828,7 @@ fn contract_aborted_transaction_invisible_to_read_committed() {
 
     // EndTxn with committed=false (ABORT)
     let mut end_req = EndTxnRequest::default();
-    end_req.transactional_id = kafka_protocol::messages::TransactionalId(StrBytes::from_string(
+    end_req.transactional_id = heimq_protocol::messages::TransactionalId(StrBytes::from_string(
         "txn-abort-test".to_string(),
     ));
     end_req.producer_id = init_resp.producer_id;
@@ -1871,16 +1871,16 @@ fn contract_aborted_transaction_invisible_to_read_committed() {
 // @covers US-004
 #[test]
 fn contract_read_uncommitted_observes_aborted_records() {
-    use kafka_protocol::messages::add_partitions_to_txn_request::{
+    use heimq_protocol::messages::add_partitions_to_txn_request::{
         AddPartitionsToTxnRequest, AddPartitionsToTxnTopic,
     };
-    use kafka_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
-    use kafka_protocol::messages::end_txn_request::EndTxnRequest;
-    use kafka_protocol::messages::end_txn_response::EndTxnResponse;
-    use kafka_protocol::messages::init_producer_id_request::InitProducerIdRequest;
-    use kafka_protocol::messages::init_producer_id_response::InitProducerIdResponse;
-    use kafka_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
-    use kafka_protocol::protocol::StrBytes;
+    use heimq_protocol::messages::add_partitions_to_txn_response::AddPartitionsToTxnResponse;
+    use heimq_protocol::messages::end_txn_request::EndTxnRequest;
+    use heimq_protocol::messages::end_txn_response::EndTxnResponse;
+    use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
+    use heimq_protocol::messages::init_producer_id_response::InitProducerIdResponse;
+    use heimq_protocol::messages::produce_request::{PartitionProduceData, TopicProduceData};
+    use heimq_protocol::protocol::StrBytes;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-txn-read-uncommitted");
@@ -1888,7 +1888,7 @@ fn contract_read_uncommitted_observes_aborted_records() {
 
     // InitProducerId
     let mut init_req = InitProducerIdRequest::default();
-    init_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    init_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-uncommitted-test".to_string()),
     ));
     init_req.transaction_timeout_ms = 60000;
@@ -1902,7 +1902,7 @@ fn contract_read_uncommitted_observes_aborted_records() {
     add_topic.name = TopicName(StrBytes::from_string(topic.clone()));
     add_topic.partitions = vec![0];
     let mut add_req = AddPartitionsToTxnRequest::default();
-    add_req.v3_and_below_transactional_id = kafka_protocol::messages::TransactionalId(
+    add_req.v3_and_below_transactional_id = heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-uncommitted-test".to_string()),
     );
     add_req.v3_and_below_producer_id = init_resp.producer_id;
@@ -1949,7 +1949,7 @@ fn contract_read_uncommitted_observes_aborted_records() {
     let mut produce_req = ProduceRequest::default();
     produce_req.acks = 1;
     produce_req.timeout_ms = 1000;
-    produce_req.transactional_id = Some(kafka_protocol::messages::TransactionalId(
+    produce_req.transactional_id = Some(heimq_protocol::messages::TransactionalId(
         StrBytes::from_string("txn-uncommitted-test".to_string()),
     ));
     produce_req.topic_data = vec![tdata];
@@ -1961,7 +1961,7 @@ fn contract_read_uncommitted_observes_aborted_records() {
 
     // EndTxn ABORT
     let mut end_req = EndTxnRequest::default();
-    end_req.transactional_id = kafka_protocol::messages::TransactionalId(StrBytes::from_string(
+    end_req.transactional_id = heimq_protocol::messages::TransactionalId(StrBytes::from_string(
         "txn-uncommitted-test".to_string(),
     ));
     end_req.producer_id = init_resp.producer_id;
@@ -2070,8 +2070,8 @@ fn contract_session_timeout_evicts_member() {
 /// waits at least half that duration before returning an empty response.
 #[test]
 fn contract_fetch_long_poll_waits_on_empty_partition() {
-    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
-    use kafka_protocol::messages::fetch_response::FetchResponse;
+    use heimq_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+    use heimq_protocol::messages::fetch_response::FetchResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-long-poll");
@@ -2122,10 +2122,10 @@ fn contract_fetch_long_poll_waits_on_empty_partition() {
 /// before the new LSO returns OFFSET_OUT_OF_RANGE (error code 1).
 #[test]
 fn contract_delete_records_advances_lso() {
-    use kafka_protocol::messages::delete_records_request::{
+    use heimq_protocol::messages::delete_records_request::{
         DeleteRecordsPartition, DeleteRecordsRequest, DeleteRecordsTopic,
     };
-    use kafka_protocol::messages::delete_records_response::DeleteRecordsResponse;
+    use heimq_protocol::messages::delete_records_response::DeleteRecordsResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-delete-records");
@@ -2228,10 +2228,10 @@ fn contract_delete_records_advances_lso() {
 /// with the correct topic/partition structure.
 #[test]
 fn contract_describe_log_dirs_returns_memory_dir() {
-    use kafka_protocol::messages::describe_log_dirs_request::{
+    use heimq_protocol::messages::describe_log_dirs_request::{
         DescribableLogDirTopic as ReqTopic, DescribeLogDirsRequest,
     };
-    use kafka_protocol::messages::describe_log_dirs_response::DescribeLogDirsResponse;
+    use heimq_protocol::messages::describe_log_dirs_response::DescribeLogDirsResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-logdirs");
@@ -2269,10 +2269,10 @@ fn contract_describe_log_dirs_returns_memory_dir() {
 /// that the new count is visible in Metadata.
 #[test]
 fn contract_create_partitions_increases_count() {
-    use kafka_protocol::messages::create_partitions_request::{
+    use heimq_protocol::messages::create_partitions_request::{
         CreatePartitionsRequest, CreatePartitionsTopic,
     };
-    use kafka_protocol::messages::create_partitions_response::CreatePartitionsResponse;
+    use heimq_protocol::messages::create_partitions_response::CreatePartitionsResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-create-parts");
@@ -2324,10 +2324,10 @@ fn contract_create_partitions_increases_count() {
 /// a subsequent OffsetFetch returns offset -1 (no committed offset).
 #[test]
 fn contract_offset_delete_clears_committed_offset() {
-    use kafka_protocol::messages::offset_delete_request::{
+    use heimq_protocol::messages::offset_delete_request::{
         OffsetDeleteRequest, OffsetDeleteRequestPartition, OffsetDeleteRequestTopic,
     };
-    use kafka_protocol::messages::offset_delete_response::OffsetDeleteResponse;
+    use heimq_protocol::messages::offset_delete_response::OffsetDeleteResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-offset-del");
@@ -2497,10 +2497,10 @@ fn contract_produce_acks0_no_response_sent() {
 /// topic resource and that the response carries no error code.
 #[test]
 fn contract_describe_configs_returns_topic_configs() {
-    use kafka_protocol::messages::describe_configs_request::{
+    use heimq_protocol::messages::describe_configs_request::{
         DescribeConfigsRequest, DescribeConfigsResource,
     };
-    use kafka_protocol::messages::describe_configs_response::DescribeConfigsResponse;
+    use heimq_protocol::messages::describe_configs_response::DescribeConfigsResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-describe-cfg");
@@ -2539,8 +2539,8 @@ fn contract_describe_configs_returns_topic_configs() {
 
 #[test]
 fn contract_list_groups_returns_joined_group() {
-    use kafka_protocol::messages::list_groups_request::ListGroupsRequest;
-    use kafka_protocol::messages::list_groups_response::ListGroupsResponse;
+    use heimq_protocol::messages::list_groups_request::ListGroupsRequest;
+    use heimq_protocol::messages::list_groups_response::ListGroupsResponse;
 
     let server = TestServer::start();
     let group = unique_group("contract-list-groups");
@@ -2577,8 +2577,8 @@ fn contract_list_groups_returns_joined_group() {
 
 #[test]
 fn contract_describe_groups_active_member() {
-    use kafka_protocol::messages::describe_groups_request::DescribeGroupsRequest;
-    use kafka_protocol::messages::describe_groups_response::DescribeGroupsResponse;
+    use heimq_protocol::messages::describe_groups_request::DescribeGroupsRequest;
+    use heimq_protocol::messages::describe_groups_response::DescribeGroupsResponse;
 
     let server = TestServer::start();
     let group = unique_group("contract-describe-groups");
@@ -2636,10 +2636,10 @@ fn contract_describe_groups_active_member() {
 
 #[test]
 fn contract_alter_configs_no_op_success() {
-    use kafka_protocol::messages::alter_configs_request::{
+    use heimq_protocol::messages::alter_configs_request::{
         AlterConfigsRequest, AlterConfigsResource, AlterableConfig,
     };
-    use kafka_protocol::messages::alter_configs_response::AlterConfigsResponse;
+    use heimq_protocol::messages::alter_configs_response::AlterConfigsResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-alter-cfg");
@@ -2750,8 +2750,8 @@ fn contract_list_offsets_timestamp_returns_offset() {
 
 #[test]
 fn contract_fetch_long_poll_wakes_on_produce() {
-    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
-    use kafka_protocol::messages::fetch_response::FetchResponse;
+    use heimq_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+    use heimq_protocol::messages::fetch_response::FetchResponse;
     use std::sync::{Arc, Barrier};
 
     let server = Arc::new(TestServer::start());
@@ -2821,8 +2821,8 @@ fn contract_fetch_long_poll_wakes_on_produce() {
 
 #[test]
 fn contract_fetch_beyond_hwm_returns_empty() {
-    use kafka_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
-    use kafka_protocol::messages::fetch_response::FetchResponse;
+    use heimq_protocol::messages::fetch_request::{FetchPartition, FetchRequest, FetchTopic};
+    use heimq_protocol::messages::fetch_response::FetchResponse;
 
     let server = TestServer::start();
     let topic = unique_topic("contract-fetch-beyond-hwm");
@@ -2942,7 +2942,7 @@ fn contract_delete_groups_removes_group() {
 
     // DeleteGroups v0 (non-flexible) — should return error_code=0.
     let mut del_req = DeleteGroupsRequest::default();
-    del_req.groups_names = vec![kafka_protocol::messages::GroupId(StrBytes::from_string(
+    del_req.groups_names = vec![heimq_protocol::messages::GroupId(StrBytes::from_string(
         group.clone(),
     ))];
     let del_resp: DeleteGroupsResponse = send_request(&server, 42, 0, &del_req);
