@@ -29,7 +29,6 @@ bench = false
 # Keep the fuzz crate out of the parent workspace (cargo-fuzz convention).
 [workspace]
 
-# Same bounded-decode fork as the root workspace (see root Cargo.toml), so the
-# fuzzer exercises the patched kafka-protocol.
-[patch.crates-io]
-kafka-protocol = { git = "https://github.com/easel/kafka-protocol-rs", branch = "heimq-bound-array-capacity" }
+# No kafka-protocol patch needed: heimq and heimq-broker pull in the vendored
+# `heimq-protocol` crate (crates/heimq-protocol) by path, so the fuzzer already
+# exercises the patched, bounded-decode implementation.
