@@ -6,18 +6,33 @@
 //! metadata plus a borrowed iterator over records without losing access to
 //! the original bytes for fast-path pass-through.
 //!
-//! Construction decodes the batch via `kafka_protocol::records` (same entry
-//! point produce handlers will use) and caches the resulting `RecordSet`
-//! alongside the original `&[u8]`.
+//! Decoding is implemented here rather than delegated to `kafka-protocol` so
+//! that `heimq-broker` — the crate embedders depend on — carries no Kafka
+//! protocol crate in its public dependency tree. Embedders that link their own
+//! `kafka-protocol` (at whatever version) therefore never resolve a second,
+//! conflicting copy through us.
+//!
+//! Only v2 batches (`magic == 2`) are decoded. Legacy v0/v1 message sets are
+//! rejected, consistent with [`RecordBatchHeader::peek`] and
+//! [`stamp_base_offset`], which have always been v2-only.
 
 #![allow(dead_code)]
 
 use crate::error::{HeimqError, Result};
 use crate::storage::CompressionCodec;
 use bytes::Bytes;
-use kafka_protocol::records::{
-    Compression, Record, RecordBatchDecoder, RecordCompression, RecordSet,
-};
+use std::borrow::Cow;
+use std::io::Read;
+
+/// Byte length of the fixed v2 batch header, through `record_count`.
+const V2_HEADER_LEN: usize = 61;
+const MAGIC_V2: u8 = 2;
+/// The CRC covers everything from `attributes` to the end of the batch.
+const CRC_COVERAGE_START: usize = 21;
+
+fn proto(msg: impl Into<String>) -> HeimqError {
+    HeimqError::Protocol(msg.into())
+}
 
 /// Cheap, O(1) read of the fixed fields of a Kafka v2 RecordBatch header — the
 /// producer/transaction metadata that lives at constant offsets before the
@@ -44,7 +59,7 @@ impl RecordBatchHeader {
         // base_sequence(53..57) record_count(57..61) records...
         // Only valid for v2 batches (magic == 2); legacy v0/v1 message sets have a
         // different layout, so return None rather than reading garbage fields.
-        if raw.len() < 61 || raw.get(16) != Some(&2) {
+        if raw.len() < V2_HEADER_LEN || raw.get(16) != Some(&MAGIC_V2) {
             return None;
         }
         let attributes = i16::from_be_bytes([raw[21], raw[22]]);
@@ -71,11 +86,23 @@ impl RecordBatchHeader {
 /// Returns `false` and does nothing if `batch` is not a well-formed v2 batch
 /// header (shorter than the 61-byte fixed header, or `magic != 2`).
 pub fn stamp_base_offset(batch: &mut [u8], base_offset: i64) -> bool {
-    if batch.len() < 61 || batch.get(16) != Some(&2) {
+    if batch.len() < V2_HEADER_LEN || batch.get(16) != Some(&MAGIC_V2) {
         return false;
     }
     batch[0..8].copy_from_slice(&base_offset.to_be_bytes());
     true
+}
+
+/// A record decoded out of the (possibly compressed) records section.
+///
+/// Offsets and timestamps are stored as the wire-format deltas relative to the
+/// batch header's `base_offset` / `base_timestamp`.
+struct DecodedRecord {
+    offset_delta: i32,
+    timestamp_delta: i64,
+    key: Option<Bytes>,
+    value: Option<Bytes>,
+    headers: Vec<(String, Option<Bytes>)>,
 }
 
 /// Structured view of a single Kafka record batch.
@@ -88,14 +115,14 @@ pub struct RecordBatchView<'a> {
     raw: &'a [u8],
     producer_id: i64,
     producer_epoch: i16,
+    base_sequence: i32,
     base_offset: i64,
     base_timestamp: i64,
     max_timestamp: i64,
     is_transactional: bool,
     is_control: bool,
     compression: CompressionCodec,
-    record_count: usize,
-    records: Vec<Record>,
+    records: Vec<DecodedRecord>,
 }
 
 /// Borrowed view of a single record inside a `RecordBatchView`.
@@ -108,20 +135,19 @@ pub struct RecordView<'a> {
     pub timestamp_delta: i64,
     pub key: Option<&'a Bytes>,
     pub value: Option<&'a Bytes>,
-    record: &'a Record,
+    headers: &'a [(String, Option<Bytes>)],
 }
 
 impl<'a> RecordView<'a> {
     /// Iterate over the record's headers as `(name, value)` pairs.
     pub fn headers(&self) -> impl Iterator<Item = (&'a str, Option<&'a [u8]>)> + 'a {
-        self.record
-            .headers
+        self.headers
             .iter()
             .map(|(k, v)| (k.as_str(), v.as_ref().map(Bytes::as_ref)))
     }
 
     pub fn header_count(&self) -> usize {
-        self.record.headers.len()
+        self.headers.len()
     }
 }
 
@@ -132,56 +158,60 @@ impl<'a> RecordBatchView<'a> {
     /// it reflects what the producer sent (typically `0`) and will be rewritten
     /// by the log when the batch is actually appended.
     pub fn from_bytes(raw: &'a [u8]) -> Result<Self> {
-        let mut buf = Bytes::copy_from_slice(raw);
-        let set = RecordBatchDecoder::decode(&mut buf)
-            .map_err(|e| HeimqError::Protocol(format!("decode record batch: {e}")))?;
-        Self::from_raw_and_set(raw, set)
-    }
+        if raw.len() < V2_HEADER_LEN {
+            return Err(proto(format!(
+                "record batch too short: {} bytes, need at least {V2_HEADER_LEN}",
+                raw.len()
+            )));
+        }
+        if raw[16] != MAGIC_V2 {
+            return Err(proto(format!(
+                "unsupported record batch magic {}: heimq decodes v2 batches only",
+                raw[16]
+            )));
+        }
 
-    /// Build a view from an already-decoded `RecordSet` together with the
-    /// original bytes the set was decoded from.
-    pub fn from_raw_and_set(raw: &'a [u8], set: RecordSet) -> Result<Self> {
-        let compression = match set.compression {
-            RecordCompression::RecordBatch(c) => compression_to_codec(c),
-            RecordCompression::MessageSet => CompressionCodec::None,
-        };
+        // `batch_length` counts the bytes following it, i.e. from
+        // `partition_leader_epoch` at offset 12 to the end of the batch.
+        let batch_length = i32::from_be_bytes(raw[8..12].try_into().expect("4 bytes"));
+        let batch_end = usize::try_from(batch_length)
+            .ok()
+            .and_then(|n| n.checked_add(12))
+            .filter(|end| *end >= V2_HEADER_LEN && *end <= raw.len())
+            .ok_or_else(|| proto(format!("invalid batch_length {batch_length}")))?;
 
-        let record_count = set.records.len();
+        let expected_crc = u32::from_be_bytes(raw[17..21].try_into().expect("4 bytes"));
+        let actual_crc = crc32c::crc32c(&raw[CRC_COVERAGE_START..batch_end]);
+        if expected_crc != actual_crc {
+            return Err(proto(format!(
+                "record batch CRC mismatch: expected {expected_crc}, computed {actual_crc}"
+            )));
+        }
 
-        // Batch-level fields are identical across all records in the batch;
-        // take them from the first record, or fall back to sentinels when
-        // the batch is empty.
-        let (producer_id, producer_epoch, is_transactional, is_control) =
-            if let Some(first) = set.records.first() {
-                (
-                    first.producer_id,
-                    first.producer_epoch,
-                    first.transactional,
-                    first.control,
-                )
-            } else {
-                (-1, -1, false, false)
-            };
+        let attributes = i16::from_be_bytes([raw[21], raw[22]]);
+        let compression = compression_from_attributes(attributes)?;
+        let base_timestamp = i64::from_be_bytes(raw[27..35].try_into().expect("8 bytes"));
+        let max_timestamp = i64::from_be_bytes(raw[35..43].try_into().expect("8 bytes"));
+        let record_count = i32::from_be_bytes(raw[57..61].try_into().expect("4 bytes"));
+        let record_count = usize::try_from(record_count)
+            .map_err(|_| proto(format!("negative record_count {record_count}")))?;
 
-        // base_offset / base_timestamp: minimum across decoded records. For
-        // a well-formed batch the first record carries the minima; computing
-        // the min defensively protects against out-of-order encodings.
-        let base_offset = set.records.iter().map(|r| r.offset).min().unwrap_or(0);
-        let base_timestamp = set.records.iter().map(|r| r.timestamp).min().unwrap_or(-1);
-        let max_timestamp = set.records.iter().map(|r| r.timestamp).max().unwrap_or(-1);
+        let records_section = &raw[V2_HEADER_LEN..batch_end];
+        let decompressed = decompress(compression, records_section)?;
+        let records = decode_records(&decompressed, record_count)?;
 
         Ok(Self {
             raw,
-            producer_id,
-            producer_epoch,
-            base_offset,
+            producer_id: i64::from_be_bytes(raw[43..51].try_into().expect("8 bytes")),
+            producer_epoch: i16::from_be_bytes([raw[51], raw[52]]),
+            base_sequence: i32::from_be_bytes(raw[53..57].try_into().expect("4 bytes")),
+            base_offset: i64::from_be_bytes(raw[0..8].try_into().expect("8 bytes")),
             base_timestamp,
             max_timestamp,
-            is_transactional,
-            is_control,
+            is_transactional: attributes & 0x10 != 0,
+            is_control: attributes & 0x20 != 0,
             compression,
-            record_count,
-            records: set.records,
+            records,
         })
     }
 
@@ -222,45 +252,257 @@ impl<'a> RecordBatchView<'a> {
     }
 
     pub fn record_count(&self) -> usize {
-        self.record_count
+        self.records.len()
     }
 
-    /// The base sequence number of this batch (first record's sequence).
-    /// Returns -1 for non-idempotent batches (producer_id == -1).
+    /// The base sequence number of this batch. Returns -1 for non-idempotent
+    /// batches (producer_id == -1).
     pub fn base_sequence(&self) -> i32 {
-        self.records.first().map(|r| r.sequence).unwrap_or(-1)
+        self.base_sequence
     }
 
     /// Iterate records as borrowed `RecordView`s.
     pub fn records(&self) -> impl Iterator<Item = RecordView<'_>> + '_ {
-        let base_offset = self.base_offset;
-        let base_timestamp = self.base_timestamp;
-        self.records.iter().map(move |r| RecordView {
-            offset_delta: (r.offset - base_offset) as i32,
-            timestamp_delta: r.timestamp - base_timestamp,
+        self.records.iter().map(|r| RecordView {
+            offset_delta: r.offset_delta,
+            timestamp_delta: r.timestamp_delta,
             key: r.key.as_ref(),
             value: r.value.as_ref(),
-            record: r,
+            headers: &r.headers,
         })
     }
 }
 
-fn compression_to_codec(c: Compression) -> CompressionCodec {
-    match c {
-        Compression::None => CompressionCodec::None,
-        Compression::Gzip => CompressionCodec::Gzip,
-        Compression::Snappy => CompressionCodec::Snappy,
-        Compression::Lz4 => CompressionCodec::Lz4,
-        Compression::Zstd => CompressionCodec::Zstd,
+fn compression_from_attributes(attributes: i16) -> Result<CompressionCodec> {
+    match attributes & 0x07 {
+        0 => Ok(CompressionCodec::None),
+        1 => Ok(CompressionCodec::Gzip),
+        2 => Ok(CompressionCodec::Snappy),
+        3 => Ok(CompressionCodec::Lz4),
+        4 => Ok(CompressionCodec::Zstd),
+        other => Err(proto(format!("unknown compression codec {other}"))),
+    }
+}
+
+fn decompress(codec: CompressionCodec, data: &[u8]) -> Result<Cow<'_, [u8]>> {
+    let out = match codec {
+        CompressionCodec::None => return Ok(Cow::Borrowed(data)),
+        CompressionCodec::Gzip => {
+            let mut out = Vec::new();
+            flate2::read::GzDecoder::new(data)
+                .read_to_end(&mut out)
+                .map_err(|e| proto(format!("gzip decompress: {e}")))?;
+            out
+        }
+        CompressionCodec::Snappy => decompress_snappy(data)?,
+        CompressionCodec::Lz4 => {
+            let mut out = Vec::new();
+            lz4::Decoder::new(data)
+                .map_err(|e| proto(format!("lz4 decompress: {e}")))?
+                .read_to_end(&mut out)
+                .map_err(|e| proto(format!("lz4 decompress: {e}")))?;
+            out
+        }
+        CompressionCodec::Zstd => {
+            zstd::stream::decode_all(data).map_err(|e| proto(format!("zstd decompress: {e}")))?
+        }
+    };
+    Ok(Cow::Owned(out))
+}
+
+/// Kafka's Java client frames snappy with the `xerial` block format; other
+/// producers emit a bare snappy block. Detect the framing rather than assuming,
+/// so batches from any client decode.
+const XERIAL_MAGIC: [u8; 8] = [0x82, b'S', b'N', b'A', b'P', b'P', b'Y', 0x00];
+/// 8-byte magic, then 4-byte version and 4-byte min-compatible-version.
+const XERIAL_HEADER_LEN: usize = 16;
+
+fn decompress_snappy(data: &[u8]) -> Result<Vec<u8>> {
+    let raw = |block: &[u8]| {
+        snap::raw::Decoder::new()
+            .decompress_vec(block)
+            .map_err(|e| proto(format!("snappy decompress: {e}")))
+    };
+
+    if data.len() < XERIAL_HEADER_LEN || data[..8] != XERIAL_MAGIC {
+        return raw(data);
+    }
+
+    let mut out = Vec::new();
+    let mut pos = XERIAL_HEADER_LEN;
+    while pos < data.len() {
+        let len_end = pos
+            .checked_add(4)
+            .filter(|e| *e <= data.len())
+            .ok_or_else(|| proto("snappy: truncated xerial block length"))?;
+        let block_len = u32::from_be_bytes(data[pos..len_end].try_into().expect("4 bytes"));
+        pos = len_end;
+        let block_end = usize::try_from(block_len)
+            .ok()
+            .and_then(|n| pos.checked_add(n))
+            .filter(|e| *e <= data.len())
+            .ok_or_else(|| proto("snappy: truncated xerial block"))?;
+        out.extend_from_slice(&raw(&data[pos..block_end])?);
+        pos = block_end;
+    }
+    Ok(out)
+}
+
+fn decode_records(section: &[u8], count: usize) -> Result<Vec<DecodedRecord>> {
+    let mut reader = Reader::new(section);
+    // A record occupies at least one byte, so `count` elements need at least
+    // `count` bytes. Bounding the pre-allocation by what is actually present
+    // keeps a bogus header count from triggering a multi-gigabyte reservation.
+    let mut out = Vec::with_capacity(count.min(reader.remaining()));
+    for i in 0..count {
+        out.push(
+            decode_record(&mut reader).map_err(|e| proto(format!("record {i} of {count}: {e}")))?,
+        );
+    }
+    Ok(out)
+}
+
+fn decode_record(reader: &mut Reader<'_>) -> Result<DecodedRecord> {
+    let length = reader.read_varint()?;
+    let length =
+        usize::try_from(length).map_err(|_| proto(format!("negative record length {length}")))?;
+    let body_end = reader
+        .pos
+        .checked_add(length)
+        .filter(|e| *e <= reader.buf.len())
+        .ok_or_else(|| proto("record length overruns batch"))?;
+
+    let _attributes = reader.read_u8()?;
+    let timestamp_delta = reader.read_varlong()?;
+    let offset_delta = reader.read_varint()?;
+    let key = reader.read_nullable_bytes()?;
+    let value = reader.read_nullable_bytes()?;
+
+    let header_count = reader.read_varint()?;
+    let header_count = usize::try_from(header_count)
+        .map_err(|_| proto(format!("negative header count {header_count}")))?;
+    let mut headers = Vec::with_capacity(header_count.min(reader.remaining()));
+    for _ in 0..header_count {
+        let key_len = reader.read_varint()?;
+        let key_len = usize::try_from(key_len)
+            .map_err(|_| proto(format!("null header key (length {key_len})")))?;
+        let key_bytes = reader.read_exact(key_len)?;
+        let name = std::str::from_utf8(key_bytes)
+            .map_err(|e| proto(format!("header key not utf-8: {e}")))?
+            .to_owned();
+        headers.push((name, reader.read_nullable_bytes()?));
+    }
+
+    if reader.pos != body_end {
+        return Err(proto(format!(
+            "record length mismatch: declared body ends at {body_end}, parsed to {}",
+            reader.pos
+        )));
+    }
+
+    Ok(DecodedRecord {
+        offset_delta,
+        timestamp_delta,
+        key,
+        value,
+        headers,
+    })
+}
+
+/// A bounds-checked forward cursor over the decompressed records section.
+struct Reader<'a> {
+    buf: &'a [u8],
+    pos: usize,
+}
+
+impl<'a> Reader<'a> {
+    fn new(buf: &'a [u8]) -> Self {
+        Self { buf, pos: 0 }
+    }
+
+    fn remaining(&self) -> usize {
+        self.buf.len() - self.pos
+    }
+
+    fn read_u8(&mut self) -> Result<u8> {
+        let b = *self
+            .buf
+            .get(self.pos)
+            .ok_or_else(|| proto("unexpected end of records section"))?;
+        self.pos += 1;
+        Ok(b)
+    }
+
+    fn read_exact(&mut self, n: usize) -> Result<&'a [u8]> {
+        let end = self
+            .pos
+            .checked_add(n)
+            .filter(|e| *e <= self.buf.len())
+            .ok_or_else(|| proto("unexpected end of records section"))?;
+        let slice = &self.buf[self.pos..end];
+        self.pos = end;
+        Ok(slice)
+    }
+
+    /// Kafka varints are zigzag-encoded. Accumulate in a wider type so an
+    /// over-long encoding is reported rather than silently overflowing.
+    fn read_unsigned_varint(&mut self) -> Result<u32> {
+        let mut value: u64 = 0;
+        for i in 0..5u32 {
+            let b = self.read_u8()?;
+            value |= u64::from(b & 0x7F) << (i * 7);
+            if b & 0x80 == 0 {
+                return u32::try_from(value).map_err(|_| proto("varint overflows u32"));
+            }
+        }
+        Err(proto("varint longer than 5 bytes"))
+    }
+
+    fn read_unsigned_varlong(&mut self) -> Result<u64> {
+        let mut value: u128 = 0;
+        for i in 0..10u32 {
+            let b = self.read_u8()?;
+            value |= u128::from(b & 0x7F) << (i * 7);
+            if b & 0x80 == 0 {
+                return u64::try_from(value).map_err(|_| proto("varlong overflows u64"));
+            }
+        }
+        Err(proto("varlong longer than 10 bytes"))
+    }
+
+    fn read_varint(&mut self) -> Result<i32> {
+        let n = self.read_unsigned_varint()?;
+        Ok(((n >> 1) as i32) ^ -((n & 1) as i32))
+    }
+
+    fn read_varlong(&mut self) -> Result<i64> {
+        let n = self.read_unsigned_varlong()?;
+        Ok(((n >> 1) as i64) ^ -((n & 1) as i64))
+    }
+
+    /// Length-prefixed bytes where a negative length encodes `null`.
+    fn read_nullable_bytes(&mut self) -> Result<Option<Bytes>> {
+        let len = self.read_varint()?;
+        if len < 0 {
+            return Ok(None);
+        }
+        let bytes = self.read_exact(len as usize)?;
+        Ok(Some(Bytes::copy_from_slice(bytes)))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    // Fixtures are encoded with `kafka-protocol` so these tests are differential:
+    // they assert heimq's hand-rolled decoder agrees with the reference encoder.
+    // It is a dev-dependency only — Cargo does not resolve dev-dependencies of
+    // non-workspace packages, so embedders never see it.
     use super::*;
     use bytes::BytesMut;
     use kafka_protocol::protocol::StrBytes;
-    use kafka_protocol::records::{RecordBatchEncoder, RecordEncodeOptions, TimestampType};
+    use kafka_protocol::records::{
+        Compression, Record, RecordBatchEncoder, RecordEncodeOptions, TimestampType,
+    };
 
     fn make_record(offset: i64, timestamp: i64, key: &[u8], value: &[u8]) -> Record {
         let mut headers = kafka_protocol::indexmap::IndexMap::new();
@@ -281,6 +523,14 @@ mod tests {
             key: Some(Bytes::copy_from_slice(key)),
             value: Some(Bytes::copy_from_slice(value)),
             headers,
+        }
+    }
+
+    /// `RecordBatchView` is not `Debug`, so `Result::expect_err` is unavailable.
+    fn expect_decode_err(raw: &[u8], why: &str) -> HeimqError {
+        match RecordBatchView::from_bytes(raw) {
+            Ok(_) => panic!("{why}"),
+            Err(e) => e,
         }
     }
 
@@ -379,10 +629,93 @@ mod tests {
         assert_eq!(view.record_count(), 1);
     }
 
+    /// Every codec must round-trip through the hand-rolled decoder and yield
+    /// exactly what the reference encoder was handed.
+    #[test]
+    fn view_decodes_every_compression_codec() {
+        let cases = [
+            (Compression::None, CompressionCodec::None),
+            (Compression::Gzip, CompressionCodec::Gzip),
+            (Compression::Snappy, CompressionCodec::Snappy),
+            (Compression::Lz4, CompressionCodec::Lz4),
+            (Compression::Zstd, CompressionCodec::Zstd),
+        ];
+        let records = vec![
+            make_record(0, 2_000, b"k0", b"v0"),
+            make_record(1, 2_010, b"k1", b"v1"),
+        ];
+
+        for (compression, expected) in cases {
+            let raw = encode(&records, compression);
+            let view = RecordBatchView::from_bytes(&raw)
+                .unwrap_or_else(|e| panic!("decode {expected:?}: {e}"));
+
+            assert_eq!(view.compression(), expected);
+            assert_eq!(view.record_count(), 2);
+            let values: Vec<_> = view.records().map(|r| r.value.unwrap().to_vec()).collect();
+            assert_eq!(values, vec![b"v0".to_vec(), b"v1".to_vec()], "{expected:?}");
+            let deltas: Vec<_> = view.records().map(|r| r.timestamp_delta).collect();
+            assert_eq!(deltas, vec![0, 10], "{expected:?}");
+        }
+    }
+
+    #[test]
+    fn view_decodes_null_key_and_value_and_headerless_records() {
+        let mut record = make_record(0, 1_000, b"k", b"v");
+        record.key = None;
+        record.value = None;
+        record.headers = kafka_protocol::indexmap::IndexMap::new();
+        let raw = encode(&[record], Compression::None);
+
+        let view = RecordBatchView::from_bytes(&raw).expect("decode view");
+        let decoded = view.records().next().expect("one record");
+        assert!(decoded.key.is_none());
+        assert!(decoded.value.is_none());
+        assert_eq!(decoded.header_count(), 0);
+    }
+
     #[test]
     fn view_rejects_malformed_bytes() {
         let bogus = [0u8; 4];
         assert!(RecordBatchView::from_bytes(&bogus).is_err());
+    }
+
+    #[test]
+    fn view_rejects_legacy_message_set_magic() {
+        let records = vec![make_record(0, 1_000, b"k", b"v")];
+        let mut raw = encode(&records, Compression::None);
+        raw[16] = 1; // pretend it is a v1 message set
+        let err = expect_decode_err(&raw, "v1 must be rejected");
+        assert!(format!("{err}").contains("magic"), "got: {err}");
+    }
+
+    #[test]
+    fn view_rejects_crc_mismatch() {
+        let records = vec![make_record(0, 1_000, b"k", b"v")];
+        let mut raw = encode(&records, Compression::None);
+        // Flip a bit inside the CRC-covered region (attributes onward).
+        let last = raw.len() - 1;
+        raw[last] ^= 0xFF;
+        let err = expect_decode_err(&raw, "corrupt batch must be rejected");
+        assert!(format!("{err}").contains("CRC"), "got: {err}");
+    }
+
+    /// A batch whose header claims a huge record count must fail cheaply rather
+    /// than pre-allocating gigabytes — the bug this decoder's ancestor carried.
+    #[test]
+    fn view_rejects_inflated_record_count_without_huge_allocation() {
+        let records = vec![make_record(0, 1_000, b"k", b"v")];
+        let mut raw = encode(&records, Compression::None);
+        raw[57..61].copy_from_slice(&842_150_450i32.to_be_bytes());
+        // Re-stamp the CRC so we exercise the record loop, not the CRC check.
+        let crc = crc32c::crc32c(&raw[CRC_COVERAGE_START..]);
+        raw[17..21].copy_from_slice(&crc.to_be_bytes());
+
+        let err = expect_decode_err(&raw, "must not decode");
+        assert!(
+            format!("{err}").contains("end of records section"),
+            "got: {err}"
+        );
     }
 
     #[test]

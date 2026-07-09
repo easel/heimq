@@ -11,8 +11,8 @@ keywords = ["kafka", "messaging", "streaming", "queue"]
 categories = ["network-programming", "asynchronous"]
 
 [dependencies]
-heimq-broker = { path = "../heimq-broker" }
-heimq-wire = { path = "../heimq-wire" }
+heimq-broker = { path = "../heimq-broker", version = "0.1.0" }
+heimq-wire = { path = "../heimq-wire", version = "0.1.0" }
 
 # Async runtime
 tokio = { version = "1.44", features = ["full"] }
@@ -59,7 +59,7 @@ memmap2 = "0.9"
 
 # Metrics
 metrics = "0.24"
-metrics-exporter-prometheus = "0.16"
+metrics-exporter-prometheus = "0.18"
 
 # Optional Postgres durable backend (feature: backend-postgres)
 postgres = { version = "0.19", optional = true }
@@ -72,14 +72,14 @@ proptest = "1.6"
 
 # Primary test client - rdkafka with librdkafka built from source
 # FIREWALLED: dev-dependency only, never in server binary
-rdkafka = { version = "0.36", features = ["cmake-build", "tokio"] }
+rdkafka = { version = "0.39", features = ["cmake-build", "tokio"] }
 
 # Legacy protocol testing (pure Rust, v0-v2 message formats)
 kafka = { version = "0.10", default-features = false, features = ["gzip", "snappy"] }
 
 # Parity harness - container orchestration and serialization
-testcontainers = "0.23"
-toml = "0.8"
+testcontainers = "0.27"
+toml = "1"
 
 [features]
 default = []

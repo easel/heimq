@@ -11,5 +11,21 @@ description = "Kafka broker handlers, trait families, and in-memory reference ba
 [dependencies]
 bytes = "1.10"
 thiserror = "2.0"
-kafka-protocol = "0.15"
 parking_lot = "0.12"
+
+# Record-batch decoding. heimq-broker deliberately carries no `kafka-protocol`
+# dependency: embedders link their own copy, and a second one resolved through
+# us would be a distinct, incompatible type universe. The v2 batch decoder in
+# `storage::record_batch_view` needs only a CRC and the four Kafka codecs, all
+# of which `kafka-protocol` pulled in transitively anyway.
+crc32c = "0.6"
+flate2 = "1.1"
+snap = "1.1"
+lz4 = "1.28"
+zstd = "0.13"
+
+[dev-dependencies]
+# Encodes record-batch fixtures so the decoder tests are differential against
+# the reference implementation. Cargo does not resolve dev-dependencies of
+# non-workspace packages, so this never reaches embedders' lockfiles.
+kafka-protocol = "0.15"

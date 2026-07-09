@@ -17,6 +17,7 @@ use kafka::client::KafkaClient;
 use kafka::producer::{Producer, Record, RequiredAcks};
 use rdkafka::config::ClientConfig;
 use rdkafka::consumer::{BaseConsumer, Consumer};
+use rdkafka::producer::future_producer::Delivery;
 use rdkafka::producer::{FutureProducer, FutureRecord};
 use rdkafka::Message;
 use std::time::Duration;
@@ -1092,7 +1093,11 @@ async fn test_rdkafka_seek_to_offset() {
     for i in 0..10 {
         let payload = format!("offset-{}", i);
         let record = FutureRecord::to(&topic).payload(&payload).key("key");
-        let (_partition, offset) = producer
+        let Delivery {
+            partition: _partition,
+            offset,
+            ..
+        } = producer
             .send(record, Duration::from_secs(5))
             .await
             .expect("Failed to produce");
@@ -1198,7 +1203,9 @@ async fn test_rdkafka_group_multi_partition_delivery() {
         let payload = format!("val-{}", i);
         let key = format!("key-{:06}", i);
         let record = FutureRecord::to(&topic).payload(&payload).key(&key);
-        let (partition, offset) = producer
+        let Delivery {
+            partition, offset, ..
+        } = producer
             .send(record, Duration::from_secs(5))
             .await
             .expect("Failed to produce");
@@ -2643,7 +2650,11 @@ async fn test_rdkafka_multi_partition_roundtrip() {
         let payload = format!("mp-val-{}", i);
         let key = format!("mp-key-{:04}", i);
         let record = FutureRecord::to(&topic).payload(&payload).key(&key);
-        let (partition, _offset) = producer
+        let Delivery {
+            partition,
+            offset: _offset,
+            ..
+        } = producer
             .send(record, Duration::from_secs(5))
             .await
             .expect("Failed to produce");
@@ -2735,7 +2746,9 @@ async fn test_rdkafka_per_partition_ordering() {
                     let key = format!("k-{:02}", key_idx);
                     let payload = format!("p{}|k{}|s{}", producer_id, key_idx, seq);
                     let record = FutureRecord::to(&topic).payload(&payload).key(&key);
-                    let (partition, offset) = producer
+                    let Delivery {
+                        partition, offset, ..
+                    } = producer
                         .send(record, Duration::from_secs(10))
                         .await
                         .expect("Failed to produce");
@@ -2914,13 +2927,21 @@ async fn test_rdkafka_keyed_partitioner_determinism() {
     let key_b = "deterministic-key-B";
 
     let record_a1 = FutureRecord::to(&topic).payload("a-val-1").key(key_a);
-    let (partition_a1, _offset_a1) = producer
+    let Delivery {
+        partition: partition_a1,
+        offset: _offset_a1,
+        ..
+    } = producer
         .send(record_a1, Duration::from_secs(5))
         .await
         .expect("Failed to produce key A (1)");
 
     let record_a2 = FutureRecord::to(&topic).payload("a-val-2").key(key_a);
-    let (partition_a2, _offset_a2) = producer
+    let Delivery {
+        partition: partition_a2,
+        offset: _offset_a2,
+        ..
+    } = producer
         .send(record_a2, Duration::from_secs(5))
         .await
         .expect("Failed to produce key A (2)");
@@ -2932,7 +2953,11 @@ async fn test_rdkafka_keyed_partitioner_determinism() {
     );
 
     let record_b = FutureRecord::to(&topic).payload("b-val-1").key(key_b);
-    let (partition_b, _offset_b) = producer
+    let Delivery {
+        partition: partition_b,
+        offset: _offset_b,
+        ..
+    } = producer
         .send(record_b, Duration::from_secs(5))
         .await
         .expect("Failed to produce key B");
@@ -2974,7 +2999,11 @@ async fn test_rdkafka_explicit_partition_target() {
         .key(key)
         .partition(TARGET_PARTITION);
 
-    let (delivered_partition, delivered_offset) = producer
+    let Delivery {
+        partition: delivered_partition,
+        offset: delivered_offset,
+        ..
+    } = producer
         .send(record, Duration::from_secs(5))
         .await
         .expect("Failed to produce to explicit partition");
@@ -3345,7 +3374,11 @@ async fn test_rdkafka_auto_create_toggle() {
         .await;
     let on_elapsed = on_start.elapsed();
 
-    let (on_partition, on_offset) = on_result.unwrap_or_else(|(err, _msg)| {
+    let Delivery {
+        partition: on_partition,
+        offset: on_offset,
+        ..
+    } = on_result.unwrap_or_else(|(err, _msg)| {
         panic!(
             "expected first produce to succeed with auto_create_topics=true \
              (topic={}, elapsed={:?}), got delivery error: {:?}",
@@ -3491,7 +3524,9 @@ async fn test_rdkafka_oversized_message() {
         produce_elapsed
     );
 
-    let (partition, offset) = result.unwrap_or_else(|(err, _msg)| {
+    let Delivery {
+        partition, offset, ..
+    } = result.unwrap_or_else(|(err, _msg)| {
         panic!(
             "expected oversized payload ({} bytes) to round-trip because heimq \
              enforces no message.max.bytes, got delivery error: {:?} after {:?}",
@@ -3668,7 +3703,11 @@ async fn test_rdkafka_produce_consume_soak() {
     // starts the soak burst.
     {
         let warmup = FutureRecord::to(&topic).payload("warmup").key("warmup");
-        let (_, _) = producer
+        let Delivery {
+            partition: _,
+            offset: _,
+            ..
+        } = producer
             .send(warmup, Duration::from_secs(5))
             .await
             .expect("Failed to warm up topic");
@@ -4086,7 +4125,11 @@ async fn test_rdkafka_pause_resume_partitions() {
     for i in 0..PER_PARTITION {
         let p0 = format!("p0-{}", i);
         let rec0 = FutureRecord::to(&topic).payload(&p0).key("k0").partition(0);
-        let (delivered_p, _) = producer
+        let Delivery {
+            partition: delivered_p,
+            offset: _,
+            ..
+        } = producer
             .send(rec0, Duration::from_secs(5))
             .await
             .expect("Failed to produce to partition 0");
@@ -4095,7 +4138,11 @@ async fn test_rdkafka_pause_resume_partitions() {
 
         let p1 = format!("p1-{}", i);
         let rec1 = FutureRecord::to(&topic).payload(&p1).key("k1").partition(1);
-        let (delivered_p, _) = producer
+        let Delivery {
+            partition: delivered_p,
+            offset: _,
+            ..
+        } = producer
             .send(rec1, Duration::from_secs(5))
             .await
             .expect("Failed to produce to partition 1");

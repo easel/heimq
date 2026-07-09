@@ -21,7 +21,7 @@ repository = "https://github.com/easel/heimq"
 # Same version (0.15.1), so it transparently satisfies `kafka-protocol = "0.15"`.
 # Remove once an upstream release carries the bound. Tracked: heimq-bb299c68.
 [patch.crates-io]
-kafka-protocol = { git = "https://github.com/easel/kafka-protocol-rs", branch = "heimq-bound-array-capacity" }
+kafka-protocol = { git = "https://github.com/easel/kafka-protocol-rs", rev = "b721c98f71b969ae991416a1642de110712bf318" }
 
 [profile.release]
 lto = true

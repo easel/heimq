@@ -1,0 +1,49 @@
+# cargo-deny configuration for heimq.
+#
+# Run locally with `just deny` (or `cargo deny check`); CI runs the same check.
+# Mirrors the policy used by the downstream fjord/niflheim workspaces so a
+# dependency that is acceptable here stays acceptable there.
+
+[advisories]
+yanked = "deny"
+unmaintained = "all"
+unused-ignored-advisory = "deny"
+ignore = [
+    { id = "RUSTSEC-2024-0436", reason = "paste is pulled transitively by kafka-protocol. RustSec lists no patched version; remove this ignore when kafka-protocol no longer resolves paste." },
+]
+
+[licenses]
+confidence-threshold = 0.8
+unused-allowed-license = "allow"
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+required-git-spec = "rev"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = [
+    # Pinned fork of kafka-protocol carrying the bounded Array/CompactArray
+    # decode fix. Dev-dependency of heimq-broker, normal dependency of heimq.
+    # Remove once the fix lands upstream — see docs/upstream/kafka-protocol/.
+    "https://github.com/easel/kafka-protocol-rs",
+]

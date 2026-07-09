@@ -12,6 +12,19 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Supply-chain gate: advisories, licenses, banned crates, and source origins.
+  # Policy lives in deny.toml, kept aligned with the downstream fjord/niflheim
+  # workspaces. Needs no system deps, so it runs independently of `test`.
+  deny:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          rust-version: "1.88.0"
+          arguments: --all-features
+          command-arguments: --hide-inclusion-graph
+
   test:
     runs-on: ubuntu-latest
     steps:

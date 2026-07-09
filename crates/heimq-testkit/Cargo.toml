@@ -9,13 +9,13 @@ repository.workspace = true
 description = "Per-trait conformance suites and differential parity harness for heimq"
 
 [dependencies]
-heimq = { path = "../heimq", features = ["test-support"] }
+heimq = { path = "../heimq", version = "0.1.0", features = ["test-support"] }
 anyhow = "1.0"
 kafka-protocol = "0.15"
 
 [dev-dependencies]
 tokio = { version = "1.44", features = ["full"] }
-testcontainers = "0.23"
+testcontainers = "0.27"
 
 [features]
 backend-postgres = ["heimq/backend-postgres"]
