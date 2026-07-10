@@ -1,0 +1,2 @@
+confluent-kafka==2.6.1
+crc32c==2.7.1
