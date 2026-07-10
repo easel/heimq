@@ -1,0 +1,54 @@
+name: heimq-bench
+
+# Default: heimq alone (the bench_baseline.rs replacement).
+# Compare mode: set BENCH_TARGETS to include kafka and redpanda, which start
+# alongside (the parity/bench.rs replacement).
+
+services:
+  heimq:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq
+
+  kafka:
+    image: apache/kafka:3.9.0
+    profiles: [compare]
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.1.1
+    profiles: [compare]
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=0.0.0.0:9092
+      - --advertise-kafka-addr=redpanda:9092
+
+  bench:
+    build: .
+    depends_on: [heimq]
+    environment:
+      HEIMQ_BOOTSTRAP: heimq:9092
+      BENCH_RECORDS: ${BENCH_RECORDS:-100000}
+      BENCH_RECORD_SIZE: ${BENCH_RECORD_SIZE:-256}
+      BENCH_LATENCY_SAMPLES: ${BENCH_LATENCY_SAMPLES:-2000}
+      BENCH_TARGETS: ${BENCH_TARGETS:-}
