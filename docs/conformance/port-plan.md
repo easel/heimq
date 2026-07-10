@@ -2,7 +2,7 @@
 
 ## Why
 
-The Kafka-facing test suite is written in Rust as `[dev-dependencies]` of the
+The Kafka-facing test suite lived in Rust as `[dev-dependencies]` of the
 `heimq` crate. Three consequences:
 
 1. `cargo test`, `cargo check --all-targets`, and `cargo clippy --all-targets`
@@ -51,19 +51,28 @@ is a second independent implementation.
 
 ## Stages
 
-Each stage ends green before the next begins. rdkafka leaves `Cargo.toml` only
-at S6, once nothing in Rust depends on it.
+Each stage ended green before the next began. rdkafka left `Cargo.toml` only at
+S8, once nothing in Rust depended on it.
 
-| # | Stage | Source | Gate |
-|---|-------|--------|------|
-| S1 | Compose topology + harness core (observation, diff, normalize, exemptions, runner) | `parity/{main,diff,driver,normalize,exemptions}.rs` | all three brokers reachable from a runner container |
-| S2 | 8 parity workloads, Python | `parity/workloads/*.rs` (~800 loc) | parity green vs kafka **and** redpanda |
-| S3 | Same 8 workloads, franz-go | ditto | green, and JSONL identical to S2 |
-| S4 | Legacy message-format compat | `compat.rs` (564 loc) | green |
-| S5 | heimq behavioural suite | `integration.rs` (~4,500 loc) | green |
-| S6 | Benchmarks | `bench_baseline.rs`, `parity/bench.rs` (348 loc) | runs, numbers comparable |
-| S7 | Helm/k8s e2e | `helm_memory_e2e.rs` (1,339 loc) | green |
-| S8 | **Delete** | see below | CI green on all suites |
+All stages are complete. Kept as a record of what moved where.
+
+| # | Stage | Source | Outcome |
+|---|-------|--------|---------|
+| S1 | Compose topology + harness core | `parity/{main,diff,driver,normalize,exemptions}.rs` | done |
+| S2 | 7 parity workloads, Python | `parity/workloads/*.rs` | done, 14/14 |
+| S3 | Same workloads, franz-go | ditto | done; JSONL identical to S2 |
+| S4 | Independent client oracles | `compat.rs` (564 loc) | done; kcat had never run |
+| S5 | heimq behavioural suite | `integration.rs` (4,541 loc) | done; 42 `#[ignore]`d tests now run |
+| S6 | Benchmarks | `bench_baseline.rs`, `parity/bench.rs` | done |
+| S7 | Helm/k8s e2e | `helm_memory_e2e.rs` (1,339 loc) | done, 8/8 cases |
+| S8 | **Delete** | see below | done; `cargo test` builds no broker client |
+
+An eighth workload, `concurrent_transactions`, was added during S3: franz-go
+found heimq returning success from `InitProducerId` for a transactional id whose
+previous producer still had an open transaction, where Kafka and Redpanda both
+return `CONCURRENT_TRANSACTIONS` (51). Every client library retries that code
+internally, so no librdkafka-based test could have seen it. Fixed in
+`transaction_state.rs`.
 
 ## S8 deletions
 
@@ -77,16 +86,24 @@ vendor/librdkafka-shim/   curl.h stub, only needed by librdkafka
 
 Result: zero C compilation in the Rust build; `cargo test` builds no broker client.
 
-## Known risks
+## How the risks actually landed
 
-- **S4** legacy v0–v2 message formats are produced today by the pure-Rust `kafka`
-  crate. `confluent-kafka` cannot emit v0/v1 batches, so this stage needs
-  hand-rolled frames over a socket. Sized as the hardest per-line stage.
-- **S5** is the bulk of the code (~4,500 loc) and currently uses the in-process
-  `TestServer`; each test becomes a container round-trip. Expect it to be slower
-  in wall-clock and to need a shared fixture rather than per-test servers.
-- **S7** shells out to `helm`/`kubectl` already; the Rust wrapper adds little.
-  Likely the cheapest stage per line.
-- Redpanda and Kafka disagree in places today; those disagreements are recorded
-  in `exemptions.toml` and must survive the port unchanged, or the port has
-  changed behaviour rather than relocating it.
+- **S4** was mis-sized. The legacy-format concern belonged to `integration.rs`,
+  not `compat.rs`, whose oracles were already standalone Go/JS programs. It
+  needed Dockerfiles, not rewrites.
+- **S5** legacy tests went to `kafka-python-ng` at `api_version=(0, 10, 0)`,
+  which still emits the v0/v1 MessageSet. No hand-rolled frames were needed.
+  Isolation moved from a broker per test to a topic per test, plus four extra
+  broker services for broker-level config (auto-create off; 2, 3, 4 partitions).
+- **S7** was the opposite of cheap. Scenarios cannot share a broker, and
+  scenario B needed the producer warmed before its plateau window.
+- The exemptions did survive unchanged: the redpanda `record.offset` shift is
+  still recorded and still exempted, byte-identical under both runners.
+
+## Left behind
+
+- `heimq`'s `IncrementalAlterConfigs` handler answers with a default, error-free
+  response when it cannot decode a request, so a malformed alter is
+  indistinguishable from success. v1 decodes fine, so nothing depends on this
+  today.
+- `heimq::test_support::DiffRecord` no longer has a caller.
