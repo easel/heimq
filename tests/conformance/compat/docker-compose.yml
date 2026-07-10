@@ -1,0 +1,49 @@
+name: heimq-compat
+
+# Independent client oracles, each with its runtime baked into an image. There
+# is nothing to detect on the host, so a missing runtime is a build failure
+# rather than a silently skipped test.
+#
+# These test heimq alone -- they are not differential -- so no Kafka or Redpanda.
+
+services:
+  heimq:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq
+
+  franz_go:
+    build:
+      context: .
+      dockerfile: franz_go/Dockerfile
+    depends_on: [heimq]
+    environment: {BOOTSTRAP: "heimq:9092"}
+    command: ["/usr/local/bin/oracle", "heimq:9092"]
+
+  sarama:
+    build:
+      context: .
+      dockerfile: sarama/Dockerfile
+    depends_on: [heimq]
+    environment: {BOOTSTRAP: "heimq:9092"}
+    command: ["/usr/local/bin/oracle", "heimq:9092", "sarama-compat-topic"]
+
+  kafkajs:
+    build:
+      context: .
+      dockerfile: kafkajs/Dockerfile
+    depends_on: [heimq]
+    environment: {BOOTSTRAP: "heimq:9092"}
+    command: ["node", "/oracle/main.js", "heimq:9092"]
+
+  kcat:
+    build:
+      context: .
+      dockerfile: kcat/Dockerfile
+    depends_on: [heimq]
+    environment: {BOOTSTRAP: "heimq:9092"}
+    command: ["/usr/local/bin/oracle.sh", "heimq:9092"]
