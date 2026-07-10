@@ -1,0 +1,66 @@
+name: heimq-integration
+
+# One heimq for the bulk of the suite (topics are per-test unique), plus a
+# second with auto-create disabled: a handful of tests assert the broker's
+# behaviour when a topic does not exist, which cannot coexist with auto-create.
+
+services:
+  heimq:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq
+
+  heimq-noautocreate:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq-noautocreate
+      HEIMQ_AUTO_CREATE_TOPICS: "false"
+
+  # A few tests need default_partitions=3 (TestServer::start_with_partitions).
+  heimq-3p:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq-3p
+      HEIMQ_DEFAULT_PARTITIONS: "3"
+
+  heimq-2p:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq-2p
+      HEIMQ_DEFAULT_PARTITIONS: "2"
+
+  heimq-4p:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq-4p
+      HEIMQ_DEFAULT_PARTITIONS: "4"
+
+  pytest:
+    build: .
+    depends_on: [heimq, heimq-noautocreate, heimq-3p, heimq-2p, heimq-4p]
+    environment:
+      HEIMQ_BOOTSTRAP: heimq:9092
+      HEIMQ_NOAC_BOOTSTRAP: heimq-noautocreate:9092
+      HEIMQ_3P_BOOTSTRAP: heimq-3p:9092
+      HEIMQ_2P_BOOTSTRAP: heimq-2p:9092
+      HEIMQ_4P_BOOTSTRAP: heimq-4p:9092
