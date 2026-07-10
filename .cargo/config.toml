@@ -1,0 +1,7 @@
+[env]
+# librdkafka 2.12.1 (via the rdkafka dev-dependency) includes <curl/curl.h>
+# from src/rdkafka_conf.c behind an `#ifdef WITH_OAUTHBEARER_OIDC` that is
+# always true, even though we build with OIDC off and never link libcurl.
+# Point the C compiler at a vendored stub so the build needs no libcurl dev
+# headers on the host. See vendor/librdkafka-shim/curl/curl.h.
+CPATH = { value = "vendor/librdkafka-shim", relative = true, force = true }

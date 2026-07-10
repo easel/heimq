@@ -25,9 +25,6 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Install librdkafka build dependencies
-        run: sudo apt-get update && sudo apt-get install -y libcurl4-openssl-dev libsasl2-dev
-
       - name: Pull broker images (cache-warm)
         run: |
           docker pull docker.redpanda.com/redpandadata/redpanda:v25.1.1
