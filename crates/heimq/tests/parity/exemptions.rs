@@ -52,7 +52,12 @@ impl Exemptions {
 /// Load and validate exemptions.toml from the parity test directory.
 /// Fails fast on duplicate ids or missing prd_ref (SD-003 §Quality Gates).
 pub fn load() -> Result<Exemptions> {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/parity/exemptions.toml");
+    // Single source of truth, shared with the containerized conformance runner.
+    // This harness is being ported out; see docs/conformance/port-plan.md.
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tests/conformance/exemptions.toml"
+    );
 
     let content = match std::fs::read_to_string(path) {
         Ok(s) => s,
