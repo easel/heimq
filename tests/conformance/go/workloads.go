@@ -26,6 +26,7 @@ func allWorkloads() []Workload {
 		{"epoch_fence", epochFence},
 		{"duplicate_sequence", duplicateSequence},
 		{"out_of_order_sequence", outOfOrderSequence},
+		{"concurrent_transactions", concurrentTransactions},
 	}
 }
 
@@ -374,4 +375,57 @@ func duplicateSequence(ctx context.Context, bootstrap string) ([]Observation, er
 func outOfOrderSequence(ctx context.Context, bootstrap string) ([]Observation, error) {
 	return rawSequenceWorkload(ctx, bootstrap,
 		"parity-out-of-order-sequence", "out_of_order_sequence", 5)
+}
+
+// ── concurrent_transactions ───────────────────────────────────────────────────
+// Producer A opens a transaction and produces without committing. A second
+// InitProducerId for the same transactional.id must not succeed immediately:
+// Kafka returns CONCURRENT_TRANSACTIONS (51) until the coordinator has aborted
+// A's in-flight transaction. Sent raw, because every client retries 51.
+
+func concurrentTransactions(ctx context.Context, bootstrap string) ([]Observation, error) {
+	const topic, txnID = "parity-concurrent-txn", "parity-concurrent-txn-id"
+
+	if err := createTopic(ctx, bootstrap, topic); err != nil {
+		return nil, err
+	}
+
+	producerA, err := kgo.NewClient(
+		kgo.SeedBrokers(bootstrap),
+		kgo.TransactionalID(txnID),
+		kgo.TransactionTimeout(30*time.Second),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer producerA.Close()
+
+	if err := producerA.BeginTransaction(); err != nil {
+		return nil, err
+	}
+	// The produce registers the partition with the coordinator, making the
+	// transaction genuinely in-flight rather than merely begun client-side.
+	if err := producerA.ProduceSync(ctx,
+		&kgo.Record{Topic: topic, Key: []byte("open"), Value: []byte("open")}).FirstErr(); err != nil {
+		return nil, fmt.Errorf("producer A send failed: %w", err)
+	}
+
+	plain, err := kgo.NewClient(kgo.SeedBrokers(bootstrap))
+	if err != nil {
+		return nil, err
+	}
+	defer plain.Close()
+
+	code, err := rawInitTransactionalProducerIDOnce(ctx, plain, txnID)
+	if err != nil {
+		return nil, err
+	}
+
+	_ = producerA.EndTransaction(ctx, kgo.TryAbort) // teardown; A may be fenced
+
+	return []Observation{{
+		Workload: "concurrent_transactions",
+		Step:     0,
+		Event:    errorCode("InitProducerId", code),
+	}}, nil
 }

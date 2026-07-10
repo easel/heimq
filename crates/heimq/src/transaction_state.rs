@@ -26,6 +26,10 @@ pub struct TxnEntry {
     /// topic+partition+group → (offset, metadata)
     pub pending_offsets: HashMap<(String, i32, String), (i64, Option<String>)>,
     pub status: TxnStatus,
+    /// Epoch already bumped by an InitProducerId that had to abort an in-flight
+    /// transaction. The retry that follows CONCURRENT_TRANSACTIONS returns this
+    /// epoch rather than bumping a second time.
+    pub pending_init_epoch: Option<i16>,
 }
 
 pub struct AbortedRange {
@@ -46,6 +50,10 @@ pub struct CommitOffsetArgs<'a> {
     pub offset: i64,
     pub metadata: Option<String>,
 }
+
+/// Kafka error code: the coordinator is still settling a prior transaction for
+/// this transactional id. Retriable; clients loop until it clears.
+const CONCURRENT_TRANSACTIONS: i16 = 51;
 
 pub struct TransactionManager {
     state: Mutex<TxnManagerState>,
@@ -71,9 +79,28 @@ impl TransactionManager {
     }
 
     /// InitProducerId with transactional_id.
-    /// Returns (producer_id, epoch).
-    pub fn init_transactional_producer(&self, txn_id: &str) -> (i64, i16) {
+    ///
+    /// Returns `Ok((producer_id, epoch))`, or `Err(error_code)` when the
+    /// coordinator must first abort a transaction that is still in flight.
+    /// Kafka answers CONCURRENT_TRANSACTIONS (51) until that abort lands, and
+    /// clients retry until it does.
+    pub fn init_transactional_producer(
+        &self,
+        txn_id: &str,
+    ) -> std::result::Result<(i64, i16), i16> {
         let mut state = self.state.lock();
+
+        let in_flight = matches!(
+            state.transactions.get(txn_id).map(|e| &e.status),
+            Some(TxnStatus::Ongoing | TxnStatus::PrepareCommit | TxnStatus::PrepareAbort)
+        );
+        if in_flight {
+            // Fence the previous producer and abort its transaction now; make the
+            // caller retry, so the epoch it eventually sees is the post-abort one.
+            abort_in_flight(&mut state, txn_id);
+            return Err(CONCURRENT_TRANSACTIONS);
+        }
+
         match state.transactions.get_mut(txn_id) {
             None => {
                 let pid = ProducerStateManager::allocate_producer_id();
@@ -86,11 +113,16 @@ impl TransactionManager {
                         groups: HashSet::new(),
                         pending_offsets: HashMap::new(),
                         status: TxnStatus::Empty,
+                        pending_init_epoch: None,
                     },
                 );
-                (pid, 0)
+                Ok((pid, 0))
             }
             Some(entry) => {
+                // The abort above already bumped the epoch; do not bump twice.
+                if let Some(epoch) = entry.pending_init_epoch.take() {
+                    return Ok((entry.producer_id, epoch));
+                }
                 // Bump epoch on re-init (fencing previous instance)
                 let new_epoch = entry.epoch.wrapping_add(1);
                 entry.epoch = new_epoch;
@@ -98,7 +130,7 @@ impl TransactionManager {
                 entry.groups.clear();
                 entry.pending_offsets.clear();
                 entry.status = TxnStatus::Empty;
-                (entry.producer_id, new_epoch)
+                Ok((entry.producer_id, new_epoch))
             }
         }
     }
@@ -431,4 +463,45 @@ impl TransactionManager {
                 .collect(),
         }
     }
+}
+
+/// Abort a transaction that is still in flight, as InitProducerId must before it
+/// can hand the transactional id to a new producer. Mirrors the abort branch of
+/// `end_txn`: record aborted ranges so read_committed consumers skip them, drop
+/// the open-txn markers, then bump the epoch to fence the previous producer.
+fn abort_in_flight(state: &mut TxnManagerState, txn_id: &str) {
+    let Some(entry) = state.transactions.get(txn_id) else {
+        return;
+    };
+    let pid = entry.producer_id;
+    let affected: Vec<(String, i32, i64)> = entry
+        .partitions
+        .iter()
+        .filter(|(_, &fo)| fo != i64::MAX)
+        .map(|((t, p), fo)| (t.clone(), *p, *fo))
+        .collect();
+
+    for (topic, partition, first_offset) in &affected {
+        let key = (topic.clone(), *partition);
+        state
+            .aborted
+            .entry(key.clone())
+            .or_default()
+            .push(AbortedRange {
+                producer_id: pid,
+                first_offset: *first_offset,
+            });
+        if let Some(map) = state.open_txns.get_mut(&key) {
+            map.remove(first_offset);
+        }
+    }
+
+    let entry = state.transactions.get_mut(txn_id).expect("checked above");
+    let new_epoch = entry.epoch.wrapping_add(1);
+    entry.epoch = new_epoch;
+    entry.partitions.clear();
+    entry.groups.clear();
+    entry.pending_offsets.clear();
+    entry.status = TxnStatus::Empty;
+    entry.pending_init_epoch = Some(new_epoch);
 }

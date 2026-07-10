@@ -174,18 +174,29 @@ class RawKafkaClient:
         r = self._send(18, 0, b"")
         return r.int16()  # error_code
 
-    def init_producer_id(self) -> tuple[int, int]:
+    def init_producer_id_raw(
+        self, transactional_id: str | None = None, timeout_ms: int = 60_000
+    ) -> tuple[int, int, int]:
+        """Send InitProducerId once and return (error_code, producer_id, epoch).
+
+        No retry: callers that need to observe a transient coordinator code
+        (e.g. CONCURRENT_TRANSACTIONS) must see the first response.
+        """
         body = bytearray()
-        _put_nullable_string(body, None)  # transactional_id
-        body += struct.pack(">i", 60_000)  # transaction_timeout_ms
+        _put_nullable_string(body, transactional_id)
+        body += struct.pack(">i", timeout_ms)
 
         r = self._send(22, 0, bytes(body))
         r.int32()  # throttle_time_ms
         error_code = r.int16()
-        if error_code != 0:
-            raise RuntimeError(f"InitProducerId returned error {error_code}")
         producer_id = r.int64()
         producer_epoch = r.int16()
+        return error_code, producer_id, producer_epoch
+
+    def init_producer_id(self) -> tuple[int, int]:
+        error_code, producer_id, producer_epoch = self.init_producer_id_raw()
+        if error_code != 0:
+            raise RuntimeError(f"InitProducerId returned error {error_code}")
         return producer_id, producer_epoch
 
     def produce_sequence(

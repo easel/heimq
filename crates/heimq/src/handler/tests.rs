@@ -2144,7 +2144,9 @@ fn add_partitions_to_txn_valid_txn_succeeds() {
     use heimq_protocol::messages::{ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
     // Initialise a real transaction first.
-    let (pid, epoch) = txn_mgr.init_transactional_producer("txn-apts");
+    let (pid, epoch) = txn_mgr
+        .init_transactional_producer("txn-apts")
+        .expect("fresh txn id");
     let mut req = AddPartitionsToTxnRequest::default();
     req.v3_and_below_transactional_id = TransactionalId(StrBytes::from_static_str("txn-apts"));
     req.v3_and_below_producer_id = ProducerId(pid);
@@ -2184,7 +2186,9 @@ fn add_offsets_to_txn_valid_txn_succeeds() {
     use heimq_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
     use heimq_protocol::messages::{GroupId, ProducerId, TransactionalId};
     let txn_mgr = TransactionManager::new();
-    let (pid, epoch) = txn_mgr.init_transactional_producer("txn-aotxn");
+    let (pid, epoch) = txn_mgr
+        .init_transactional_producer("txn-aotxn")
+        .expect("fresh txn id");
     let mut req = AddOffsetsToTxnRequest::default();
     req.transactional_id = TransactionalId(StrBytes::from_static_str("txn-aotxn"));
     req.producer_id = ProducerId(pid);
@@ -2283,4 +2287,38 @@ fn delete_groups_removes_empty_group() {
     assert_eq!(response.results.len(), 1);
     // Deleting a non-existent group returns 0 (already gone).
     assert_eq!(response.results[0].error_code, 0);
+}
+
+/// Apache Kafka and Redpanda both answer CONCURRENT_TRANSACTIONS (51) when
+/// InitProducerId names a transactional id whose transaction is still in
+/// flight; the coordinator aborts it and the client retries. heimq used to
+/// return success immediately. No librdkafka-based test could catch this --
+/// init_transactions() retries 51 internally -- so assert it directly here.
+#[test]
+fn init_producer_id_defers_while_transaction_in_flight() {
+    let txn_mgr = TransactionManager::new();
+    let (pid, epoch) = txn_mgr
+        .init_transactional_producer("txn-concurrent")
+        .expect("fresh txn id");
+
+    // Registering a partition puts the transaction in flight.
+    assert_eq!(
+        txn_mgr.add_partitions("txn-concurrent", pid, epoch, "topic", 0, 0),
+        0
+    );
+
+    // A second init must not hand over the id yet.
+    assert_eq!(
+        txn_mgr.init_transactional_producer("txn-concurrent"),
+        Err(51)
+    );
+
+    // The retry succeeds, with the epoch bumped exactly once by the abort.
+    assert_eq!(
+        txn_mgr.init_transactional_producer("txn-concurrent"),
+        Ok((pid, epoch + 1))
+    );
+
+    // The old producer is fenced at its stale epoch.
+    assert!(!txn_mgr.validate_epoch("txn-concurrent", pid, epoch));
 }

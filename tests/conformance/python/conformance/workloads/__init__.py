@@ -3,6 +3,7 @@
 from types import ModuleType
 
 from . import (
+    concurrent_transactions,
     consumer_group,
     duplicate_sequence,
     epoch_fence,
@@ -23,4 +24,5 @@ def all() -> list[ModuleType]:
         epoch_fence,
         duplicate_sequence,
         out_of_order_sequence,
+        concurrent_transactions,
     ]

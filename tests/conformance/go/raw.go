@@ -167,3 +167,23 @@ func initTransactionalProducerID(ctx context.Context, cl *kgo.Client, txnID stri
 	}
 	return fmt.Errorf("InitProducerId still returning %d after 30s", lastCode)
 }
+
+// rawInitTransactionalProducerIDOnce sends InitProducerId once for a
+// transactional id and returns the broker's first error code, without retrying.
+// Client libraries all retry CONCURRENT_TRANSACTIONS internally, which is
+// exactly what hides the broker's real answer.
+func rawInitTransactionalProducerIDOnce(
+	ctx context.Context, cl *kgo.Client, txnID string,
+) (int16, error) {
+	req := kmsg.NewPtrInitProducerIDRequest()
+	req.Version = 0
+	id := txnID
+	req.TransactionalID = &id
+	req.TransactionTimeoutMillis = 30_000
+
+	resp, err := req.RequestWith(ctx, cl)
+	if err != nil {
+		return 0, fmt.Errorf("InitProducerId: %w", err)
+	}
+	return resp.ErrorCode, nil
+}
