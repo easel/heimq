@@ -12,8 +12,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y default-jdk-headless
 
       - name: Download Apache Kafka CLI tools
+        # archive.apache.org retains pinned releases permanently; downloads.apache.org
+        # only serves the current one, so it 404s once 4.3.0 is superseded.
         run: |
-          curl -fsSL https://downloads.apache.org/kafka/4.3.0/kafka_2.13-4.3.0.tgz -o /tmp/kafka.tgz
+          curl -fsSL https://archive.apache.org/dist/kafka/4.3.0/kafka_2.13-4.3.0.tgz -o /tmp/kafka.tgz
           tar -xzf /tmp/kafka.tgz -C /tmp
           echo "/tmp/kafka_2.13-4.3.0/bin" >> $GITHUB_PATH
 
