@@ -32,7 +32,7 @@ docker run -d --rm \
 if ! docker run --rm \
     --network "container:${CONTAINER}" \
     -v "${ROOT_DIR}:/repo" \
-    -w /repo/crates/heimq/tests/compat/sarama_oracle \
+    -w /repo/tests/conformance/compat/sarama \
     golang:1.24-bookworm \
     bash -lc "set -euo pipefail
         export PATH=/usr/local/go/bin:\$PATH
