@@ -1,6 +1,6 @@
 [package]
 name = "heimq"
-version = "0.1.0"
+version = "0.1.3"
 edition = "2021"
 rust-version = "1.88"
 authors = ["heimq contributors"]
@@ -9,6 +9,16 @@ license = "MIT"
 repository = "https://github.com/heimq/heimq"
 keywords = ["kafka", "messaging", "streaming", "queue"]
 categories = ["network-programming", "asynchronous"]
+
+# heimq is the one crate cargo-release acts on; its version owns the vX.Y.Z tag.
+# tag-prefix is emptied so the tag is `v0.1.4`, not the workspace default
+# `heimq-0.1.4`. See release.toml.
+[package.metadata.release]
+release = true
+tag-prefix = ""
+tag-name = "v{{version}}"
+tag-message = "v{{version}}"
+pre-release-commit-message = "chore: release {{crate_name}} {{version}}"
 
 [dependencies]
 heimq-broker = { path = "../heimq-broker", version = "0.1.0" }

@@ -1,0 +1,22 @@
+# cargo-release configuration (https://github.com/crate-ci/cargo-release).
+#
+# Only the `heimq` crate is released. Its version drives the `vX.Y.Z` tag that
+# triggers release-binaries.yml and docker-image.yml. Nothing is published to
+# crates.io -- releases ship as GitHub binaries and a ghcr.io image.
+#
+# Cut a release from a clean `main`:
+#
+#     cargo install cargo-release      # once
+#     cargo release patch              # 0.1.3 -> 0.1.4: bump, commit, tag, push
+#
+# `cargo release` derives the tag from the crate version, so Cargo.toml and the
+# tag can no longer drift -- the failure mode where v0.1.1..v0.1.3 all shipped
+# binaries reporting 0.1.0 (env!("CARGO_PKG_VERSION")).
+
+# Workspace defaults. Each crate opts in via [package.metadata.release]; only
+# heimq does. This keeps the vendored heimq-protocol fork (0.15.1) and the
+# internal crates from being versioned or tagged in lockstep.
+publish = false
+push = true
+release = false
+shared-version = false
