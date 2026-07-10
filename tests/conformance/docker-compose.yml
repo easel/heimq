@@ -44,14 +44,32 @@ services:
       - --kafka-addr=0.0.0.0:9092
       - --advertise-kafka-addr=redpanda:9092
 
+  # Two runners, one contract. confluent-kafka wraps librdkafka; franz-go is an
+  # independent Go implementation. Running both means a protocol bug in either
+  # client cannot hide behind agreement with itself.
   python:
     build: ./python
     depends_on: [heimq, kafka, redpanda]
+    # Write JSONL into the bind mount as the invoking user, not root.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       HEIMQ_BOOTSTRAP: heimq:9092
       KAFKA_BOOTSTRAP: kafka:9092
       REDPANDA_BOOTSTRAP: redpanda:9092
-      OUT_DIR: /out
+      OUT_DIR: /out/python
+    volumes:
+      - ./exemptions.toml:/conformance/exemptions.toml:ro
+      - ../../target/conformance:/out
+
+  go:
+    build: ./go
+    depends_on: [heimq, kafka, redpanda]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HEIMQ_BOOTSTRAP: heimq:9092
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDPANDA_BOOTSTRAP: redpanda:9092
+      OUT_DIR: /out/go
     volumes:
       - ./exemptions.toml:/conformance/exemptions.toml:ro
       - ../../target/conformance:/out
