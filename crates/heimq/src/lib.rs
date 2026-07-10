@@ -5,15 +5,17 @@
 #![allow(clippy::uninlined_format_args)]
 
 pub mod config;
-pub mod config_store;
 pub mod consumer_group;
 pub mod error;
 pub mod handler;
-pub mod producer_state;
 pub mod protocol;
 pub mod server;
 pub mod storage;
-pub mod transaction_state;
+
+// Request-level handlers and their supporting state now live in heimq-handlers
+// so embedders can reuse them. Re-exported at the original module paths to keep
+// the rest of the binary's `crate::…` references unchanged.
+pub use heimq_handlers::{config_store, producer_state, transaction_state};
 
 // Test support module - available during tests and when test-support feature is enabled
 #[cfg(any(test, feature = "test-support"))]

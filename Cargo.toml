@@ -4,6 +4,7 @@ members = [
     "crates/heimq",
     "crates/heimq-wire",
     "crates/heimq-broker",
+    "crates/heimq-handlers",
     "crates/heimq-testkit",
 ]
 

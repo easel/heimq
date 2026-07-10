@@ -12,9 +12,12 @@
 //! `kafka-protocol` (at whatever version) therefore never resolve a second,
 //! conflicting copy through us.
 //!
-//! Only v2 batches (`magic == 2`) are decoded. Legacy v0/v1 message sets are
-//! rejected, consistent with [`RecordBatchHeader::peek`] and
-//! [`stamp_base_offset`], which have always been v2-only.
+//! [`RecordBatchView::from_bytes`] decodes a single v2 batch (`magic == 2`);
+//! [`RecordBatchView::decode_all`] additionally walks several concatenated v2
+//! batches and decodes legacy v0/v1 message sets (transparently unwrapping any
+//! compression wrapper) so embedders can iterate records from old clients and
+//! multi-batch produce. [`RecordBatchHeader::peek`] and [`stamp_base_offset`]
+//! remain v2-only — they operate on the producer/offset fields of the v2 header.
 
 #![allow(dead_code)]
 
@@ -26,9 +29,16 @@ use std::io::Read;
 
 /// Byte length of the fixed v2 batch header, through `record_count`.
 const V2_HEADER_LEN: usize = 61;
+const MAGIC_V0: u8 = 0;
+const MAGIC_V1: u8 = 1;
 const MAGIC_V2: u8 = 2;
 /// The CRC covers everything from `attributes` to the end of the batch.
 const CRC_COVERAGE_START: usize = 21;
+/// The magic byte sits at the same absolute offset (16) in both a v2 batch
+/// header (`…partition_leader_epoch(12..16) magic(16)`) and a legacy message-set
+/// entry (`offset(0..8) message_size(8..12) crc(12..16) magic(16)`), so one peek
+/// classifies either container.
+const MAGIC_OFFSET: usize = 16;
 
 fn proto(msg: impl Into<String>) -> HeimqError {
     HeimqError::Protocol(msg.into())
@@ -171,14 +181,7 @@ impl<'a> RecordBatchView<'a> {
             )));
         }
 
-        // `batch_length` counts the bytes following it, i.e. from
-        // `partition_leader_epoch` at offset 12 to the end of the batch.
-        let batch_length = i32::from_be_bytes(raw[8..12].try_into().expect("4 bytes"));
-        let batch_end = usize::try_from(batch_length)
-            .ok()
-            .and_then(|n| n.checked_add(12))
-            .filter(|end| *end >= V2_HEADER_LEN && *end <= raw.len())
-            .ok_or_else(|| proto(format!("invalid batch_length {batch_length}")))?;
+        let batch_end = v2_batch_len(raw)?;
 
         let expected_crc = u32::from_be_bytes(raw[17..21].try_into().expect("4 bytes"));
         let actual_crc = crc32c::crc32c(&raw[CRC_COVERAGE_START..batch_end]);
@@ -213,6 +216,30 @@ impl<'a> RecordBatchView<'a> {
             compression,
             records,
         })
+    }
+
+    /// Decode every record batch contained in `raw`.
+    ///
+    /// A produce partition's records field may carry several v2 record batches
+    /// concatenated (multi-batch produce), or — from old clients — a single
+    /// legacy v0/v1 message set. v2 batches decode to one view each; a legacy
+    /// message set (including a compressed wrapper) decodes to a single view
+    /// whose records carry each message's key/value/timestamp. Legacy messages
+    /// have no producer/sequence metadata or record headers, so those fields are
+    /// reported as absent (`producer_id`/`base_sequence` = -1, no headers).
+    ///
+    /// Returns an empty vector for empty input.
+    pub fn decode_all(raw: &'a [u8]) -> Result<Vec<Self>> {
+        if raw.is_empty() {
+            return Ok(Vec::new());
+        }
+        match magic_at(raw)? {
+            MAGIC_V2 => decode_v2_batches(raw),
+            MAGIC_V0 | MAGIC_V1 => Ok(vec![decode_legacy_message_set(raw)?]),
+            other => Err(proto(format!(
+                "unknown record set magic {other}: expected a v0/v1 message set or v2 batch"
+            ))),
+        }
     }
 
     pub fn raw(&self) -> &'a [u8] {
@@ -271,6 +298,187 @@ impl<'a> RecordBatchView<'a> {
             headers: &r.headers,
         })
     }
+}
+
+/// Read the magic byte that classifies a record set. Both a v2 batch header and
+/// a legacy message-set entry place it at [`MAGIC_OFFSET`].
+fn magic_at(raw: &[u8]) -> Result<u8> {
+    raw.get(MAGIC_OFFSET)
+        .copied()
+        .ok_or_else(|| proto("record set too short to contain a magic byte"))
+}
+
+/// Total byte length of the v2 batch that starts at `raw[0]` — i.e.
+/// `base_offset(8) + batch_length(4) + batch_length` bytes, where the header's
+/// `batch_length` counts everything after itself. Validates that the span is at
+/// least a full header and fits within `raw`. The caller must ensure
+/// `raw.len() >= V2_HEADER_LEN` before calling (so `raw[8..12]` is present).
+fn v2_batch_len(raw: &[u8]) -> Result<usize> {
+    let batch_length = i32::from_be_bytes(raw[8..12].try_into().expect("4 bytes"));
+    usize::try_from(batch_length)
+        .ok()
+        .and_then(|n| n.checked_add(12))
+        .filter(|total| *total >= V2_HEADER_LEN && *total <= raw.len())
+        .ok_or_else(|| proto(format!("invalid batch_length {batch_length}")))
+}
+
+/// Walk a buffer of one or more concatenated v2 batches, decoding each. Batch
+/// boundaries come from each header's `batch_length`.
+fn decode_v2_batches(raw: &[u8]) -> Result<Vec<RecordBatchView<'_>>> {
+    let mut out = Vec::new();
+    let mut pos = 0;
+    while pos < raw.len() {
+        let rem = &raw[pos..];
+        if rem.len() < V2_HEADER_LEN {
+            return Err(proto(format!(
+                "trailing {} bytes are too short for a v2 batch header",
+                rem.len()
+            )));
+        }
+        let total = v2_batch_len(rem)?;
+        let end = pos + total;
+        out.push(RecordBatchView::from_bytes(&raw[pos..end])?);
+        pos = end;
+    }
+    Ok(out)
+}
+
+/// One decoded leaf message from a legacy message set (after any compression
+/// wrapper has been unwrapped).
+struct LegacyLeaf {
+    offset: i64,
+    timestamp: i64,
+    key: Option<Bytes>,
+    value: Option<Bytes>,
+}
+
+/// Decode a legacy v0/v1 message set into a single view. Compression wrappers
+/// are transparently unwrapped, so the returned records are the leaf messages.
+///
+/// Offsets follow the message set as it sits on the wire: `base_offset()` is the
+/// first message's stored offset and each record's `offset_delta` is relative to
+/// it. In a *compressed* v1 set the inner messages carry 0-based relative offsets
+/// (the wrapper holds the absolute offset of the last), so the reported base is
+/// that relative 0, not the absolute base — which is why callers must not treat a
+/// legacy `base_offset()` as an absolute log position. On the produce path this is
+/// moot: those offsets are producer placeholders that the log reassigns at append.
+/// The per-record deltas remain correct and sequential either way.
+fn decode_legacy_message_set(raw: &[u8]) -> Result<RecordBatchView<'_>> {
+    let mut leaves = Vec::new();
+    parse_legacy_messages(raw, &mut leaves, true)?;
+
+    let base_offset = leaves.first().map(|m| m.offset).unwrap_or(0);
+    let base_timestamp = leaves.first().map(|m| m.timestamp).unwrap_or(-1);
+    let mut max_timestamp = -1;
+    let mut records = Vec::with_capacity(leaves.len());
+    for m in &leaves {
+        max_timestamp = max_timestamp.max(m.timestamp);
+        let offset_delta = i32::try_from(m.offset - base_offset).map_err(|_| {
+            proto(format!(
+                "legacy message offset {} is more than i32::MAX beyond base {base_offset}",
+                m.offset
+            ))
+        })?;
+        records.push(DecodedRecord {
+            offset_delta,
+            timestamp_delta: m.timestamp - base_timestamp,
+            key: m.key.clone(),
+            value: m.value.clone(),
+            headers: Vec::new(),
+        });
+    }
+
+    Ok(RecordBatchView {
+        raw,
+        producer_id: -1,
+        producer_epoch: -1,
+        base_sequence: -1,
+        base_offset,
+        base_timestamp,
+        max_timestamp,
+        is_transactional: false,
+        is_control: false,
+        // Records are exposed already decompressed, so the view's codec is None
+        // regardless of any wrapper that carried them on the wire.
+        compression: CompressionCodec::None,
+        records,
+    })
+}
+
+/// Walk a legacy message set, pushing each leaf message into `out`.
+///
+/// A compressed entry's value is itself a message set, decompressed and parsed
+/// one level deeper. `allow_compression` gates that recursion: it is `true` for
+/// the top-level set and `false` for the inner set, because Kafka forbids nested
+/// compression. Bounding the recursion to a single level also prevents a crafted
+/// deeply-nested payload from overflowing the stack.
+fn parse_legacy_messages(
+    buf: &[u8],
+    out: &mut Vec<LegacyLeaf>,
+    allow_compression: bool,
+) -> Result<()> {
+    let mut reader = Reader::new(buf);
+    while reader.remaining() > 0 {
+        // read_i64/read_i32 bounds-check, so a short trailing entry surfaces here.
+        let offset = reader
+            .read_i64()
+            .map_err(|_| proto("legacy message set: truncated entry header (offset)"))?;
+        let message_size = reader
+            .read_i32()
+            .map_err(|_| proto("legacy message set: truncated entry header (message size)"))?;
+        let message_size = usize::try_from(message_size)
+            .map_err(|_| proto(format!("negative legacy message size {message_size}")))?;
+        let message = reader.read_exact(message_size)?;
+        parse_legacy_message(offset, message, out, allow_compression)?;
+    }
+    Ok(())
+}
+
+/// Parse one legacy message: `crc(4) magic(1) attributes(1) [timestamp(8) if
+/// magic>=1] key(bytes) value(bytes)`, where key/value use i32 length prefixes.
+fn parse_legacy_message(
+    offset: i64,
+    message: &[u8],
+    out: &mut Vec<LegacyLeaf>,
+    allow_compression: bool,
+) -> Result<()> {
+    let mut reader = Reader::new(message);
+    let _crc = reader.read_i32()?;
+    let magic = reader.read_u8()?;
+    if magic > MAGIC_V1 {
+        return Err(proto(format!(
+            "legacy message set contains magic {magic}; expected 0 or 1"
+        )));
+    }
+    let attributes = reader.read_u8()?;
+    let codec = compression_from_attributes(i16::from(attributes))?;
+    let timestamp = if magic >= MAGIC_V1 {
+        reader.read_i64()?
+    } else {
+        -1
+    };
+    let key = reader.read_legacy_bytes()?;
+    let value = reader.read_legacy_bytes()?;
+
+    if codec == CompressionCodec::None {
+        out.push(LegacyLeaf {
+            offset,
+            timestamp,
+            key,
+            value,
+        });
+    } else {
+        if !allow_compression {
+            return Err(proto(
+                "nested compression in legacy message set: a compressed wrapper's inner messages must be uncompressed",
+            ));
+        }
+        let payload =
+            value.ok_or_else(|| proto("compressed legacy message has a null value payload"))?;
+        let inner = decompress(codec, &payload)?;
+        parse_legacy_messages(&inner, out, false)?;
+    }
+    Ok(())
 }
 
 fn compression_from_attributes(attributes: i16) -> Result<CompressionCodec> {
@@ -483,6 +691,29 @@ impl<'a> Reader<'a> {
     /// Length-prefixed bytes where a negative length encodes `null`.
     fn read_nullable_bytes(&mut self) -> Result<Option<Bytes>> {
         let len = self.read_varint()?;
+        if len < 0 {
+            return Ok(None);
+        }
+        let bytes = self.read_exact(len as usize)?;
+        Ok(Some(Bytes::copy_from_slice(bytes)))
+    }
+
+    fn read_i32(&mut self) -> Result<i32> {
+        Ok(i32::from_be_bytes(
+            self.read_exact(4)?.try_into().expect("4 bytes"),
+        ))
+    }
+
+    fn read_i64(&mut self) -> Result<i64> {
+        Ok(i64::from_be_bytes(
+            self.read_exact(8)?.try_into().expect("8 bytes"),
+        ))
+    }
+
+    /// Legacy (v0/v1) length-prefixed bytes: an i32 length where -1 encodes
+    /// `null`.
+    fn read_legacy_bytes(&mut self) -> Result<Option<Bytes>> {
+        let len = self.read_i32()?;
         if len < 0 {
             return Ok(None);
         }
@@ -741,5 +972,241 @@ mod tests {
         let mut bogus = [0u8; 8];
         assert!(!stamp_base_offset(&mut bogus, 5));
         assert_eq!(bogus, [0u8; 8]);
+    }
+
+    /// Legacy v0/v1 message sets carry no record headers, so the reference
+    /// encoder rejects a record that has any. Build a headerless record for
+    /// those fixtures.
+    fn make_legacy_record(offset: i64, timestamp: i64, key: &[u8], value: &[u8]) -> Record {
+        Record {
+            headers: heimq_protocol::indexmap::IndexMap::new(),
+            ..make_record(offset, timestamp, key, value)
+        }
+    }
+
+    fn encode_ver(records: &[Record], version: i8, compression: Compression) -> Vec<u8> {
+        let mut buf = BytesMut::new();
+        RecordBatchEncoder::encode(
+            &mut buf,
+            records,
+            &RecordEncodeOptions {
+                version,
+                compression,
+            },
+        )
+        .expect("encode message set");
+        buf.to_vec()
+    }
+
+    fn kv(view: &RecordBatchView<'_>) -> Vec<(Vec<u8>, Vec<u8>)> {
+        view.records()
+            .map(|r| {
+                (
+                    r.key.map(|k| k.to_vec()).unwrap_or_default(),
+                    r.value.map(|v| v.to_vec()).unwrap_or_default(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn decode_all_empty_input_yields_no_batches() {
+        assert!(RecordBatchView::decode_all(&[]).unwrap().is_empty());
+    }
+
+    #[test]
+    fn decode_all_returns_single_v2_batch() {
+        let raw = encode(&[make_record(0, 1_000, b"k0", b"v0")], Compression::None);
+        let views = RecordBatchView::decode_all(&raw).expect("decode single batch");
+        assert_eq!(views.len(), 1);
+        assert_eq!(views[0].record_count(), 1);
+        assert_eq!(kv(&views[0]), vec![(b"k0".to_vec(), b"v0".to_vec())]);
+    }
+
+    #[test]
+    fn decode_all_splits_concatenated_v2_batches() {
+        let mut raw = encode(&[make_record(0, 1_000, b"k0", b"v0")], Compression::None);
+        raw.extend(encode(
+            &[
+                make_record(0, 2_000, b"k1", b"v1"),
+                make_record(1, 2_010, b"k2", b"v2"),
+            ],
+            Compression::Gzip,
+        ));
+
+        let views = RecordBatchView::decode_all(&raw).expect("decode multi-batch");
+        assert_eq!(views.len(), 2);
+        assert_eq!(views[0].record_count(), 1);
+        assert_eq!(views[1].record_count(), 2);
+        assert_eq!(kv(&views[0]), vec![(b"k0".to_vec(), b"v0".to_vec())]);
+        assert_eq!(
+            kv(&views[1]),
+            vec![
+                (b"k1".to_vec(), b"v1".to_vec()),
+                (b"k2".to_vec(), b"v2".to_vec()),
+            ]
+        );
+        // Each view still borrows only its own batch bytes.
+        assert_eq!(views[0].raw().len() + views[1].raw().len(), raw.len());
+    }
+
+    #[test]
+    fn decode_all_reads_legacy_v0_message_set() {
+        let raw = encode_ver(
+            &[
+                make_legacy_record(0, -1, b"k0", b"v0"),
+                make_legacy_record(1, -1, b"k1", b"v1"),
+            ],
+            0,
+            Compression::None,
+        );
+        assert_eq!(
+            raw[MAGIC_OFFSET], MAGIC_V0,
+            "fixture must be a v0 message set"
+        );
+
+        let views = RecordBatchView::decode_all(&raw).expect("decode v0 message set");
+        assert_eq!(views.len(), 1);
+        let view = &views[0];
+        assert_eq!(view.producer_id(), -1);
+        assert_eq!(view.base_sequence(), -1);
+        assert_eq!(view.record_count(), 2);
+        assert!(view.records().all(|r| r.header_count() == 0));
+        assert_eq!(
+            kv(view),
+            vec![
+                (b"k0".to_vec(), b"v0".to_vec()),
+                (b"k1".to_vec(), b"v1".to_vec()),
+            ]
+        );
+    }
+
+    #[test]
+    fn decode_all_reads_legacy_v1_message_set_with_timestamps() {
+        let raw = encode_ver(
+            &[
+                make_legacy_record(0, 1_500, b"k0", b"v0"),
+                make_legacy_record(1, 1_600, b"k1", b"v1"),
+            ],
+            1,
+            Compression::None,
+        );
+        assert_eq!(
+            raw[MAGIC_OFFSET], MAGIC_V1,
+            "fixture must be a v1 message set"
+        );
+
+        let views = RecordBatchView::decode_all(&raw).expect("decode v1 message set");
+        assert_eq!(views.len(), 1);
+        let view = &views[0];
+        assert_eq!(
+            kv(view),
+            vec![
+                (b"k0".to_vec(), b"v0".to_vec()),
+                (b"k1".to_vec(), b"v1".to_vec()),
+            ]
+        );
+        let timestamps: Vec<i64> = view
+            .records()
+            .map(|r| view.base_timestamp() + r.timestamp_delta)
+            .collect();
+        assert_eq!(timestamps, vec![1_500, 1_600]);
+    }
+
+    #[test]
+    fn decode_all_unwraps_compressed_legacy_message_set() {
+        let raw = encode_ver(
+            &[
+                make_legacy_record(0, 1_500, b"k0", b"v0"),
+                make_legacy_record(1, 1_600, b"k1", b"v1"),
+            ],
+            1,
+            Compression::Gzip,
+        );
+        // A compressed legacy set is a single wrapper message (magic v1).
+        assert_eq!(raw[MAGIC_OFFSET], MAGIC_V1);
+
+        let views = RecordBatchView::decode_all(&raw).expect("decode compressed v1 set");
+        assert_eq!(views.len(), 1);
+        let view = &views[0];
+        assert_eq!(
+            view.record_count(),
+            2,
+            "wrapper must be unwrapped to leaves"
+        );
+        assert_eq!(
+            kv(view),
+            vec![
+                (b"k0".to_vec(), b"v0".to_vec()),
+                (b"k1".to_vec(), b"v1".to_vec()),
+            ]
+        );
+    }
+
+    /// Build a legacy v1 message-set entry: `offset(8) size(4) [crc(4) magic(1)
+    /// attributes(1) timestamp(8) key(bytes) value(bytes)]`. The legacy CRC is
+    /// not validated on decode, so it is left zero.
+    fn legacy_v1_entry(attributes: u8, value: &[u8]) -> Vec<u8> {
+        let mut msg = Vec::new();
+        msg.extend_from_slice(&0i32.to_be_bytes()); // crc (unchecked)
+        msg.push(MAGIC_V1);
+        msg.push(attributes);
+        msg.extend_from_slice(&0i64.to_be_bytes()); // timestamp
+        msg.extend_from_slice(&(-1i32).to_be_bytes()); // key = null
+        msg.extend_from_slice(&(value.len() as i32).to_be_bytes());
+        msg.extend_from_slice(value);
+
+        let mut entry = Vec::new();
+        entry.extend_from_slice(&0i64.to_be_bytes()); // offset
+        entry.extend_from_slice(&(msg.len() as i32).to_be_bytes());
+        entry.extend_from_slice(&msg);
+        entry
+    }
+
+    fn gzip(data: &[u8]) -> Vec<u8> {
+        use flate2::{write::GzEncoder, Compression as GzLevel};
+        use std::io::Write;
+        let mut enc = GzEncoder::new(Vec::new(), GzLevel::default());
+        enc.write_all(data).expect("gzip write");
+        enc.finish().expect("gzip finish")
+    }
+
+    #[test]
+    fn decode_all_rejects_nested_compression_in_legacy_message_set() {
+        // Kafka forbids a compressed wrapper whose inner messages are themselves
+        // compressed; an unbounded decoder would recurse until the stack blows.
+        // Inner (decompressed) content: one message that *claims* gzip (attr 0x01).
+        let inner = legacy_v1_entry(0x01, b"");
+        // Outer wrapper: a real gzip message whose payload is that inner content.
+        let nested = legacy_v1_entry(0x01, &gzip(&inner));
+
+        let err = match RecordBatchView::decode_all(&nested) {
+            Ok(_) => panic!("nested compression must be rejected"),
+            Err(e) => format!("{e}"),
+        };
+        assert!(
+            err.contains("nested compression"),
+            "expected a nested-compression error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn decode_legacy_rejects_offset_more_than_i32_beyond_base() {
+        // First message at offset 0, second at offset 2^31 — the delta overflows
+        // i32 and must be rejected rather than silently clamped.
+        let mut raw = legacy_v1_entry(0x00, b"v0");
+        // Second entry with a huge absolute offset.
+        let mut second = legacy_v1_entry(0x00, b"v1");
+        second[0..8].copy_from_slice(&(i64::from(i32::MAX) + 1).to_be_bytes());
+        raw.append(&mut second);
+
+        let err = match RecordBatchView::decode_all(&raw) {
+            Ok(_) => panic!("offset gap beyond i32::MAX must be rejected"),
+            Err(e) => format!("{e}"),
+        };
+        assert!(
+            err.contains("beyond base"),
+            "expected an offset-overflow error, got: {err}"
+        );
     }
 }

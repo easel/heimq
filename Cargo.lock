@@ -1011,6 +1011,7 @@ dependencies = [
  "flate2",
  "heimq",
  "heimq-broker",
+ "heimq-handlers",
  "heimq-protocol",
  "heimq-wire",
  "lz4",
@@ -1045,6 +1046,20 @@ dependencies = [
  "snap",
  "thiserror",
  "zstd",
+]
+
+[[package]]
+name = "heimq-handlers"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "chrono",
+ "heimq-broker",
+ "heimq-protocol",
+ "parking_lot",
+ "proptest",
+ "tracing",
 ]
 
 [[package]]

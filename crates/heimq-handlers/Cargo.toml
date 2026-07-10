@@ -1,0 +1,25 @@
+[package]
+name = "heimq-handlers"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Request-level Kafka handlers (Produce/Metadata/ApiVersions/InitProducerId) and request-envelope codec over heimq-broker, for embedders that delegate decode+dispatch+encode"
+
+[dependencies]
+heimq-broker = { path = "../heimq-broker", version = "0.1.0" }
+# Vendored fork of kafka-protocol 0.15.1; imported as `heimq_protocol`. Embedders
+# adopt this same fork rather than linking a foreign kafka-protocol, so the wire
+# types exposed here never resolve a second, conflicting copy.
+heimq-protocol = { path = "../heimq-protocol", version = "0.15.1" }
+
+bytes = "1.10"
+tracing = "0.1"
+chrono = "0.4"
+parking_lot = "0.12"
+
+[dev-dependencies]
+proptest = "1.6"
+anyhow = "1.0"

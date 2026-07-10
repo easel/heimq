@@ -22,6 +22,7 @@ pre-release-commit-message = "chore: release {{crate_name}} {{version}}"
 
 [dependencies]
 heimq-broker = { path = "../heimq-broker", version = "0.1.0" }
+heimq-handlers = { path = "../heimq-handlers", version = "0.1.0" }
 heimq-wire = { path = "../heimq-wire", version = "0.1.0" }
 
 # Async runtime

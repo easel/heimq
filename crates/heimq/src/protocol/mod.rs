@@ -3,14 +3,15 @@
 //! Decodes incoming requests, routes to appropriate handlers,
 //! and encodes responses.
 
-mod codec;
 mod router;
 
-pub use codec::{decode_request, decode_request_bytes, encode_response, RequestHeader};
-pub use flexible::is_flexible;
+// The request-envelope codec and flexible-version predicate now live in
+// heimq-handlers (embedders reuse them); re-exported at the original paths.
+pub use heimq_handlers::codec::{
+    decode_request, decode_request_bytes, encode_response, RequestHeader,
+};
+pub use heimq_handlers::flexible::is_flexible;
 pub use router::Router;
-
-mod flexible;
 
 use crate::consumer_group::GroupCoordinatorCapabilities;
 use crate::storage::{BackendCapabilities, OffsetStoreCapabilities};

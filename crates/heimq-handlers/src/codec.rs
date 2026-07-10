@@ -1,6 +1,6 @@
 //! Protocol encoding and decoding
 
-use crate::protocol::is_flexible;
+use crate::flexible::is_flexible;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use heimq_protocol::protocol::Encodable;
 use std::io::Cursor;
@@ -191,7 +191,6 @@ pub fn encode_response_body<R: Encodable>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::init_tracing;
     use anyhow::anyhow;
 
     struct FailingEncode;
@@ -212,7 +211,6 @@ mod tests {
 
     #[test]
     fn test_decode_request_header() {
-        init_tracing();
         // API key 18 (ApiVersions), version 0, correlation_id 1, no client_id
         let data = [
             0x00, 0x12, // api_key = 18
@@ -379,7 +377,7 @@ mod tests {
 #[cfg(test)]
 mod flexible_tests {
     use super::*;
-    use crate::protocol::is_flexible;
+    use crate::flexible::is_flexible;
     use bytes::BytesMut;
     use heimq_protocol::messages::TopicName;
     use heimq_protocol::protocol::{Decodable, Encodable, StrBytes};
