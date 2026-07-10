@@ -1,0 +1,35 @@
+name: heimq-helm-e2e
+
+# Local reproduction of the Helm-deployed broker's shape: fixed memory budget
+# and the Prometheus endpoint the harness scrapes. In CI the harness points at
+# the kind/Helm deployment instead, via HEIMQ_E2E_BOOTSTRAP / HEIMQ_E2E_METRICS.
+
+services:
+  heimq:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq
+      HEIMQ_MAX_MEMORY_BYTES: "8388608"   # 8 MiB, matches MAX_MEMORY_BYTES
+      HEIMQ_METRICS: "true"
+      HEIMQ_METRICS_PORT: "9093"
+      # Per-scenario broker retention, as scripts/helm-memory-e2e.sh sets via
+      # --set heimq.retentionMs on each fresh install.
+      HEIMQ_RETENTION_MS: ${HEIMQ_RETENTION_MS:-604800000}
+
+  e2e:
+    build: .
+    depends_on: [heimq]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HEIMQ_E2E_BOOTSTRAP: heimq:9092
+      HEIMQ_E2E_METRICS: heimq:9093
+      HEIMQ_E2E_ARTIFACT_DIR: /out
+      HEIMQ_E2E_SCENARIO: ${HEIMQ_E2E_SCENARIO:-}
+      HEIMQ_E2E_A_CASE: ${HEIMQ_E2E_A_CASE:-}
+      HEIMQ_E2E_DEBUG: ${HEIMQ_E2E_DEBUG:-}
+    volumes:
+      - ../../../target/helm-memory-e2e:/out

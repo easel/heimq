@@ -28,7 +28,7 @@ Runs the heimq Helm fixed-memory e2e suite and writes raw evidence under:
   target/helm-memory-e2e/<timestamp>/
 
 Required tools:
-  docker, kind, kubectl, helm, cargo, curl
+  docker, kind, kubectl, helm, curl
 
 Default behavior:
   - creates/uses kind cluster heimq-e2e
@@ -36,7 +36,7 @@ Default behavior:
   - loads that image into kind
   - installs a fresh Helm release for each scenario/case
   - port-forwards 127.0.0.1:9092 and 127.0.0.1:9093
-  - runs cargo test -p heimq --test helm_memory_e2e -- --ignored --exact ...
+  - runs the containerized harness in tests/conformance/helm_e2e
 
 Environment:
   HEIMQ_E2E_KIND_CLUSTER       kind cluster name (default: heimq-e2e)
@@ -89,7 +89,6 @@ preflight() {
     require_tool kind
     require_tool kubectl
     require_tool helm
-    require_tool cargo
     require_tool curl
 
     if command -v lsof >/dev/null 2>&1; then
@@ -317,26 +316,34 @@ start_cgroup_sampler() {
     SAMPLE_PID="$!"
 }
 
-run_rust_scenario() {
+E2E_IMAGE_TAG="heimq-helm-e2e:local"
+
+build_e2e_image() {
+    docker build -t "${E2E_IMAGE_TAG}" "${ROOT_DIR}/tests/conformance/helm_e2e" >/dev/null
+}
+
+# The harness runs in a container and reaches the port-forwarded broker on the
+# host, so nothing but Docker is required on the runner. It used to be a Rust
+# test linking librdkafka into the heimq crate.
+run_e2e_scenario() {
     local case_name="$1"
     local scenario="$2"
     local a_case="${3:-}"
     local case_dir="${ARTIFACT_DIR}/${case_name}"
-    local env_args=(
-        "HEIMQ_E2E_BOOTSTRAP=127.0.0.1:${KAFKA_PORT}"
-        "HEIMQ_E2E_METRICS=127.0.0.1:${METRICS_PORT}"
-        "HEIMQ_E2E_ARTIFACT_DIR=${case_dir}"
-        "HEIMQ_E2E_SCENARIO=${scenario}"
+    local docker_env=(
+        -e "HEIMQ_E2E_BOOTSTRAP=127.0.0.1:${KAFKA_PORT}"
+        -e "HEIMQ_E2E_METRICS=127.0.0.1:${METRICS_PORT}"
+        -e "HEIMQ_E2E_ARTIFACT_DIR=/out"
+        -e "HEIMQ_E2E_SCENARIO=${scenario}"
     )
     if [[ -n "${a_case}" ]]; then
-        env_args+=("HEIMQ_E2E_A_CASE=${a_case}")
+        docker_env+=(-e "HEIMQ_E2E_A_CASE=${a_case}")
     fi
-    (
-        cd "${ROOT_DIR}"
-        env "${env_args[@]}" \
-            cargo test -p heimq --test helm_memory_e2e \
-            -- --ignored --exact helm_memory_e2e_requires_bootstrap_or_runs_when_bootstrap_set --nocapture
-    ) 2>&1 | tee "${case_dir}/cargo-test.log"
+    docker run --rm --network host \
+        "${docker_env[@]}" \
+        --user "$(id -u):$(id -g)" \
+        -v "${case_dir}:/out" \
+        "${E2E_IMAGE_TAG}" 2>&1 | tee "${case_dir}/e2e.log"
 }
 
 capture_after() {
@@ -362,7 +369,7 @@ run_case() {
     if [[ "${scenario}" == "B" ]]; then
         start_cgroup_sampler "${case_name}"
     fi
-    run_rust_scenario "${case_name}" "${scenario}" "${a_case}"
+    run_e2e_scenario "${case_name}" "${scenario}" "${a_case}"
     stop_cgroup_sampler
     capture_after "${case_name}"
     cleanup_background
@@ -383,11 +390,11 @@ main() {
         docker version || true
         kubectl version --client=true || true
         helm version || true
-        cargo --version || true
     } >"${ARTIFACT_DIR}/run-metadata.txt" 2>&1
 
     ensure_cluster
     build_and_load_image
+    build_e2e_image
 
     run_case "scenario-a-1-topic" "A" "604800000" "A-1-topic"
     run_case "scenario-a-10-topics" "A" "604800000" "A-10-topics"

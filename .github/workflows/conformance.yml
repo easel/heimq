@@ -1,0 +1,59 @@
+name: conformance
+
+# The Kafka-facing test suite. Everything here runs in containers and needs
+# nothing on the runner but Docker -- no Rust toolchain, no librdkafka, no Go,
+# Node or kcat. A missing runtime is a build failure, never a skipped test.
+#
+#   parity      heimq vs apache/kafka + redpanda, two independent clients
+#   compat      independent client oracles against heimq alone
+#   integration heimq's own behavioural suite
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  # Differential: compares heimq's wire-level responses against each reference
+  # broker across all SD-003 workloads, under both a librdkafka-derived client
+  # and franz-go. Apache Kafka is the canonical oracle; Redpanda is a second
+  # independent implementation.
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pull broker images (cache-warm)
+        run: |
+          docker pull docker.redpanda.com/redpandadata/redpanda:v25.1.1
+          docker pull apache/kafka:3.9.0
+
+      - name: Run parity (python + go runners)
+        run: ./tests/conformance/run.sh
+
+      - name: Upload diff records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-diffs-${{ github.run_id }}
+          path: target/conformance/
+          if-no-files-found: ignore
+
+  # Independent client implementations against heimq: franz-go, sarama, KafkaJS
+  # and kcat. Their runtimes live in the images, so none can silently skip.
+  compat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run compat oracles
+        run: ./tests/conformance/compat/run.sh
+
+  # heimq's own behavioural suite: legacy v0/v1 message formats via
+  # kafka-python-ng, and the modern protocol via confluent-kafka.
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run integration suite
+        run: ./tests/conformance/integration/run.sh

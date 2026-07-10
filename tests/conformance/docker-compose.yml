@@ -1,0 +1,75 @@
+name: heimq-conformance
+
+# Every broker, including heimq, runs from its normal entrypoint on one network.
+# Runners are containers on that same network, so brokers resolve by service name
+# and no bridge-IP discovery or host port mapping is needed.
+
+services:
+  heimq:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    environment:
+      HEIMQ_HOST: 0.0.0.0
+      HEIMQ_PORT: "9092"
+      HEIMQ_ADVERTISED_HOST: heimq
+
+  kafka:
+    image: apache/kafka:3.9.0
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # Bind to the service name, not 0.0.0.0: Kafka's storage-format step
+      # rejects a non-routable advertised address, and advertised.listeners
+      # defaults from listeners.
+      KAFKA_LISTENERS: PLAINTEXT://kafka:9092,CONTROLLER://kafka:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v25.1.1
+    command:
+      - redpanda
+      - start
+      - --smp=1
+      - --memory=512M
+      - --overprovisioned
+      - --kafka-addr=0.0.0.0:9092
+      - --advertise-kafka-addr=redpanda:9092
+
+  # Two runners, one contract. confluent-kafka wraps librdkafka; franz-go is an
+  # independent Go implementation. Running both means a protocol bug in either
+  # client cannot hide behind agreement with itself.
+  python:
+    build: ./python
+    depends_on: [heimq, kafka, redpanda]
+    # Write JSONL into the bind mount as the invoking user, not root.
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HEIMQ_BOOTSTRAP: heimq:9092
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDPANDA_BOOTSTRAP: redpanda:9092
+      OUT_DIR: /out/python
+    volumes:
+      - ./exemptions.toml:/conformance/exemptions.toml:ro
+      - ../../target/conformance:/out
+
+  go:
+    build: ./go
+    depends_on: [heimq, kafka, redpanda]
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
+    environment:
+      HEIMQ_BOOTSTRAP: heimq:9092
+      KAFKA_BOOTSTRAP: kafka:9092
+      REDPANDA_BOOTSTRAP: redpanda:9092
+      OUT_DIR: /out/go
+    volumes:
+      - ./exemptions.toml:/conformance/exemptions.toml:ro
+      - ../../target/conformance:/out

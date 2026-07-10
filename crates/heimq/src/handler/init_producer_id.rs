@@ -31,13 +31,24 @@ pub fn handle(
 
     if is_transactional {
         let txn_id = request.transactional_id.as_ref().unwrap().0.to_string();
-        let (pid, epoch) = transaction_manager.init_transactional_producer(&txn_id);
-        debug!(producer_id = pid, epoch, txn_id = %txn_id, "Allocated transactional producer ID");
-
         let mut resp = InitProducerIdResponse::default();
-        resp.error_code = 0;
-        resp.producer_id = ProducerId(pid);
-        resp.producer_epoch = epoch;
+
+        match transaction_manager.init_transactional_producer(&txn_id) {
+            Ok((pid, epoch)) => {
+                debug!(producer_id = pid, epoch, txn_id = %txn_id, "Allocated transactional producer ID");
+                resp.error_code = 0;
+                resp.producer_id = ProducerId(pid);
+                resp.producer_epoch = epoch;
+            }
+            Err(code) => {
+                // A transaction for this id is still in flight; it has been aborted
+                // and the caller must retry. Kafka reports no id alongside the error.
+                debug!(error_code = code, txn_id = %txn_id, "InitProducerId deferred");
+                resp.error_code = code;
+                resp.producer_id = ProducerId(-1);
+                resp.producer_epoch = -1;
+            }
+        }
         return Ok(resp);
     }
 

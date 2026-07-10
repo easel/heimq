@@ -154,10 +154,13 @@ Run the full workspace test suite:
 cargo test --workspace --all-targets
 ```
 
-Run the compatibility script:
+Run the Kafka-facing conformance suite. It runs entirely in containers and
+needs nothing installed but Docker:
 
 ```bash
-./scripts/compatibility-test.sh
+./tests/conformance/run.sh              # heimq vs Kafka + Redpanda
+./tests/conformance/compat/run.sh       # independent client oracles
+./tests/conformance/integration/run.sh  # heimq behavioural suite
 ```
 
 Run the local benchmark smoke:

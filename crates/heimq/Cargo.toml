@@ -71,16 +71,6 @@ tokio-test = "0.4"
 tempfile = "3.16"
 proptest = "1.6"
 
-# Primary test client - rdkafka with librdkafka built from source
-# FIREWALLED: dev-dependency only, never in server binary
-rdkafka = { version = "0.39", features = ["cmake-build", "tokio"] }
-
-# Legacy protocol testing (pure Rust, v0-v2 message formats)
-kafka = { version = "0.10", default-features = false, features = ["gzip", "snappy"] }
-
-# Parity harness - container orchestration and serialization
-testcontainers = "0.27"
-toml = "1"
 
 [features]
 default = []
@@ -95,16 +85,9 @@ features = ["test-support"]
 name = "heimq"
 path = "src/main.rs"
 
-[[test]]
-name = "parity"
-path = "tests/parity/main.rs"
-harness = false
 
-[[test]]
-name = "compat"
-path = "tests/compat.rs"
 
-# Benchmarks - uncomment when rdkafka is available
+# Benchmarks - see tests/conformance/bench
 # [[bench]]
 # name = "throughput"
 # harness = false

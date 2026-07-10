@@ -8,9 +8,7 @@
 yanked = "deny"
 unmaintained = "all"
 unused-ignored-advisory = "deny"
-ignore = [
-    { id = "RUSTSEC-2024-0436", reason = "paste is a dependency of the vendored heimq-protocol crate (kafka-protocol 0.15.1). RustSec lists no patched version; remove this ignore when heimq-protocol no longer resolves paste." },
-]
+ignore = []
 
 [licenses]
 confidence-threshold = 0.8

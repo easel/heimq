@@ -206,8 +206,8 @@ kcat -b localhost:9092 -L
 ### Compatibility Testing
 
 ```bash
-# Run against real Kafka/Redpanda for comparison
-./scripts/compatibility-test.sh
+# Differential: heimq vs Apache Kafka and Redpanda, in containers
+./tests/conformance/run.sh
 ```
 
 ## Performance
