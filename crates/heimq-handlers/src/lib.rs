@@ -8,6 +8,11 @@
 //! fork, so exposing those types here does not resolve a second, conflicting
 //! copy of `kafka-protocol`.
 
+// The handler and codec modules were extracted from the heimq binary, which
+// allows this lint crate-wide; keep the same policy so the moved code's
+// `format!("{}", x)` style stays consistent across the toolchains CI pins.
+#![allow(clippy::uninlined_format_args)]
+
 pub mod api_versions;
 pub mod codec;
 pub mod config_store;
