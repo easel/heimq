@@ -31,7 +31,7 @@ jobs:
           docker pull apache/kafka:3.9.0
 
       - name: Run parity (python + go runners)
-        run: ./tests/conformance/run.sh
+        run: scripts/ci/reliability-gate.sh feat-003-parity -- ./tests/conformance/run.sh
 
       - name: Upload diff records
         if: always()

@@ -95,8 +95,16 @@ single script per target.
 
 ### Non-Functional Requirements
 
-- **Reliability**: Each integration test pass rate ≥ 99% on its gating
-  profile.
+- **Reliability**: The executable reliability rule is a zero-failure
+  invariant over the current GitHub Actions workflow run. The FEAT-005
+  evidence window is the `ecosystem` workflow: one required attempt for
+  each integration target, zero allowed failures, emitted and enforced
+  by `scripts/ci/reliability-gate.sh`. The target names are
+  `feat-005-librdkafka-python`, `feat-005-librdkafka-go`,
+  `feat-005-node-rdkafka`, `feat-005-schema-registry`,
+  `feat-005-kafka-connect`, `feat-005-ksqldb`, `feat-005-debezium`,
+  and `feat-005-flink`. Historical pass-rate percentages are not
+  claimed until a separate rolling measurement store exists.
 - **Reproducibility**: Pinned tool versions per integration; one script
   per integration that brings up dependencies, runs the test, tears
   down.
@@ -127,6 +135,9 @@ single script per target.
   CI.
 - The integration matrix is documented in the test plan with each
   target's status (green / yellow / parked).
+- Current-workflow reliability evidence for FEAT-005 shows
+  `reliability_rule=zero_failures`, `required_attempts=1`,
+  `allowed_failures=0`, and a passing result for every ecosystem target.
 
 ## Constraints and Assumptions
 

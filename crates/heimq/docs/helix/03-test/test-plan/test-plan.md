@@ -408,6 +408,29 @@ test:
     - cargo llvm-cov --workspace --all-features --fail-under-lines 100 --fail-under-regions 100
 ```
 
+### Reliability Evidence Window
+
+FEAT-003, FEAT-004, and FEAT-005 use the same executable reliability
+rule: zero target failures in the current GitHub Actions workflow run.
+The evidence window is deliberately the current workflow run, not a
+historical percentage window, because the repository does not maintain a
+rolling result store for flake-rate or pass-rate aggregation. No
+less-than-1-percent flake-rate or at-least-99-percent pass-rate result is
+claimed by this plan.
+
+The CI ratchet is `scripts/ci/reliability-gate.sh <target> -- <command>`.
+It emits `reliability_rule=zero_failures`,
+`evidence_window=current_github_actions_workflow_run`,
+`required_attempts=1`, and `allowed_failures=0`, runs the target command,
+then exits non-zero when the command fails. The required target windows
+are:
+
+| Feature | Workflow target(s) | Required attempts | Allowed failures |
+| --- | --- | ---: | ---: |
+| FEAT-003 | `feat-003-parity` in `.github/workflows/conformance.yml` | 1 | 0 |
+| FEAT-004 | `feat-004-bench-smoke` in `.github/workflows/bench-smoke.yml`; `feat-004-bench-omb` in `.github/workflows/bench-omb.yml` | 1 per target | 0 |
+| FEAT-005 | `feat-005-librdkafka-python`, `feat-005-librdkafka-go`, `feat-005-node-rdkafka`, `feat-005-schema-registry`, `feat-005-kafka-connect`, `feat-005-ksqldb`, `feat-005-debezium`, `feat-005-flink` in `.github/workflows/ecosystem.yml` | 1 per target | 0 |
+
 ## Risk Assessment
 
 | Risk | Impact | Probability | Mitigation |

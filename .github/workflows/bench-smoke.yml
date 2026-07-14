@@ -34,7 +34,7 @@ jobs:
         # @covers US-006-AC2
         # @covers US-006-AC3
         # @covers US-006-AC4
-        run: BOOTSTRAP=localhost:9094 bash scripts/bench/run-smoke.sh
+        run: scripts/ci/reliability-gate.sh feat-004-bench-smoke -- bash -c 'BOOTSTRAP=localhost:9094 bash scripts/bench/run-smoke.sh'
 
       - name: Stop heimq
         if: always()

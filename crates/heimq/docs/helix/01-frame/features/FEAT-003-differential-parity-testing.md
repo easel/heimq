@@ -79,7 +79,13 @@ with Redpanda is observable rather than asserted.
   workload produce the same diff (after normalization).
 - **Performance**: Harness completes its gating workload in under 10
   minutes on CI hardware.
-- **Reliability**: Less than 1% flake rate on the gating workload.
+- **Reliability**: The executable reliability rule is a zero-failure
+  invariant over the current GitHub Actions workflow run. The FEAT-003
+  evidence window is the `conformance` workflow's `parity` job: one
+  required parity-harness attempt, zero allowed failures, emitted and
+  enforced by `scripts/ci/reliability-gate.sh feat-003-parity -- ./tests/conformance/run.sh`.
+  Historical flake-rate percentages are not claimed until a separate
+  rolling measurement store exists.
 
 ## User Stories
 
@@ -98,6 +104,9 @@ with Redpanda is observable rather than asserted.
 
 - Zero unmatched diffs at the gating workload across in-scope APIs.
 - Differential harness gates CI for protocol-touching changes.
+- Current-workflow reliability evidence for FEAT-003 shows
+  `reliability_rule=zero_failures`, `required_attempts=1`,
+  `allowed_failures=0`, and a passing `feat-003-parity` target.
 
 ## Constraints and Assumptions
 

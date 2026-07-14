@@ -33,17 +33,17 @@ jobs:
       - name: Test Python confluent-kafka
         # @covers US-012-AC2
         # @covers US-012-AC4
-        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/01-librdkafka-python.sh
+        run: scripts/ci/reliability-gate.sh feat-005-librdkafka-python -- bash -c 'BOOTSTRAP=localhost:9094 bash tests/ecosystem/01-librdkafka-python.sh'
 
       - name: Test Go confluent-kafka-go
         # @covers US-012-AC1
         # @covers US-012-AC4
-        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/02-librdkafka-go.sh
+        run: scripts/ci/reliability-gate.sh feat-005-librdkafka-go -- bash -c 'BOOTSTRAP=localhost:9094 bash tests/ecosystem/02-librdkafka-go.sh'
 
       - name: Test Node node-rdkafka
         # @covers US-012-AC3
         # @covers US-012-AC4
-        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/03-librdkafka-node.sh
+        run: scripts/ci/reliability-gate.sh feat-005-node-rdkafka -- bash -c 'BOOTSTRAP=localhost:9094 bash tests/ecosystem/03-librdkafka-node.sh'
 
       - name: Stop heimq
         if: always()
@@ -72,20 +72,20 @@ jobs:
         # @covers US-011-AC2
         # @covers US-011-AC3
         # @covers US-011-AC4
-        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/04-schema-registry.sh
+        run: scripts/ci/reliability-gate.sh feat-005-schema-registry -- bash -c 'BOOTSTRAP=localhost:9094 bash tests/ecosystem/04-schema-registry.sh'
 
       - name: Test Kafka Connect (source + sink)
         # @covers US-008-AC1
         # @covers US-008-AC2
         # @covers US-008-AC3
         # @covers US-008-AC4
-        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/05-kafka-connect.sh
+        run: scripts/ci/reliability-gate.sh feat-005-kafka-connect -- bash -c 'BOOTSTRAP=localhost:9094 bash tests/ecosystem/05-kafka-connect.sh'
 
       - name: Test ksqlDB
         # @covers US-014-AC1
         # @covers US-014-AC2
         # @covers US-014-AC3
-        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/06-ksqldb.sh
+        run: scripts/ci/reliability-gate.sh feat-005-ksqldb -- bash -c 'BOOTSTRAP=localhost:9094 bash tests/ecosystem/06-ksqldb.sh'
 
       - name: Stop heimq
         if: always()
@@ -113,13 +113,13 @@ jobs:
         # @covers US-010-AC1
         # @covers US-010-AC2
         # @covers US-010-AC3
-        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/07-debezium.sh
+        run: scripts/ci/reliability-gate.sh feat-005-debezium -- bash -c 'BOOTSTRAP=localhost:9094 bash tests/ecosystem/07-debezium.sh'
 
       - name: Test Apache Flink (Kafka source + sink, EOS)
         # @covers US-009-AC1
         # @covers US-009-AC2
         # @covers US-009-AC3
-        run: BOOTSTRAP=localhost:9094 bash tests/ecosystem/08-flink.sh
+        run: scripts/ci/reliability-gate.sh feat-005-flink -- bash -c 'BOOTSTRAP=localhost:9094 bash tests/ecosystem/08-flink.sh'
 
       - name: Stop heimq
         if: always()

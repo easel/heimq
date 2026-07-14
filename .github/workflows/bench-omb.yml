@@ -51,7 +51,7 @@ jobs:
       - name: Run OMB conformance
         # @covers US-007-AC1
         # @covers US-007-AC3
-        run: BOOTSTRAP=localhost:9094 bash scripts/bench/run-omb.sh
+        run: scripts/ci/reliability-gate.sh feat-004-bench-omb -- bash -c 'BOOTSTRAP=localhost:9094 bash scripts/bench/run-omb.sh'
 
       - name: Stop heimq
         if: always()

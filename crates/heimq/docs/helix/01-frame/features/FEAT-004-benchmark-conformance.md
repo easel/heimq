@@ -78,7 +78,14 @@ tests miss.
 
 ### Non-Functional Requirements
 
-- **Reliability**: Bench harness pass rate ≥ 99% on the gating workload.
+- **Reliability**: The executable reliability rule is a zero-failure
+  invariant over the current GitHub Actions workflow run. The FEAT-004
+  evidence window is the `bench-smoke` workflow's `feat-004-bench-smoke`
+  target plus the `bench-omb` workflow's `feat-004-bench-omb` target:
+  one required attempt per target, zero allowed failures, emitted and
+  enforced by `scripts/ci/reliability-gate.sh`. Historical pass-rate
+  percentages are not claimed until a separate rolling measurement
+  store exists.
 - **Reproducibility**: Each profile is a checked-in script with pinned
   client / tool versions.
 - **Performance**: Bench harness wall-clock budget ≤ 30 min on CI
@@ -105,6 +112,10 @@ tests miss.
   errors at their gating profile.
 - Each benchmark profile is checked in with its expected exit code and
   acceptable warnings list.
+- Current-workflow reliability evidence for FEAT-004 shows
+  `reliability_rule=zero_failures`, `required_attempts=1`,
+  `allowed_failures=0`, and passing `feat-004-bench-smoke` and
+  `feat-004-bench-omb` targets.
 
 ## Constraints and Assumptions
 
