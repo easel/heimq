@@ -1,0 +1,101 @@
+{
+  "attempt_id": "20260714T040745-ff209030",
+  "bead_id": "heimq-a97ba3ff",
+  "base_rev": "9cde1670ac05a12295869346c0d7c7ef9d4998cb",
+  "created_at": "2026-07-14T04:07:46.069457472Z",
+  "requested": {
+    "prompt": "synthesized",
+    "min_power": 5
+  },
+  "bead": {
+    "id": "heimq-a97ba3ff",
+    "title": "Pin the OpenMessaging Benchmark source used by CI",
+    "description": "Resolve AR13-03. ADR-004 requires the OMB harness to pin the latest released driver, but .github/workflows/bench-omb.yml currently clones default-branch HEAD and scripts/bench/run-omb.sh documents the same floating clone. Determine the current latest released OMB tag from the authoritative upstream repository, pin CI and documentation to that immutable tag or commit, and record the chosen version in ADR-004/FEAT-004. In scope: bench-omb workflow, OMB run docs/scripts, ADR-004 and FEAT-004 version statement. Out of scope: changing workload semantics.",
+    "acceptance": "1. rg -n 'git clone' .github/workflows/bench-omb.yml scripts/bench/run-omb.sh shows an explicit tag/commit checkout and no floating default-branch build. 2. The pin matches the version recorded in ADR-004 and FEAT-004. 3. bash -n scripts/bench/run-omb.sh passes and actionlint .github/workflows/bench-omb.yml passes when actionlint is available.",
+    "parent": "heimq-c7d1cba4",
+    "labels": [
+      "helix",
+      "area:infra",
+      "area:testing",
+      "kind:reproducibility"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"project root mutation rejected\",\"fingerprint\":\"14dfad3e8360df050ef8e97beebd6d35f6bab18d3a57e1a8d7acdc94828e3b7f\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"14dfad3e8360df050ef8e97beebd6d35f6bab18d3a57e1a8d7acdc94828e3b7f\"}",
+          "created_at": "2026-07-14T04:02:48.384839734Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"resolved_provider\":\"codex\",\"resolved_model\":\"gpt-5.4-mini\",\"route_reason\":\"explicit_pin_discovery_unavailable\",\"fallback_chain\":[]}",
+          "created_at": "2026-07-14T04:05:31.603166765Z",
+          "kind": "routing",
+          "source": "legacy agent execute-bead",
+          "summary": "provider=codex model=gpt-5.4-mini reason=explicit_pin_discovery_unavailable"
+        },
+        {
+          "actor": "ddx",
+          "body": "{\"attempt_id\":\"20260714T040257-2d721e50\",\"harness\":\"codex\",\"model\":\"gpt-5.4-mini\",\"route_reason\":\"explicit_pin_discovery_unavailable\",\"input_tokens\":594699,\"output_tokens\":8348,\"total_tokens\":603047,\"cost_usd\":0,\"duration_ms\":152675,\"exit_code\":0}",
+          "created_at": "2026-07-14T04:05:31.873664201Z",
+          "kind": "cost",
+          "source": "legacy agent execute-bead",
+          "summary": "tokens=603047 model=gpt-5.4-mini"
+        },
+        {
+          "actor": "",
+          "body": "{\"candidate_ref\":\"refs/ddx/iterations/20260714T040257-2d721e50/0\",\"cycle_index\":0,\"attempt_id\":\"20260714T040257-2d721e50\",\"base_rev\":\"f4884d6bc123f2fc9545b9c287fafb59bdfb1fc0\",\"result_rev\":\"6f2efce5416a5b7e98eec7986d0cedccbce46610\"}",
+          "created_at": "2026-07-14T04:05:32.005729561Z",
+          "kind": "candidate_cycle_pinned",
+          "source": "",
+          "summary": ""
+        },
+        {
+          "actor": "",
+          "body": "{\"candidate_ref\":\"refs/ddx/iterations/20260714T040257-2d721e50/0\",\"cycle_index\":0,\"attempt_id\":\"20260714T040257-2d721e50\",\"base_rev\":\"f4884d6bc123f2fc9545b9c287fafb59bdfb1fc0\",\"result_rev\":\"6f2efce5416a5b7e98eec7986d0cedccbce46610\",\"classification\":\"review_malfunction\",\"reason\":\"review-group: review-error: provider_empty: reviewer output: unparseable JSON verdict: empty input (raw output 0 bytes; see .ddx/executions/20260714T040532-c2cb9507)\"}",
+          "created_at": "2026-07-14T04:07:44.021209266Z",
+          "kind": "candidate-review-classified",
+          "source": "",
+          "summary": "review_malfunction"
+        },
+        {
+          "actor": "erik",
+          "body": "name=workspace-tests\nstatus=error\nmessage=check \"workspace-tests\" exited 2: sh: 1: set: Illegal option -o pipefail\n",
+          "created_at": "2026-07-14T04:07:44.298564458Z",
+          "kind": "checks-blocked",
+          "source": "ddx work",
+          "summary": "pre-merge check \"workspace-tests\" returned error"
+        },
+        {
+          "actor": "erik",
+          "body": "check_name=workspace-tests\nstatus=error\nexit_code=2\nattempt_id=20260714T040257-2d721e50\nbase_rev=f4884d6bc123f2fc9545b9c287fafb59bdfb1fc0\nresult_rev=6f2efce5416a5b7e98eec7986d0cedccbce46610\nevidence_dir=/home/erik/Projects/heimq/.ddx/executions/20260714T040257-2d721e50/checks\nmessage=check \"workspace-tests\" exited 2: sh: 1: set: Illegal option -o pipefail\noutput=check \"workspace-tests\" exited 2: sh: 1: set: Illegal option -o pipefail\nstderr_tail=sh: 1: set: Illegal option -o pipefail",
+          "created_at": "2026-07-14T04:07:44.298564458Z",
+          "kind": "pre_merge_check_failed",
+          "source": "ddx work",
+          "summary": "pre-merge checks blocked check=workspace-tests status=error"
+        }
+      ],
+      "spec-id": "ADR-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-004",
+      "path": "crates/heimq/docs/helix/02-design/adr/ADR-004-openmessaging-benchmark-version.md",
+      "title": "ADR-004: OpenMessaging Benchmark Version Targeting"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260714T040745-ff209030",
+    "prompt": ".ddx/executions/20260714T040745-ff209030/prompt.md",
+    "manifest": ".ddx/executions/20260714T040745-ff209030/manifest.json",
+    "result": ".ddx/executions/20260714T040745-ff209030/result.json",
+    "checks": ".ddx/executions/20260714T040745-ff209030/checks.json",
+    "usage": ".ddx/executions/20260714T040745-ff209030/usage.json",
+    "worktree": "home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T040745-ff209030"
+  },
+  "prompt_sha": "7f0113b48be9ad1310acddc9781c3d798755eefa1cc3cad910b6e24f4d4d282b"
+}
