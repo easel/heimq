@@ -1,0 +1,83 @@
+{
+  "attempt_id": "20260714T041408-1a6a7547",
+  "bead_id": "heimq-a97ba3ff",
+  "worktree": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+  "trigger": "context canceled",
+  "started_at": "2026-07-14T04:14:22.997268616Z",
+  "finished_at": "2026-07-14T04:14:23.404513344Z",
+  "scanned": 736,
+  "candidates": [
+    {
+      "pid": 1716674,
+      "ppid": 1716391,
+      "pgid": 1716367,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "/bin/bash /home/erik/.dotfiles/scripts/install-configs.sh --quiet"
+    },
+    {
+      "pid": 1716408,
+      "ppid": 1,
+      "pgid": 1716408,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "npm exec @modelcontextprotocol/server-sequential-thinking"
+    },
+    {
+      "pid": 1716396,
+      "ppid": 1,
+      "pgid": 1716396,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "npm exec @modelcontextprotocol/server-filesystem ${CLAUDE_PLUGIN_ROOT}/../.."
+    },
+    {
+      "pid": 1716391,
+      "ppid": 1,
+      "pgid": 1716367,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "/bin/bash /home/erik/.dotfiles/scripts/install-configs.sh --quiet"
+    },
+    {
+      "pid": 1716367,
+      "ppid": 1,
+      "pgid": 1716367,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "/usr/bin/zsh -lc if [[ -n \"$ZDOTDIR\" ]]; then rc=\"$ZDOTDIR/.zshrc\" else rc=\"$HOME/.zshrc\" fi [[ -r \"$rc\" ]] \u0026\u0026 . \"$rc\" print '# Snapshot file' print '# Unset all aliases to avoid conflicts with functions' print 'unalias -a 2\u003e/dev/null || true' print '# Functions' functions print '' setopt_count=$(setopt | wc -l | tr -d ' ') print \"# setopts $setopt_count\" setopt | sed 's/^/setopt /' print '' alias_count=$(alias -L | wc -l | tr -d ' ') print \"# aliases $alias_count\" alias -L print '' export_lines=$(export -p | awk ' /^(export|declare -x|typeset -x) / { line=$0 name=line sub(/^(export|declare -x|typeset -x) /, \"\", name) sub(/=.*/, \"\", name) if (name ~ /^(PWD|OLDPWD)$/) { next } if (name ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { print line } }') export_count=$(printf '%s\\n' \"$export_lines\" | sed '/^$/d' | wc -l | tr -d ' ') print \"# exports $export_count\" if [[ -n \"$export_lines\" ]]; then print -r -- \"$export_lines\" fi"
+    }
+  ],
+  "killed": [
+    {
+      "pid": 1716674,
+      "ppid": 1716391,
+      "pgid": 1716367,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "/bin/bash /home/erik/.dotfiles/scripts/install-configs.sh --quiet"
+    },
+    {
+      "pid": 1716408,
+      "ppid": 1,
+      "pgid": 1716408,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "npm exec @modelcontextprotocol/server-sequential-thinking"
+    },
+    {
+      "pid": 1716396,
+      "ppid": 1,
+      "pgid": 1716396,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "npm exec @modelcontextprotocol/server-filesystem ${CLAUDE_PLUGIN_ROOT}/../.."
+    },
+    {
+      "pid": 1716391,
+      "ppid": 1,
+      "pgid": 1716367,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "/bin/bash /home/erik/.dotfiles/scripts/install-configs.sh --quiet"
+    },
+    {
+      "pid": 1716367,
+      "ppid": 1,
+      "pgid": 1716367,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T041408-1a6a7547",
+      "command": "/usr/bin/zsh -lc if [[ -n \"$ZDOTDIR\" ]]; then rc=\"$ZDOTDIR/.zshrc\" else rc=\"$HOME/.zshrc\" fi [[ -r \"$rc\" ]] \u0026\u0026 . \"$rc\" print '# Snapshot file' print '# Unset all aliases to avoid conflicts with functions' print 'unalias -a 2\u003e/dev/null || true' print '# Functions' functions print '' setopt_count=$(setopt | wc -l | tr -d ' ') print \"# setopts $setopt_count\" setopt | sed 's/^/setopt /' print '' alias_count=$(alias -L | wc -l | tr -d ' ') print \"# aliases $alias_count\" alias -L print '' export_lines=$(export -p | awk ' /^(export|declare -x|typeset -x) / { line=$0 name=line sub(/^(export|declare -x|typeset -x) /, \"\", name) sub(/=.*/, \"\", name) if (name ~ /^(PWD|OLDPWD)$/) { next } if (name ~ /^[A-Za-z_][A-Za-z0-9_]*$/) { print line } }') export_count=$(printf '%s\\n' \"$export_lines\" | sed '/^$/d' | wc -l | tr -d ' ') print \"# exports $export_count\" if [[ -n \"$export_lines\" ]]; then print -r -- \"$export_lines\" fi"
+    }
+  ]
+}
