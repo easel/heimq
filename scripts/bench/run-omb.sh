@@ -5,6 +5,10 @@
 #   - Docker + the ombbuild-heimq image (built once; see below)
 #   - heimq running on BOOTSTRAP (default localhost:9094)
 #
+# @covers US-007-AC1
+# @covers US-007-AC2
+# @covers US-007-AC3
+#
 # Build the image once:
 #   docker build --network host \
 #     -f scripts/bench/openmessaging/Dockerfile.omb-heimq \
@@ -56,6 +60,7 @@ if echo "$omb_out" | grep -qiE "ERROR Benchmark|Exception in thread|FATAL"; then
     exit 1
 fi
 
+# @covers US-007-AC1
 if ! echo "$omb_out" | grep -q "Writing test result"; then
     echo "FAIL: OMB did not complete (no result file written, exit=$omb_exit)" >&2
     exit 1

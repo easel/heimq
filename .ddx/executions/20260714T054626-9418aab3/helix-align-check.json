@@ -1,0 +1,579 @@
+{
+  "docs_root": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix",
+  "code_root": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3",
+  "prd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/prd.md",
+  "parser_warnings": [],
+  "dimensions": {
+    "decomposition": {
+      "subsystems": [
+        "Wire protocol (FEAT-001 + FEAT-006)",
+        "Core semantics (FEAT-002)",
+        "Differential parity (FEAT-003)",
+        "Benchmark conformance (FEAT-004)",
+        "Ecosystem integrations (FEAT-005)",
+        "Durable offset backend (FEAT-007)",
+        "Engine trait surface (TRAIT-001)"
+      ],
+      "frs": [
+        "FR-1",
+        "FR-2",
+        "FR-3",
+        "FR-4",
+        "FR-5",
+        "FR-6",
+        "FR-7",
+        "FR-8",
+        "FR-9",
+        "FR-10",
+        "FR-11",
+        "FR-12",
+        "FR-13"
+      ],
+      "feats": {
+        "FEAT-001": {
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-001-wire-protocol-compatibility.md",
+          "subsystems": [
+            "Wire protocol (FEAT-001 + FEAT-006)"
+          ],
+          "requirements": [
+            "FR-1",
+            "FR-2",
+            "FR-3",
+            "FR-4"
+          ],
+          "cross_rationale": true
+        },
+        "FEAT-002": {
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-002-core-kafka-semantics.md",
+          "subsystems": [
+            "Core semantics (FEAT-002)"
+          ],
+          "requirements": [
+            "FR-5",
+            "FR-6",
+            "FR-7"
+          ],
+          "cross_rationale": true
+        },
+        "FEAT-003": {
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-003-differential-parity-testing.md",
+          "subsystems": [
+            "Differential parity (FEAT-003)"
+          ],
+          "requirements": [
+            "FR-8"
+          ],
+          "cross_rationale": true
+        },
+        "FEAT-004": {
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-004-benchmark-conformance.md",
+          "subsystems": [
+            "Benchmark conformance (FEAT-004)"
+          ],
+          "requirements": [
+            "FR-9"
+          ],
+          "cross_rationale": true
+        },
+        "FEAT-005": {
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-005-ecosystem-integrations.md",
+          "subsystems": [
+            "Ecosystem integrations (FEAT-005)"
+          ],
+          "requirements": [
+            "FR-10"
+          ],
+          "cross_rationale": true
+        },
+        "FEAT-006": {
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-006-flexible-version-protocol.md",
+          "subsystems": [
+            "Wire protocol (FEAT-001 + FEAT-006)"
+          ],
+          "requirements": [
+            "FR-4"
+          ],
+          "cross_rationale": true
+        },
+        "FEAT-007": {
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-007-durable-offset-backend.md",
+          "subsystems": [
+            "Durable offset backend (FEAT-007)"
+          ],
+          "requirements": [
+            "FR-11"
+          ],
+          "cross_rationale": true
+        },
+        "FEAT-008": {
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-008-engine-embedding-contract.md",
+          "subsystems": [
+            "Engine trait surface (TRAIT-001)"
+          ],
+          "requirements": [
+            "FR-12",
+            "FR-13"
+          ],
+          "cross_rationale": true
+        }
+      },
+      "stories": {
+        "US-001": {
+          "feature": "FEAT-001",
+          "acs": [
+            "US-001-AC1",
+            "US-001-AC2",
+            "US-001-AC3",
+            "US-001-AC4"
+          ]
+        },
+        "US-002": {
+          "feature": "FEAT-002",
+          "acs": [
+            "US-002-AC1",
+            "US-002-AC2",
+            "US-002-AC3",
+            "US-002-AC4",
+            "US-002-AC5"
+          ]
+        },
+        "US-003": {
+          "feature": "FEAT-002",
+          "acs": [
+            "US-003-AC1",
+            "US-003-AC2",
+            "US-003-AC3",
+            "US-003-AC4",
+            "US-003-AC5"
+          ]
+        },
+        "US-004": {
+          "feature": "FEAT-002",
+          "acs": [
+            "US-004-AC1",
+            "US-004-AC10",
+            "US-004-AC11",
+            "US-004-AC2",
+            "US-004-AC3",
+            "US-004-AC4",
+            "US-004-AC5",
+            "US-004-AC6",
+            "US-004-AC7",
+            "US-004-AC8",
+            "US-004-AC9"
+          ]
+        },
+        "US-005": {
+          "feature": "FEAT-003",
+          "acs": [
+            "US-005-AC1",
+            "US-005-AC2",
+            "US-005-AC3",
+            "US-005-AC4",
+            "US-005-AC5",
+            "US-005-AC6",
+            "US-005-AC7"
+          ]
+        },
+        "US-006": {
+          "feature": "FEAT-004",
+          "acs": [
+            "US-006-AC1",
+            "US-006-AC2",
+            "US-006-AC3",
+            "US-006-AC4"
+          ]
+        },
+        "US-007": {
+          "feature": "FEAT-004",
+          "acs": [
+            "US-007-AC1",
+            "US-007-AC2",
+            "US-007-AC3"
+          ]
+        },
+        "US-008": {
+          "feature": "FEAT-005",
+          "acs": [
+            "US-008-AC1",
+            "US-008-AC2",
+            "US-008-AC3",
+            "US-008-AC4"
+          ]
+        },
+        "US-009": {
+          "feature": "FEAT-005",
+          "acs": [
+            "US-009-AC1",
+            "US-009-AC2",
+            "US-009-AC3"
+          ]
+        },
+        "US-010": {
+          "feature": "FEAT-005",
+          "acs": [
+            "US-010-AC1",
+            "US-010-AC2",
+            "US-010-AC3"
+          ]
+        },
+        "US-011": {
+          "feature": "FEAT-005",
+          "acs": [
+            "US-011-AC1",
+            "US-011-AC2",
+            "US-011-AC3",
+            "US-011-AC4"
+          ]
+        },
+        "US-012": {
+          "feature": "FEAT-005",
+          "acs": [
+            "US-012-AC1",
+            "US-012-AC2",
+            "US-012-AC3",
+            "US-012-AC4"
+          ]
+        },
+        "US-013": {
+          "feature": "FEAT-006",
+          "acs": [
+            "US-013-AC1",
+            "US-013-AC2",
+            "US-013-AC3",
+            "US-013-AC4"
+          ]
+        },
+        "US-014": {
+          "feature": "FEAT-005",
+          "acs": [
+            "US-014-AC1",
+            "US-014-AC2",
+            "US-014-AC3"
+          ]
+        },
+        "US-015": {
+          "feature": "FEAT-007",
+          "acs": [
+            "US-015-AC1",
+            "US-015-AC2",
+            "US-015-AC3",
+            "US-015-AC4"
+          ]
+        },
+        "US-016": {
+          "feature": "FEAT-008",
+          "acs": [
+            "US-016-AC1",
+            "US-016-AC2",
+            "US-016-AC3",
+            "US-016-AC4"
+          ]
+        },
+        "US-017": {
+          "feature": "FEAT-008",
+          "acs": [
+            "US-017-AC1",
+            "US-017-AC2",
+            "US-017-AC3",
+            "US-017-AC4",
+            "US-017-AC5"
+          ]
+        }
+      }
+    },
+    "acceptance": {
+      "acs_found": 77,
+      "acs_cited": [
+        "US-001-AC1",
+        "US-001-AC4",
+        "US-002-AC1",
+        "US-002-AC2",
+        "US-002-AC3",
+        "US-002-AC4",
+        "US-002-AC5",
+        "US-003-AC1",
+        "US-003-AC2",
+        "US-003-AC5",
+        "US-004-AC1",
+        "US-004-AC10",
+        "US-004-AC11",
+        "US-004-AC2",
+        "US-004-AC3",
+        "US-004-AC4",
+        "US-004-AC5",
+        "US-004-AC6",
+        "US-004-AC7",
+        "US-004-AC8",
+        "US-004-AC9",
+        "US-005-AC1",
+        "US-005-AC2",
+        "US-005-AC3",
+        "US-005-AC4",
+        "US-005-AC5",
+        "US-005-AC6",
+        "US-005-AC7",
+        "US-006-AC1",
+        "US-006-AC2",
+        "US-006-AC3",
+        "US-006-AC4",
+        "US-007-AC1",
+        "US-007-AC2",
+        "US-007-AC3",
+        "US-008-AC1",
+        "US-008-AC2",
+        "US-008-AC3",
+        "US-008-AC4",
+        "US-009-AC1",
+        "US-009-AC2",
+        "US-009-AC3",
+        "US-010-AC1",
+        "US-010-AC2",
+        "US-010-AC3",
+        "US-011-AC1",
+        "US-011-AC2",
+        "US-011-AC3",
+        "US-011-AC4",
+        "US-012-AC1",
+        "US-012-AC2",
+        "US-012-AC3",
+        "US-012-AC4",
+        "US-013-AC3",
+        "US-014-AC1",
+        "US-014-AC2",
+        "US-014-AC3",
+        "US-015-AC1",
+        "US-015-AC3",
+        "US-016-AC1",
+        "US-016-AC2",
+        "US-016-AC3",
+        "US-016-AC4",
+        "US-017-AC2",
+        "US-017-AC4",
+        "US-017-AC5"
+      ],
+      "acs_uncited": [
+        "US-001-AC2",
+        "US-001-AC3",
+        "US-003-AC3",
+        "US-003-AC4",
+        "US-013-AC1",
+        "US-013-AC2",
+        "US-013-AC4",
+        "US-015-AC2",
+        "US-015-AC4",
+        "US-017-AC1",
+        "US-017-AC3"
+      ],
+      "dangling_citations": []
+    },
+    "adr": {
+      "found": 7,
+      "by_status": {
+        "accepted": 7
+      },
+      "items": [
+        {
+          "id": "ADR-001",
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/02-design/adr/ADR-001-kafka-client-for-testing.md",
+          "status": "accepted"
+        },
+        {
+          "id": "ADR-002",
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/02-design/adr/ADR-002-bead-close-test-gate.md",
+          "status": "accepted"
+        },
+        {
+          "id": "ADR-003",
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/02-design/adr/ADR-003-flexible-version-codec-strategy.md",
+          "status": "accepted"
+        },
+        {
+          "id": "ADR-004",
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/02-design/adr/ADR-004-openmessaging-benchmark-version.md",
+          "status": "accepted"
+        },
+        {
+          "id": "ADR-005",
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/02-design/adr/ADR-005-schema-registry-target.md",
+          "status": "accepted"
+        },
+        {
+          "id": "ADR-006",
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/02-design/adr/ADR-006-no-state-across-restart.md",
+          "status": "accepted"
+        },
+        {
+          "id": "ADR-007",
+          "file": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/02-design/adr/ADR-007-workspace-split-engine-crates.md",
+          "status": "accepted"
+        }
+      ],
+      "naming_violations": []
+    },
+    "nfr": {
+      "candidate_artifacts": [
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-001-wire-protocol-compatibility.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-002-core-kafka-semantics.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-003-differential-parity-testing.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-004-benchmark-conformance.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-005-ecosystem-integrations.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-006-flexible-version-protocol.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-007-durable-offset-backend.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/features/FEAT-008-engine-embedding-contract.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/01-frame/user-stories/US-002-consumer-group-rebalance.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/03-test/test-plan/test-plan.md",
+        "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-f0049303-20260714T054626-9418aab3/crates/heimq/docs/helix/06-iterate/alignment-reviews/AR-2026-07-13-repo.md"
+      ]
+    }
+  },
+  "coverage_matrix_inputs": [
+    {
+      "dimension": "Capability (FR)",
+      "computed": true,
+      "found": 13,
+      "checked": 13,
+      "blocking_findings": 0,
+      "advisory_findings": 0,
+      "structural_status": "clean (structural floor)",
+      "detail": "13 FRs; 13 covered by a FEAT",
+      "model_completes": "verify each FR is implemented in code (code->spec surface map)"
+    },
+    {
+      "dimension": "Acceptance behavior",
+      "computed": true,
+      "found": 77,
+      "checked": 77,
+      "blocking_findings": 0,
+      "advisory_findings": 11,
+      "structural_status": "advisory-findings",
+      "detail": "66/77 ACs have a @covers citation; 0 dangling",
+      "model_completes": "verify each cited test EXERCISES that exact AC; classify uncited ACs UNTESTED vs UNCITED_COVERAGE"
+    },
+    {
+      "dimension": "Architecture decision (ADR)",
+      "computed": true,
+      "found": 7,
+      "checked": 7,
+      "blocking_findings": 0,
+      "advisory_findings": 0,
+      "structural_status": "clean (structural floor)",
+      "detail": "7 ADRs; status {'accepted': 7}",
+      "model_completes": "verify each accepted ADR's decision is honored in code; no contradicting surface"
+    },
+    {
+      "dimension": "Concern practice",
+      "computed": false,
+      "found": null,
+      "checked": null,
+      "blocking_findings": 0,
+      "advisory_findings": 0,
+      "structural_status": "model-required",
+      "detail": "this checker does not inspect concern practices",
+      "model_completes": "verify each active concern's behavioral practices are realized in code (not just tooling wired)"
+    },
+    {
+      "dimension": "Measurable NFR / budget",
+      "computed": false,
+      "found": null,
+      "checked": null,
+      "blocking_findings": 0,
+      "advisory_findings": 0,
+      "structural_status": "model-required",
+      "detail": "11 candidate artifact(s) mention NFR / non-functional (search pointer, NOT an NFR-item count)",
+      "model_completes": "extract stated NFR targets and verify each is met / has evidence"
+    },
+    {
+      "dimension": "Decomposition",
+      "computed": true,
+      "found": 32,
+      "checked": 32,
+      "blocking_findings": 0,
+      "advisory_findings": 0,
+      "structural_status": "clean (structural floor)",
+      "detail": "7 subsystems / 8 FEATs / 17 stories",
+      "model_completes": null
+    },
+    {
+      "dimension": "Slot / instrument",
+      "computed": false,
+      "found": null,
+      "checked": null,
+      "blocking_findings": 0,
+      "advisory_findings": 0,
+      "structural_status": "model-required",
+      "detail": "Slot-Registry + Instrument-Integrity read the workflows/concerns tree, not this docs-root",
+      "model_completes": "run the deterministic Slot-Registry Integrity check (slots.yml vs concern ## Slot) separately"
+    }
+  ],
+  "findings": [
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-001-AC2 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-001-AC3 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-003-AC3 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-003-AC4 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-013-AC1 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-013-AC2 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-013-AC4 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-015-AC2 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-015-AC4 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-017-AC1 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    },
+    {
+      "check": "ac-citation",
+      "severity": "advisory",
+      "classification": "NO_CITATION",
+      "detail": "US-017-AC3 has no @covers citation in the scanned code tree \u2014 deterministic fact only; the model classifies UNTESTED vs UNCITED_COVERAGE by checking for an exercising test"
+    }
+  ],
+  "blocking_count": 0,
+  "note": "Deterministic structural floor only \u2014 these are INPUTS to the Dimension Coverage Matrix, not the matrix itself. The script assigns no Step 4 classification. Semantic verdicts (cited-test-exercises-that-AC, ADR-decision-honored, concern-behavior-realized, NFR-target-met) and the model-required rows are the model's job in reconcile-alignment STEP 3."
+}

@@ -3,6 +3,11 @@
 # Requirements: Kafka CLI tools on PATH, heimq running on localhost:9094.
 # Exit code: 0 on success, non-zero on any protocol/client error line.
 #
+# @covers US-006-AC1
+# @covers US-006-AC2
+# @covers US-006-AC3
+# @covers US-006-AC4
+#
 # Usage: BOOTSTRAP=localhost:9094 ./scripts/bench/run-smoke.sh
 
 set -euo pipefail
@@ -31,6 +36,7 @@ echo "==> [1/3] Non-idempotent producer + consumer"
 kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --topic "$TOPIC" \
     --partitions 1 --replication-factor 1
 
+# @covers US-006-AC1
 run_check kafka-producer-perf-test.sh \
     --producer-props bootstrap.servers="$BOOTSTRAP" acks=1 enable.idempotence=false \
     --topic "$TOPIC" \
@@ -38,6 +44,7 @@ run_check kafka-producer-perf-test.sh \
     --record-size "$RECORD_SIZE" \
     --throughput -1
 
+# @covers US-006-AC2
 run_check kafka-consumer-perf-test.sh \
     --bootstrap-server "$BOOTSTRAP" \
     --consumer.config "$SCRIPT_DIR/profiles/consumer-smoke.properties" \
@@ -56,6 +63,7 @@ echo "==> [2/3] Idempotent producer (enable.idempotence=true)"
 kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --topic "$TOPIC_IDEM" \
     --partitions 1 --replication-factor 1
 
+# @covers US-006-AC3
 run_check kafka-producer-perf-test.sh \
     --producer.config "$SCRIPT_DIR/profiles/producer-idempotent.properties" \
     --topic "$TOPIC_IDEM" \
@@ -75,6 +83,7 @@ echo "==> [3/3] Transactional producer (transactional.id)"
 kafka-topics.sh --bootstrap-server "$BOOTSTRAP" --create --topic "$TOPIC_TXN" \
     --partitions 1 --replication-factor 1
 
+# @covers US-006-AC3
 run_check kafka-producer-perf-test.sh \
     --producer.config "$SCRIPT_DIR/profiles/producer-transactional.properties" \
     --topic "$TOPIC_TXN" \

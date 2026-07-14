@@ -30,6 +30,10 @@ jobs:
           timeout 15 bash -c 'until nc -z localhost 9094; do sleep 0.2; done'
 
       - name: Run bench smoke
+        # @covers US-006-AC1
+        # @covers US-006-AC2
+        # @covers US-006-AC3
+        # @covers US-006-AC4
         run: BOOTSTRAP=localhost:9094 bash scripts/bench/run-smoke.sh
 
       - name: Stop heimq

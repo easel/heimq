@@ -27,6 +27,8 @@ jobs:
         run: git clone --no-checkout --filter=blob:none https://github.com/openmessaging/benchmark /tmp/ombbench && git -C /tmp/ombbench checkout c0e51b8b86a3b0ff50b935152d6e600602a7f0a0
 
       - name: Build OMB Docker image (cached)
+        # @covers US-007-AC2
+        # @covers US-007-AC3
         uses: docker/build-push-action@v5
         with:
           context: /tmp/ombbench
@@ -47,6 +49,8 @@ jobs:
           timeout 15 bash -c 'until nc -z localhost 9094; do sleep 0.2; done'
 
       - name: Run OMB conformance
+        # @covers US-007-AC1
+        # @covers US-007-AC3
         run: BOOTSTRAP=localhost:9094 bash scripts/bench/run-omb.sh
 
       - name: Stop heimq
