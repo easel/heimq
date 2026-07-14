@@ -7,7 +7,7 @@ ddx:
     self_hash: 07f27eaae7593ae43b1298811d182edf0b53e89c0b629712104ecbfc5aecdaa3
     deps:
       FEAT-002: 164350929c7bbc09a589f3cd1a80b685e88cce1054445fe5373aec566464636f
-    reviewed_at: "2026-07-14T05:12:26Z"
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-003 — Idempotent producer dedup
 

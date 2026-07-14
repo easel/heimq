@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: 7ca108079732515c953e1be73600ba2dc1ac5cbd02c849b216e9147951166fc3
     deps:
-      FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
-    reviewed_at: "2026-07-14T05:12:26Z"
+      FEAT-005: 36cf0d0af7c2a412b9a7fce2edf8a917dcf8c7518190e444acc7813b1ff563b8
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-012 — Multi-language librdkafka clients against heimq
 

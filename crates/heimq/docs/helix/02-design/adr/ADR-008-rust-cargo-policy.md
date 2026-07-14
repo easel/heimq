@@ -2,6 +2,10 @@
 ddx:
   id: ADR-008
   status: accepted
+  review:
+    self_hash: 92ba38c56a92fe8f4947b143f49c74da0e9c7fc3d9ddbded5d0e4801ccc78e35
+    deps: {}
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 
 # ADR-008: Rust Cargo Workspace Policy

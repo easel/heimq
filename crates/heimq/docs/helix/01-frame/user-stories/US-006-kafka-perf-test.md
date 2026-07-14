@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: ea037831114a863a64e1b8462648e7258daa055320a3a3f2356281e065e7ad5a
     deps:
-      FEAT-004: 84531399bf0bf4d4ff962e6f516c45506d67340944a8ba924e6010b4a39b64a6
-    reviewed_at: "2026-07-14T05:12:26Z"
+      FEAT-004: f7d84558ef81d4501ca858b2fa8c0bb6c3bc6e864b2d49a32920178fcfc1fa8e
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-006 — Run kafka-producer-perf-test and kafka-consumer-perf-test against heimq
 

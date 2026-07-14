@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: 168616bd29809066f578398a7c34ba64f23005e237d58eac1381dde83a4ef2fd
     deps:
-      FEAT-003: d134a5740222f1b59ecda81b318c7b28de9968bba9f640bb6280310c1e906233
-    reviewed_at: "2026-07-14T05:12:26Z"
+      FEAT-003: 2d80d13a1295f71bfa6d8dd0ee2097b4835f242dd4aca487a3479860706410ce
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-005 — Run the same workload against heimq and Redpanda and diff
 

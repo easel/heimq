@@ -7,13 +7,13 @@ ddx:
     - FEAT-002
     - FEAT-006
   review:
-    self_hash: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
+    self_hash: 36cf0d0af7c2a412b9a7fce2edf8a917dcf8c7518190e444acc7813b1ff563b8
     deps:
       FEAT-001: 7133c264bc364ec4535c1d6b6187a90c9ba66d1fa3df30731ade260c2e092479
       FEAT-002: 164350929c7bbc09a589f3cd1a80b685e88cce1054445fe5373aec566464636f
       FEAT-006: e59d3b8965ebd35b4bbe9c5302f4218432ad83ec27691989dfd4c345ac2ae004
-      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
-    reviewed_at: "2026-07-14T05:12:26Z"
+      helix.prd: debc0a32007f0c42db51e82f47848c7b988c3f67f6f97171069170492f9b5b95
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # Feature Specification: FEAT-005 — Ecosystem Integrations
 

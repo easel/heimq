@@ -14,8 +14,8 @@ ddx:
     deps:
       API-001: 85aaecdeafe47af73d0e287b3851f021313a23a96dc492d2646f78913978d5de
       CODEC-001: d83709237e2ca19409a81cc063bfba856b91e67d8231964561686d2ec602c919
-      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
-    reviewed_at: "2026-07-14T05:12:26Z"
+      helix.prd: debc0a32007f0c42db51e82f47848c7b988c3f67f6f97171069170492f9b5b95
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 
 # WIRE-001: Wire Scaffolding Contract

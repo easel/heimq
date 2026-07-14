@@ -5,7 +5,7 @@ ddx:
   review:
     self_hash: be8ea1ebdc7eb8bdd22c10873e036b03831b53dea4ab2f31164fa83f35c971d1
     deps: {}
-    reviewed_at: "2026-06-22T21:30:26Z"
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 
 # ADR-001: Kafka Client Library for Integration Testing

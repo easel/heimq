@@ -13,9 +13,9 @@ ddx:
     self_hash: 0f7508ff4e3da65c8f84f465ea2b2c7db82797016f5333240148cdcaa7e7cc23
     deps:
       ADR-006: 881bf5e99cfef0f38fec536b48898ee1d3bf40b1be8bd2fbfc036f48aabfc385
-      ADR-007: 8d887546b3e7a83c6648b84d4c325cd3a1a1545ebabb877cedf17f8ca9195ea0
-      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
-    reviewed_at: "2026-07-14T05:12:26Z"
+      ADR-007: e299f6b474affd654a4a833dfc4a85eb8a2fccf52674517a1e207ec426177541
+      helix.prd: debc0a32007f0c42db51e82f47848c7b988c3f67f6f97171069170492f9b5b95
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 
 # TRAIT-001: Backend Trait Families

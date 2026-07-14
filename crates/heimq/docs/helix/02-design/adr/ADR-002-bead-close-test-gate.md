@@ -5,7 +5,7 @@ ddx:
   review:
     self_hash: 8bf2c52cbb393c83e4eab474135e140ce5ea0f6167e43f2c6fca0b63553943d6
     deps: {}
-    reviewed_at: "2026-06-22T21:30:26Z"
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 
 # ADR-002: Enforce Workspace Test Gate at Bead Close

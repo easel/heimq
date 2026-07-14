@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: fd681a21fd3e5c0d0383d82fec67c1571f3efc2c572df672ddc8c95b86d69061
     deps:
-      FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
-    reviewed_at: "2026-07-14T05:12:26Z"
+      FEAT-005: 36cf0d0af7c2a412b9a7fce2edf8a917dcf8c7518190e444acc7813b1ff563b8
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-008 — Kafka Connect runs against heimq
 

@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: d5b7edf3b50f6b1189c2f6178df7b842b9371c5a46f8dda9de91d96aba28bb37
     deps:
-      FEAT-004: 84531399bf0bf4d4ff962e6f516c45506d67340944a8ba924e6010b4a39b64a6
-    reviewed_at: "2026-07-14T05:12:26Z"
+      FEAT-004: f7d84558ef81d4501ca858b2fa8c0bb6c3bc6e864b2d49a32920178fcfc1fa8e
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-007 — Run OpenMessaging Benchmark against heimq
 

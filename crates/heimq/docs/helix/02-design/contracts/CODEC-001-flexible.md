@@ -14,7 +14,7 @@ ddx:
       ADR-003: c06761cf28323ddb6162d309cfcfe4db1037f915a2c05a716ad4262222193145
       API-001: 85aaecdeafe47af73d0e287b3851f021313a23a96dc492d2646f78913978d5de
       FEAT-006: e59d3b8965ebd35b4bbe9c5302f4218432ad83ec27691989dfd4c345ac2ae004
-    reviewed_at: "2026-07-14T05:12:26Z"
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 
 # CODEC-001: Flexible-Version Codec Module Surface

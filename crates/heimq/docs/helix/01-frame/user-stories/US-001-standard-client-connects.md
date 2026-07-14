@@ -7,7 +7,7 @@ ddx:
     self_hash: 26bbd1249d94abf0000b005c67fc86eb59936c64075631102ba7cf7dea75e643
     deps:
       FEAT-001: 7133c264bc364ec4535c1d6b6187a90c9ba66d1fa3df30731ade260c2e092479
-    reviewed_at: "2026-07-14T05:12:26Z"
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-001 — Standard Kafka client connects without code changes
 

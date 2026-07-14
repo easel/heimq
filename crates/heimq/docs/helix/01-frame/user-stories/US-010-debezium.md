@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: d4c990816e9d3ffd0ee45dd5da9b0a5a2fb80724c546527945a0eba02f9c7f02
     deps:
-      FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
-    reviewed_at: "2026-07-14T05:12:26Z"
+      FEAT-005: 36cf0d0af7c2a412b9a7fce2edf8a917dcf8c7518190e444acc7813b1ff563b8
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-010 — Debezium emits CDC into heimq
 

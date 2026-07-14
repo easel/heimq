@@ -6,8 +6,8 @@ ddx:
   review:
     self_hash: e947608aa0633732bde029cdf025cb8875286da1fed7bf9480548917157390ad
     deps:
-      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
-    reviewed_at: "2026-07-14T05:12:26Z"
+      helix.prd: debc0a32007f0c42db51e82f47848c7b988c3f67f6f97171069170492f9b5b95
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # Feature Specification: FEAT-007 — Durable Offset Backend (Postgres)
 

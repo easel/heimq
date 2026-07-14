@@ -9,9 +9,9 @@ ddx:
   review:
     self_hash: a81de258a7ce95ebf74b07d1f46b742c0e5c24013b6a8d41ae6ca8d6ccf5be7a
     deps:
-      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
+      helix.prd: debc0a32007f0c42db51e82f47848c7b988c3f67f6f97171069170492f9b5b95
       helix.product-vision: 8fda503ba36c48175e42be03782c96af196de39d6e87b6edab88d853ee1857ca
-    reviewed_at: "2026-07-14T05:12:26Z"
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # Implementation Plan: heimq Engine Restructuring Program
 

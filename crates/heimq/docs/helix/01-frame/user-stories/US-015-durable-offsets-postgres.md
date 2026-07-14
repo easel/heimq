@@ -7,7 +7,7 @@ ddx:
     self_hash: 2e5fa6adc59b1e69ed0b8be84483707fe98b10907be6beefc9c39b7b62d14174
     deps:
       FEAT-007: e947608aa0633732bde029cdf025cb8875286da1fed7bf9480548917157390ad
-    reviewed_at: "2026-07-14T05:12:26Z"
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # US-015 — Durable offsets via Postgres
 

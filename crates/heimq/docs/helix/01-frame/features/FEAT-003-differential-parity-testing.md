@@ -6,12 +6,12 @@ ddx:
     - FEAT-001
     - FEAT-002
   review:
-    self_hash: d134a5740222f1b59ecda81b318c7b28de9968bba9f640bb6280310c1e906233
+    self_hash: 2d80d13a1295f71bfa6d8dd0ee2097b4835f242dd4aca487a3479860706410ce
     deps:
       FEAT-001: 7133c264bc364ec4535c1d6b6187a90c9ba66d1fa3df30731ade260c2e092479
       FEAT-002: 164350929c7bbc09a589f3cd1a80b685e88cce1054445fe5373aec566464636f
-      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
-    reviewed_at: "2026-07-14T05:12:26Z"
+      helix.prd: debc0a32007f0c42db51e82f47848c7b988c3f67f6f97171069170492f9b5b95
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 # Feature Specification: FEAT-003 — Differential Parity Testing vs Redpanda/Kafka
 

@@ -5,7 +5,7 @@ ddx:
   review:
     self_hash: 881bf5e99cfef0f38fec536b48898ee1d3bf40b1be8bd2fbfc036f48aabfc385
     deps: {}
-    reviewed_at: "2026-06-22T21:30:26Z"
+    reviewed_at: "2026-07-14T06:48:37Z"
 ---
 
 # ADR-006: No Idempotent-Producer / Transaction State Across Restart
