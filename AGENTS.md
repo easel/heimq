@@ -47,3 +47,11 @@ Forbidden on execute-bead branches: `gh pr merge --squash`,
 `git filter-branch`, `git filter-repo`, and `git commit --amend` on
 any commit already in the trail.
 <!-- DDX-AGENTS:END -->
+
+## Plugin installation policy
+
+- Install and update HELIX through the native plugin registries as
+  `helix@helix`; do not manage HELIX with `ddx install` or `ddx update`.
+- Install and update agent-facing DDx skills through the DDx Library plugin
+  registry as `ddx@ddx-library`; DDx's project package cache is not the skill
+  installation mechanism.
