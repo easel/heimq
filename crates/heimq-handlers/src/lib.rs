@@ -27,6 +27,11 @@
 //! TLS/SASL authentication is not part of this crate's dispatch contract.
 //! Embedders authenticate connections before calling `heimq-handlers` and pass
 //! any resulting identity through [`storage::RequestContext`].
+//!
+//! This contract is versioned by the repository's `vX.Y.Z` release tags, which
+//! are the supported consumption mechanism for these internal crates. Breaking
+//! embedder changes require a corresponding release-tag version bump and
+//! release-note callout.
 
 // The handler and codec modules were extracted from the heimq binary, which
 // allows this lint crate-wide; keep the same policy so the moved code's
