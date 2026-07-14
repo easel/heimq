@@ -50,7 +50,8 @@ async function main() {
         producer.on("event.error", reject);
     });
 
-    // Consume
+    // @covers US-012-AC3
+    // Consume and require every produced message to come back through node-rdkafka.
     await new Promise((resolve, reject) => {
         const consumer = new Kafka.KafkaConsumer({
             "metadata.broker.list": bootstrap,
@@ -86,4 +87,5 @@ node test.js
 '
 
 eco_pass "librdkafka Node: produce+consume via node-rdkafka"
+# @covers US-012-AC4
 eco_summary

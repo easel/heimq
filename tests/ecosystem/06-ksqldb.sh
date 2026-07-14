@@ -67,14 +67,29 @@ if ! wait_for_http "${KSQL_URL}/info" 90; then
 fi
 echo "  ksqlDB is up"
 
-# Create a stream over the topic
+# @covers US-014-AC1
+# Create a stream over the topic and require the REST call to succeed.
 STREAM_NAME="ECO_STREAM_${RUN_ID}"
 CREATE_RESP=$(curl -sf -X POST "${KSQL_URL}/ksql" \
     -H "Content-Type: application/vnd.ksql.v1+json" \
     -d "{\"ksql\": \"CREATE STREAM ${STREAM_NAME} (val VARCHAR) WITH (kafka_topic='${TOPIC}', value_format='KAFKA', partitions=1);\", \"streamsProperties\": {}}")
 echo "  CREATE STREAM: $(echo "$CREATE_RESP" | head -c 200)"
 
-# Verify ksqlDB server status
+# @covers US-014-AC2
+# Run a SELECT over the stream and require one of the seeded values to appear.
+QUERY_RESP=$(curl -sf -X POST "${KSQL_URL}/query-stream" \
+    -H "Content-Type: application/vnd.ksqlapi.delimited.v1" \
+    -d "{\"sql\": \"SELECT VAL FROM ${STREAM_NAME} EMIT CHANGES LIMIT 10;\", \"properties\": {\"auto.offset.reset\": \"earliest\"}}" \
+    | tee /tmp/heimq-ksql-query-"${RUN_ID}".log)
+echo "  SELECT result: $(echo "$QUERY_RESP" | grep -E "event-[0-9]" | head -1 || true)"
+
+if ! echo "$QUERY_RESP" | grep -q "event-"; then
+    echo "FAIL: SELECT did not return seeded event values" >&2
+    cat /tmp/heimq-ksql-query-"${RUN_ID}".log >&2
+    exit 1
+fi
+
+# Verify ksqlDB server status.
 SERVER_INFO=$(curl -sf "${KSQL_URL}/info")
 STATUS=$(echo "$SERVER_INFO" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("KsqlServerInfo", {}).get("serverStatus", ""))' 2>/dev/null || echo "unknown")
 echo "  ksqlDB serverStatus=$STATUS"
@@ -84,4 +99,5 @@ if [ "$STATUS" = "RUNNING" ]; then
 else
     eco_fail "ksqlDB: serverStatus=$STATUS (expected RUNNING)"
 fi
+# @covers US-014-AC3
 eco_summary

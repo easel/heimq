@@ -44,7 +44,8 @@ for i in range(n):
     p.produce(topic, f"msg-{i}".encode())
 p.flush(timeout=10)
 
-# Consume
+# @covers US-012-AC2
+# Consume and require every produced message to come back through confluent-kafka.
 c = Consumer({
     "bootstrap.servers": bootstrap,
     "group.id": "eco-python-test",
@@ -75,4 +76,5 @@ PYEOF
 '
 
 eco_pass "librdkafka Python: produce+consume via confluent-kafka"
+# @covers US-012-AC4
 eco_summary

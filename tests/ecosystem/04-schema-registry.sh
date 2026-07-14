@@ -51,7 +51,8 @@ RESPONSE=$(curl -sf -X POST "${SR_URL}/subjects/${TOPIC}-value/versions" \
 echo "  schema registered: $RESPONSE"
 SCHEMA_ID=$(echo "$RESPONSE" | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 
-# Retrieve schema back and verify
+# @covers US-011-AC1
+# Retrieve schema back and verify that registration resolved to a concrete schema id.
 RETRIEVED=$(curl -sf "${SR_URL}/subjects/${TOPIC}-value/versions/latest")
 echo "  schema retrieved: $RETRIEVED"
 
@@ -62,5 +63,73 @@ if [ -z "$RETRIEVED_SCHEMA" ]; then
     exit 1
 fi
 
+# @covers US-011-AC2
+# @covers US-011-AC3
+# Produce and consume through Confluent's registry-aware Avro serializer/deserializer.
+docker run --rm \
+    -e BOOTSTRAP="$DOCKER_BOOTSTRAP" \
+    -e SCHEMA_REGISTRY_URL="$SR_URL" \
+    -e TOPIC="$TOPIC" \
+    python:3.11-slim bash -c '
+pip install --quiet "confluent-kafka[avro]"
+python3 - << '"'"'PYEOF'"'"'
+import os, sys, time
+from confluent_kafka import KafkaError
+from confluent_kafka.admin import AdminClient, NewTopic
+from confluent_kafka.avro import AvroConsumer, AvroProducer, loads
+
+bootstrap = os.environ["BOOTSTRAP"]
+registry_url = os.environ["SCHEMA_REGISTRY_URL"]
+topic = os.environ["TOPIC"]
+expected = {"value": "schema-registry-ok"}
+schema = loads("""{"type":"record","name":"Msg","fields":[{"name":"value","type":"string"}]}""")
+
+admin = AdminClient({"bootstrap.servers": bootstrap})
+fs = admin.create_topics([NewTopic(topic, num_partitions=1, replication_factor=1)])
+for f in fs.values():
+    try:
+        f.result()
+    except Exception:
+        pass
+
+producer = AvroProducer(
+    {"bootstrap.servers": bootstrap, "schema.registry.url": registry_url},
+    default_value_schema=schema,
+)
+producer.produce(topic=topic, value=expected)
+producer.flush(10)
+
+consumer = AvroConsumer({
+    "bootstrap.servers": bootstrap,
+    "schema.registry.url": registry_url,
+    "group.id": "eco-sr-verify",
+    "auto.offset.reset": "earliest",
+    "enable.auto.commit": "false",
+})
+consumer.subscribe([topic])
+deadline = time.time() + 20
+while time.time() < deadline:
+    msg = consumer.poll(1.0)
+    if msg is None:
+        continue
+    if msg.error():
+        if msg.error().code() != KafkaError._PARTITION_EOF:
+            print(f"consumer error: {msg.error()}", file=sys.stderr)
+            sys.exit(1)
+        continue
+    if msg.value() == expected:
+        print("registry serializer/deserializer round-trip ok")
+        consumer.close()
+        sys.exit(0)
+    print(f"FAIL: decoded {msg.value()!r}, expected {expected!r}", file=sys.stderr)
+    consumer.close()
+    sys.exit(1)
+consumer.close()
+print("FAIL: no registry-serialized record within 20s", file=sys.stderr)
+sys.exit(1)
+PYEOF
+'
+
 eco_pass "Schema Registry: registered and retrieved Avro schema (id=$SCHEMA_ID)"
+# @covers US-011-AC4
 eco_summary

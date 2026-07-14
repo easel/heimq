@@ -79,7 +79,8 @@ func main() {
 	p.Flush(10000)
 	p.Close()
 
-	// Consume
+	// @covers US-012-AC1
+	// Consume and require every produced message to come back through confluent-kafka-go.
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
 		"bootstrap.servers":  bootstrap,
 		"group.id":           "eco-go-test",
@@ -118,4 +119,5 @@ go run main.go
 '
 
 eco_pass "librdkafka Go: produce+consume via confluent-kafka-go"
+# @covers US-012-AC4
 eco_summary

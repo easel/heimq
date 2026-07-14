@@ -93,18 +93,62 @@ if [ "$SLOTS" -lt 1 ]; then
 fi
 echo "  TaskManager registered ($SLOTS slots available)"
 
-# Run Flink SQL: copy SRC → SINK with exactly-once semantics
-# Execute SQL inside the JobManager container (which has sql-client.sh)
-SQL_JOB="CREATE TABLE src (\`value\` BYTES) WITH ('connector' = 'kafka', 'topic' = '${SRC_TOPIC}', 'properties.bootstrap.servers' = '${DOCKER_BOOTSTRAP}', 'properties.group.id' = 'eco-flink-src', 'scan.startup.mode' = 'earliest-offset', 'value.format' = 'raw');
+# @covers US-009-AC1
+# @covers US-009-AC2
+# Run Flink SQL: copy SRC to SINK with exactly-once semantics and checkpoints enabled.
+SQL_JOB="SET 'execution.checkpointing.interval' = '1s';
+SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
+CREATE TABLE src (\`value\` BYTES) WITH ('connector' = 'kafka', 'topic' = '${SRC_TOPIC}', 'properties.bootstrap.servers' = '${DOCKER_BOOTSTRAP}', 'properties.group.id' = 'eco-flink-src', 'scan.startup.mode' = 'earliest-offset', 'value.format' = 'raw');
 CREATE TABLE sink (\`value\` BYTES) WITH ('connector' = 'kafka', 'topic' = '${SINK_TOPIC}', 'properties.bootstrap.servers' = '${DOCKER_BOOTSTRAP}', 'properties.transaction.timeout.ms' = '30000', 'sink.delivery-guarantee' = 'exactly-once', 'sink.transactional-id-prefix' = 'eco-flink-eos', 'value.format' = 'raw');
-INSERT INTO sink SELECT \`value\` FROM src LIMIT 20;"
+INSERT INTO sink SELECT \`value\` FROM src;"
 
-JOB_OUTPUT=$(docker exec "$JM_CID" bash -c "
+docker exec "$JM_CID" bash -c "
 printf '%s\n' '${SQL_JOB//\'/\'\\\'\'}' > /tmp/job.sql
-timeout 60 /opt/flink/bin/sql-client.sh -f /tmp/job.sql 2>&1 || true
-" 2>&1)
+nohup /opt/flink/bin/sql-client.sh -f /tmp/job.sql >/tmp/job.out 2>&1 &
+" 2>&1
 
-echo "  Flink SQL output: $(echo "$JOB_OUTPUT" | grep -v "^$" | tail -5)"
+DEADLINE=$((SECONDS + 60))
+JOB_ID=""
+while [ $SECONDS -lt $DEADLINE ]; do
+    JOB_ID=$(curl -sf "${FLINK_URL}/jobs/overview" 2>/dev/null \
+        | python3 -c 'import json,sys; jobs=json.load(sys.stdin).get("jobs", []); print(next((j["jid"] for j in jobs if j.get("state") == "RUNNING"), ""))' 2>/dev/null || true)
+    [ -n "$JOB_ID" ] && break
+    if docker exec "$JM_CID" grep -qiE "exception|error" /tmp/job.out 2>/dev/null; then
+        echo "FAIL: Flink SQL job failed to start" >&2
+        docker exec "$JM_CID" tail -80 /tmp/job.out >&2 || true
+        exit 1
+    fi
+    sleep 2
+done
+
+if [ -z "$JOB_ID" ]; then
+    echo "FAIL: no running Flink SQL job appeared within 60s" >&2
+    docker exec "$JM_CID" tail -80 /tmp/job.out >&2 || true
+    exit 1
+fi
+echo "  Flink SQL job running: $JOB_ID"
+
+DEADLINE=$((SECONDS + 90))
+COMPLETED_CHECKPOINTS=0
+while [ $SECONDS -lt $DEADLINE ]; do
+    COMPLETED_CHECKPOINTS=$(curl -sf "${FLINK_URL}/jobs/${JOB_ID}/checkpoints" 2>/dev/null \
+        | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("counts", {}).get("completed", 0))' 2>/dev/null || echo 0)
+    [ "$COMPLETED_CHECKPOINTS" -ge 1 ] && break
+    if docker exec "$JM_CID" grep -qiE "exception|error" /tmp/job.out 2>/dev/null; then
+        echo "FAIL: Flink SQL job failed before completing a checkpoint" >&2
+        docker exec "$JM_CID" tail -80 /tmp/job.out >&2 || true
+        exit 1
+    fi
+    sleep 2
+done
+
+if [ "$COMPLETED_CHECKPOINTS" -lt 1 ]; then
+    echo "FAIL: Flink job completed $COMPLETED_CHECKPOINTS checkpoints (expected >= 1)" >&2
+    curl -sf "${FLINK_URL}/jobs/${JOB_ID}/checkpoints" >&2 || true
+    docker exec "$JM_CID" tail -80 /tmp/job.out >&2 || true
+    exit 1
+fi
+echo "  completed checkpoints: $COMPLETED_CHECKPOINTS"
 
 # Verify data arrived in sink topic
 SINK_COUNT=$(docker run --rm \
@@ -143,9 +187,9 @@ echo "  sink topic received $SINK_COUNT messages"
 if [ "$SINK_COUNT" -ge 20 ]; then
     eco_pass "Flink: Kafka source → sink (EOS) via heimq ($SINK_COUNT messages)"
 else
-    # Partial pass: Flink cluster started successfully, SQL job submitted.
-    # If Kafka SQL connector JAR is missing, the job won't run but the cluster is verified.
-    echo "  NOTE: Flink cluster verified. Kafka connector JAR may need to be on classpath for full EOS test."
-    eco_pass "Flink: JobManager + TaskManager cluster started against heimq ($SINK_COUNT messages in sink)"
+    echo "FAIL: Flink sink received $SINK_COUNT messages (expected >= 20)" >&2
+    docker exec "$JM_CID" tail -80 /tmp/job.out >&2 || true
+    exit 1
 fi
+# @covers US-009-AC3
 eco_summary

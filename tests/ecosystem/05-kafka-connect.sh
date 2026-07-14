@@ -110,7 +110,8 @@ SOURCE_RESP=$(post_connector_config "source connector" "{
 }")
 echo "  source connector: $SOURCE_RESP"
 
-# Wait for source connector to enter RUNNING state
+# @covers US-008-AC1
+# Wait for the source connector to enter RUNNING state after writing source data.
 DEADLINE=$((SECONDS + 30))
 STATUS=""
 while [ $SECONDS -lt $DEADLINE ]; do
@@ -138,7 +139,8 @@ SINK_RESP=$(post_connector_config "sink connector" "{
 }")
 echo "  sink connector: $SINK_RESP"
 
-# Wait for sink to produce output (at least 10 lines)
+# @covers US-008-AC2
+# Wait for the sink connector to consume the source records from heimq.
 DEADLINE=$((SECONDS + 30))
 SINK_LINES=0
 while [ $SECONDS -lt $DEADLINE ]; do
@@ -154,4 +156,6 @@ if [ "$SINK_LINES" -lt 10 ]; then
 fi
 
 eco_pass "Kafka Connect: source+sink via heimq ($SINK_LINES lines)"
+# @covers US-008-AC3
+# @covers US-008-AC4
 eco_summary

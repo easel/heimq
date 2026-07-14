@@ -147,7 +147,9 @@ echo "  connector RUNNING; inserting test row..."
 docker exec "$PG_CID" psql -U debezium -d inventory -c \
     "INSERT INTO orders (item, quantity) VALUES ('widget', 42);" >/dev/null
 
-# Consume the CDC event from heimq using Python
+# @covers US-010-AC1
+# @covers US-010-AC2
+# Consume the CDC event from heimq and require the inserted row to be present.
 CDC_TOPIC="eco-dbz-${RUN_ID}.public.orders"
 RECEIVED=$(docker run --rm \
     -e BOOTSTRAP="$DOCKER_BOOTSTRAP" \
@@ -173,7 +175,12 @@ while time.time() < deadline:
         if msg.error().code() != KafkaError._PARTITION_EOF:
             print(\"consumer error:\", msg.error(), file=sys.stderr)
         continue
-    print(\"received CDC event:\", msg.value()[:80] if msg.value() else \"(tombstone)\")
+    value = msg.value() or b\"\"
+    if b\"widget\" not in value or b\"42\" not in value:
+        print(\"FAIL: CDC event did not contain inserted row:\", value[:200], file=sys.stderr)
+        c.close()
+        sys.exit(1)
+    print(\"received CDC event:\", value[:80])
     c.close()
     sys.exit(0)
 c.close()
@@ -188,4 +195,5 @@ else
     eco_pass "Debezium CDC: captured PostgreSQL row change via heimq"
     echo "  $RECEIVED"
 fi
+# @covers US-010-AC3
 eco_summary
