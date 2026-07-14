@@ -1,0 +1,52 @@
+{
+  "attempt_id": "20260714T040257-2d721e50",
+  "bead_id": "heimq-a97ba3ff",
+  "base_rev": "f4884d6bc123f2fc9545b9c287fafb59bdfb1fc0",
+  "created_at": "2026-07-14T04:02:58.766545089Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-a97ba3ff",
+    "title": "Pin the OpenMessaging Benchmark source used by CI",
+    "description": "Resolve AR13-03. ADR-004 requires the OMB harness to pin the latest released driver, but .github/workflows/bench-omb.yml currently clones default-branch HEAD and scripts/bench/run-omb.sh documents the same floating clone. Determine the current latest released OMB tag from the authoritative upstream repository, pin CI and documentation to that immutable tag or commit, and record the chosen version in ADR-004/FEAT-004. In scope: bench-omb workflow, OMB run docs/scripts, ADR-004 and FEAT-004 version statement. Out of scope: changing workload semantics.",
+    "acceptance": "1. rg -n 'git clone' .github/workflows/bench-omb.yml scripts/bench/run-omb.sh shows an explicit tag/commit checkout and no floating default-branch build. 2. The pin matches the version recorded in ADR-004 and FEAT-004. 3. bash -n scripts/bench/run-omb.sh passes and actionlint .github/workflows/bench-omb.yml passes when actionlint is available.",
+    "parent": "heimq-c7d1cba4",
+    "labels": [
+      "helix",
+      "area:infra",
+      "area:testing",
+      "kind:reproducibility"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"project root mutation rejected\",\"fingerprint\":\"14dfad3e8360df050ef8e97beebd6d35f6bab18d3a57e1a8d7acdc94828e3b7f\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"14dfad3e8360df050ef8e97beebd6d35f6bab18d3a57e1a8d7acdc94828e3b7f\"}",
+          "created_at": "2026-07-14T04:02:48.384839734Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ],
+      "spec-id": "ADR-004"
+    }
+  },
+  "governing": [
+    {
+      "id": "ADR-004",
+      "path": "crates/heimq/docs/helix/02-design/adr/ADR-004-openmessaging-benchmark-version.md",
+      "title": "ADR-004: OpenMessaging Benchmark Version Targeting"
+    }
+  ],
+  "paths": {
+    "dir": ".ddx/executions/20260714T040257-2d721e50",
+    "prompt": ".ddx/executions/20260714T040257-2d721e50/prompt.md",
+    "manifest": ".ddx/executions/20260714T040257-2d721e50/manifest.json",
+    "result": ".ddx/executions/20260714T040257-2d721e50/result.json",
+    "checks": ".ddx/executions/20260714T040257-2d721e50/checks.json",
+    "usage": ".ddx/executions/20260714T040257-2d721e50/usage.json",
+    "worktree": "home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-a97ba3ff-20260714T040257-2d721e50"
+  },
+  "prompt_sha": "a52803c2e10abdc116b687710e73c6dd5683b8627b14b9078aaf7bbe388206a3"
+}

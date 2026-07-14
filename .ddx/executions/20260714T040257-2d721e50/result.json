@@ -1,0 +1,72 @@
+{
+  "bead_id": "heimq-a97ba3ff",
+  "attempt_id": "20260714T040257-2d721e50",
+  "base_rev": "f4884d6bc123f2fc9545b9c287fafb59bdfb1fc0",
+  "result_rev": "6f2efce5416a5b7e98eec7986d0cedccbce46610",
+  "implementation_rev": "6f2efce5416a5b7e98eec7986d0cedccbce46610",
+  "outcome": "preserved",
+  "status": "post_run_check_failed",
+  "detail": "pre-merge checks blocked: workspace-tests",
+  "orchestrator_status": "post_run_check_failed",
+  "reason": "pre-merge checks blocked: workspace-tests",
+  "preserve_ref": "refs/ddx/iterations/heimq-a97ba3ff/20260714T040744Z-f4884d6bc123",
+  "candidate_ref": "refs/ddx/iterations/20260714T040257-2d721e50/0",
+  "cycle_trace": [
+    {
+      "cycle_index": 0,
+      "attempt_id": "20260714T040257-2d721e50",
+      "result_rev": "6f2efce5416a5b7e98eec7986d0cedccbce46610",
+      "implementer_route": {
+        "harness": "codex",
+        "model": "gpt-5.4-mini"
+      },
+      "requested_route": {
+        "harness": "codex",
+        "model": "gpt-5.4-mini"
+      },
+      "actual_route": {
+        "harness": "codex",
+        "model": "gpt-5.4-mini"
+      },
+      "review_group_id": "20260714T040532-c2cb9507",
+      "reviewer_indices": [
+        0,
+        1
+      ],
+      "review_verdicts": [
+        "",
+        ""
+      ],
+      "reviewer_route": {
+        "model": "smart"
+      },
+      "review_result": {
+        "classification": "review_malfunction"
+      },
+      "final_decision": "review_malfunction",
+      "failure_class": "review_malfunction",
+      "retry_action": "retry",
+      "escalation_count": 0,
+      "review_status": "malformed",
+      "review_skip_reason": "",
+      "review_classification": "review_malfunction",
+      "land_status": "not_landed",
+      "reconcile_status": "not_applicable"
+    }
+  ],
+  "harness": "codex",
+  "model": "gpt-5.4-mini",
+  "session_id": "eb-d1741c6a",
+  "duration_ms": 152675,
+  "tokens": 603047,
+  "exit_code": 0,
+  "project_root": "/home/erik/Projects/heimq",
+  "execution_dir": ".ddx/executions/20260714T040257-2d721e50",
+  "prompt_file": ".ddx/executions/20260714T040257-2d721e50/prompt.md",
+  "manifest_file": ".ddx/executions/20260714T040257-2d721e50/manifest.json",
+  "result_file": ".ddx/executions/20260714T040257-2d721e50/result.json",
+  "usage_file": ".ddx/executions/20260714T040257-2d721e50/usage.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-07-14T04:02:58.800166856Z",
+  "finished_at": "2026-07-14T04:05:31.475501677Z"
+}
