@@ -35,6 +35,7 @@ mod tests {
     use super::*;
 
     #[test]
+    // @covers US-017-AC4
     fn test_error_codes() {
         assert_eq!(HeimqError::TopicNotFound("t".into()).to_error_code(), 3);
         assert_eq!(

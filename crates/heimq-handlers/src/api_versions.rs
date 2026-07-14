@@ -22,3 +22,52 @@ pub fn handle(_api_version: i16, apis: &[(i16, i16, i16)]) -> ApiVersionsRespons
 
     response
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn keys(response: &ApiVersionsResponse) -> Vec<i16> {
+        response.api_keys.iter().map(|api| api.api_key).collect()
+    }
+
+    #[test]
+    // @covers US-016-AC2
+    fn api_versions_omits_apis_missing_from_capability_gated_input() {
+        let advertised = [(0, 0, 11), (1, 0, 12), (18, 0, 3)];
+
+        let response = handle(3, &advertised);
+        let keys = keys(&response);
+
+        assert!(keys.contains(&0), "Produce remains advertised");
+        assert!(keys.contains(&1), "Fetch remains advertised");
+        assert!(keys.contains(&18), "ApiVersions remains advertised");
+        assert!(
+            !keys.contains(&8) && !keys.contains(&9),
+            "Offset APIs omitted by capability computation must not be reintroduced"
+        );
+        assert!(
+            !keys.contains(&10) && !keys.contains(&11),
+            "Group APIs omitted by capability computation must not be reintroduced"
+        );
+    }
+
+    #[test]
+    // @covers US-016-AC3
+    fn api_versions_preserves_unrelated_apis_when_one_family_is_omitted() {
+        let advertised = [(0, 0, 11), (1, 0, 12), (8, 0, 9), (9, 0, 9), (18, 0, 3)];
+
+        let response = handle(3, &advertised);
+        let keys = keys(&response);
+
+        for key in [0, 1, 8, 9, 18] {
+            assert!(keys.contains(&key), "api key {key} must remain advertised");
+        }
+        for key in [10, 11, 12, 13, 14] {
+            assert!(
+                !keys.contains(&key),
+                "missing group-family key {key} must stay omitted"
+            );
+        }
+    }
+}

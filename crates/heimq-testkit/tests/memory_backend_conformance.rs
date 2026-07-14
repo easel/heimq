@@ -12,6 +12,7 @@ use std::sync::Arc;
 // ── LogBackend ────────────────────────────────────────────────────────────────
 
 #[test]
+// @covers US-016-AC1
 fn memory_log_backend_capabilities_name() {
     let cfg = test_config(true);
     let backend = MemoryLog::new(cfg);
@@ -19,6 +20,7 @@ fn memory_log_backend_capabilities_name() {
 }
 
 #[test]
+// @covers US-016-AC1
 fn memory_log_backend_create_and_find_topic() {
     let cfg = test_config(true);
     let backend = MemoryLog::new(cfg);
@@ -28,6 +30,7 @@ fn memory_log_backend_create_and_find_topic() {
 }
 
 #[test]
+// @covers US-016-AC1
 fn memory_log_backend_list_topics() {
     let cfg = test_config(true);
     let backend = MemoryLog::new(cfg);
@@ -35,6 +38,7 @@ fn memory_log_backend_list_topics() {
 }
 
 #[test]
+// @covers US-016-AC1
 fn memory_log_backend_append_and_fetch() {
     let cfg = test_config(true);
     let backend = MemoryLog::new(cfg);
@@ -42,6 +46,7 @@ fn memory_log_backend_append_and_fetch() {
 }
 
 #[test]
+// @covers US-016-AC1
 fn memory_log_backend_high_watermark() {
     let cfg = test_config(true);
     let backend = MemoryLog::new(cfg);
@@ -49,6 +54,7 @@ fn memory_log_backend_high_watermark() {
 }
 
 #[test]
+// @covers US-016-AC1
 fn memory_log_backend_log_start_offset_initial() {
     let cfg = test_config(true);
     let backend = MemoryLog::new(cfg);
@@ -56,6 +62,7 @@ fn memory_log_backend_log_start_offset_initial() {
 }
 
 #[test]
+// @covers US-016-AC1
 fn memory_log_backend_get_or_create_idempotent() {
     let cfg = test_config(true);
     let backend = MemoryLog::new(cfg);
@@ -63,6 +70,7 @@ fn memory_log_backend_get_or_create_idempotent() {
 }
 
 #[test]
+// @covers US-016-AC1
 fn memory_log_backend_delete_topic() {
     let cfg = test_config(true);
     let backend = MemoryLog::new(cfg);
@@ -72,6 +80,7 @@ fn memory_log_backend_delete_topic() {
 // ── PartitionLog ──────────────────────────────────────────────────────────────
 
 #[test]
+// @covers US-016-AC1
 fn memory_partition_log_suite() {
     suites::partition_log::run_all(&|| Arc::new(MemoryPartitionLog::new(0)) as Arc<_>);
 }
@@ -79,6 +88,7 @@ fn memory_partition_log_suite() {
 // ── OffsetStore ───────────────────────────────────────────────────────────────
 
 #[test]
+// @covers US-016-AC1
 fn memory_offset_store_suite() {
     let cfg = test_config(true);
     let manager = ConsumerGroupManager::new(cfg);
@@ -89,6 +99,7 @@ fn memory_offset_store_suite() {
 // ── ClusterView ───────────────────────────────────────────────────────────────
 
 #[test]
+// @covers US-016-AC1
 fn single_node_cluster_view_suite() {
     let cfg = test_config(true);
     let view = SingleNodeClusterView::new(&cfg);
@@ -98,6 +109,7 @@ fn single_node_cluster_view_suite() {
 // ── GroupCoordinatorBackend ───────────────────────────────────────────────────
 
 #[test]
+// @covers US-016-AC1
 fn memory_group_coordinator_suite() {
     let cfg = test_config(true);
     let manager = ConsumerGroupManager::new(cfg);

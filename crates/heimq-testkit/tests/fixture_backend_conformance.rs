@@ -16,11 +16,13 @@ use std::sync::Arc;
 // ── WAL-shape ─────────────────────────────────────────────────────────────────
 
 #[test]
+// @covers US-016-AC1
 fn wal_shape_partition_log_suite() {
     suites::partition_log::run_all(&|| Arc::new(WalShapePartitionLog::new(0)) as Arc<_>);
 }
 
 #[test]
+// @covers US-016-AC1
 fn wal_shape_records_in_wal_before_ack() {
     use heimq::storage::{PartitionLog, RecordBatchView};
     use heimq::test_support::encode_record_batch;
@@ -57,6 +59,7 @@ fn wal_shape_records_in_wal_before_ack() {
 // ── Queue-sink-shape ──────────────────────────────────────────────────────────
 
 #[test]
+// @covers US-016-AC1
 fn queue_sink_partition_log_suite() {
     suites::partition_log::run_all(&|| {
         let (log, _rx) = QueueSinkPartitionLog::new(0);
@@ -65,6 +68,7 @@ fn queue_sink_partition_log_suite() {
 }
 
 #[test]
+// @covers US-016-AC1
 fn queue_sink_delivers_to_channel() {
     use heimq::storage::{PartitionLog, RecordBatchView};
     use heimq::test_support::encode_record_batch;
@@ -98,11 +102,13 @@ fn queue_sink_delivers_to_channel() {
 // ── Object-store-shape ────────────────────────────────────────────────────────
 
 #[test]
+// @covers US-016-AC1
 fn object_store_shape_partition_log_suite() {
     suites::partition_log::run_all(&|| Arc::new(ObjectStoreShapePartitionLog::new(0)) as Arc<_>);
 }
 
 #[test]
+// @covers US-016-AC1
 fn object_store_shape_records_in_manifest() {
     use heimq::storage::{PartitionLog, RecordBatchView};
     use heimq::test_support::encode_record_batch;

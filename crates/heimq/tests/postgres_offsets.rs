@@ -151,6 +151,7 @@ fn unique_suffix() -> String {
 }
 
 #[test]
+// @covers US-015-AC1 US-015-AC2
 fn postgres_offset_store_survives_restart() {
     let base_url = match std::env::var("HEIMQ_PG_TEST_URL") {
         Ok(v) if !v.is_empty() => v,

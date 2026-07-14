@@ -279,6 +279,7 @@ mod tests {
     }
 
     #[test]
+    // @covers US-017-AC5
     fn test_encode_response_error_mapping() {
         let response = FailingEncode;
         let err = encode_response(1, 0, 0, &response).unwrap_err();
@@ -299,6 +300,7 @@ mod tests {
     }
 
     #[test]
+    // @covers US-017-AC5
     fn test_encode_response_invalid_versions_error() {
         use heimq_protocol::messages::api_versions_response::ApiVersionsResponse;
         use heimq_protocol::messages::create_topics_response::CreateTopicsResponse;

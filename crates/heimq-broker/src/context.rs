@@ -42,3 +42,31 @@ impl RequestContext {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    // @covers US-016-AC4 US-017-AC1
+    fn request_context_carries_identity_without_policy_decisions() {
+        let ctx = RequestContext::new(
+            Some("principal-a".to_string()),
+            Some("tenant-a".to_string()),
+            Some("client-a".to_string()),
+        );
+
+        assert_eq!(ctx.principal.as_deref(), Some("principal-a"));
+        assert_eq!(ctx.tenant.as_deref(), Some("tenant-a"));
+        assert_eq!(ctx.client_id.as_deref(), Some("client-a"));
+    }
+
+    #[test]
+    // @covers US-016-AC4
+    fn anonymous_context_has_no_embedder_policy_identity() {
+        assert_eq!(RequestContext::anonymous(), RequestContext::ANONYMOUS);
+        assert!(RequestContext::ANONYMOUS.principal.is_none());
+        assert!(RequestContext::ANONYMOUS.tenant.is_none());
+        assert!(RequestContext::ANONYMOUS.client_id.is_none());
+    }
+}

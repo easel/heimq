@@ -46,6 +46,7 @@ async fn start_postgres() -> (ContainerAsync<GenericImage>, String) {
 }
 
 #[tokio::test]
+// @covers US-016-AC1
 async fn postgres_offset_store_capabilities() {
     if !pg_tests_enabled() {
         return;
@@ -60,6 +61,7 @@ async fn postgres_offset_store_capabilities() {
 }
 
 #[tokio::test]
+// @covers US-016-AC1
 async fn postgres_offset_store_fetch_missing() {
     if !pg_tests_enabled() {
         return;
@@ -74,6 +76,7 @@ async fn postgres_offset_store_fetch_missing() {
 }
 
 #[tokio::test]
+// @covers US-016-AC1
 async fn postgres_offset_store_commit_and_fetch() {
     if !pg_tests_enabled() {
         return;
@@ -88,6 +91,7 @@ async fn postgres_offset_store_commit_and_fetch() {
 }
 
 #[tokio::test]
+// @covers US-016-AC1
 async fn postgres_offset_store_commit_overwrites() {
     if !pg_tests_enabled() {
         return;
@@ -102,6 +106,7 @@ async fn postgres_offset_store_commit_overwrites() {
 }
 
 #[tokio::test]
+// @covers US-016-AC1
 async fn postgres_offset_store_fetch_all_for_group() {
     if !pg_tests_enabled() {
         return;
@@ -116,6 +121,7 @@ async fn postgres_offset_store_fetch_all_for_group() {
 }
 
 #[tokio::test]
+// @covers US-016-AC1
 async fn postgres_offset_store_delete_group() {
     if !pg_tests_enabled() {
         return;

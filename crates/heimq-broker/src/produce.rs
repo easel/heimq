@@ -596,6 +596,7 @@ mod tests {
     }
 
     #[test]
+    // @covers US-016-AC4 US-017-AC1
     fn produce_append_core_threads_request_context_to_backend() {
         let storage = TestStorage::new();
         let records = record_batch_header_bytes(1, -1, 0);
@@ -619,6 +620,7 @@ mod tests {
     }
 
     #[test]
+    // @covers US-017-AC2 US-017-AC3
     fn produce_append_async_waits_on_deferred_backend_without_sync_append() {
         let state = Arc::new(DeferredAppendState::new());
         let storage = DeferredStorage::new(state.clone());
