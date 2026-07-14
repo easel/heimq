@@ -24,10 +24,10 @@ ddx:
 ## Scope
 
 Restructure heimq from a single-crate, single-node test broker into a
-four-crate workspace that serves as the shared Kafka broker engine for three
-consumer projects, then drive adoption in dependency order:
+five-member first-party workspace that serves as the shared Kafka broker
+engine for three consumer projects, then drive adoption in dependency order:
 
-1. Split heimq into wire / broker / cli workspace crates.
+1. Split heimq into wire / broker / handlers / testkit / cli workspace crates.
 2. Fold in niflheim wire-layer improvements.
 3. Build out the heimq test/conformance suite.
 4. Iterate until it passes.
@@ -39,10 +39,20 @@ Target workspace (this repo, no rename):
 
 | Crate | Contents | Consumers |
 |---|---|---|
-| `heimq-wire` | framing, codec, flexible headers, connection loop, SASL/TLS hooks, error-frame policy, handler registry | niflheim, pqueue, (broker) |
-| `heimq-broker` | handlers, group/idempotence/transaction semantics, capability gating, trait families (`LogBackend`/`TopicLog`/`PartitionLog`, `OffsetStore`, `GroupCoordinatorBackend`, `ClusterView`), in-memory reference backends | fjord, niflheim (produce path over a WAL-backed `TopicLog`), heimq bin; pqueue shape decided at Slice 7 framing |
-| `heimq-testkit` | per-trait conformance suites, contract-test pattern, differential parity harness (SD-003), expected-divergence annotations | all consumers |
 | `heimq` (bin) | CLI, config, backend dispatch (memory/postgres), packaging — the distribution | end users |
+| `heimq-wire` | framing, flexible headers, connection loop, SASL/TLS hooks, frame-size and error-frame policy | niflheim, pqueue, heimq bin |
+| `heimq-broker` | produce core, group/idempotence/transaction semantics, capability gating, trait families (`LogBackend`/`TopicLog`/`PartitionLog`, `OffsetStore`, `GroupCoordinatorBackend`, `ClusterView`), in-memory reference backends | fjord, niflheim (produce path over a WAL-backed `TopicLog`), heimq bin; pqueue shape decided at Slice 7 framing |
+| `heimq-handlers` | request-level decode/dispatch/encode layer above `heimq-broker`; embedder-facing codec helpers plus typed Produce, ApiVersions, Metadata, and InitProducerId handlers | heimq bin, niflheim downstream delegation |
+| `heimq-testkit` | per-trait conformance suites, contract-test pattern, differential parity harness (SD-003), expected-divergence annotations | all consumers |
+
+The workspace also carries `crates/heimq-protocol`, a vendored fork of
+`kafka-protocol` 0.15.1, as an excluded path dependency rather than a
+first-party workspace member.
+
+Status update (2026-07-14): upstream handler extraction into
+`heimq-handlers` landed in commit `35e8a15` and release `v0.1.4`. That
+satisfies Heimq's side of the request-level seam, but Niflheim's request-path
+delegation remains downstream work tracked by `niflheim-ba3e609c`.
 
 Governing decisions recorded 2026-06-12 (formalized in Slice 0): single name
 `heimq` for engine and distribution; conformance on the in-memory reference
@@ -95,10 +105,12 @@ between vision/PRD and FEAT-001..007.
 ### Slice 1 — Split heimq (program step 1)
 
 Mechanical workspace restructure plus seam-debt payoff at the boundary:
-- Flatten `heimq/` into `crates/{heimq-wire,heimq-broker,heimq-testkit,heimq}`
+- Flatten `heimq/` into the first-party
+  `crates/{heimq,heimq-wire,heimq-broker,heimq-handlers,heimq-testkit}`
   workspace (testkit created here as manifest + public API skeleton,
-  populated in Slice 3); CI (`test.yml`, stress-matrix) updated for
-  workspace paths.
+  populated in Slice 3; `heimq-handlers` owns request-level
+  decode/dispatch/encode above `heimq-broker`); CI (`test.yml`,
+  stress-matrix) updated for workspace paths.
 - Seam-debt beads (fix while drawing the boundary, not after):
   router holds concrete `ConsumerGroupManager` → trait object;
   `Config` reach-through in Metadata/FindCoordinator → `ClusterView` trait
@@ -227,6 +239,9 @@ wire + produce-path conformance subset; pqueue suite green.
 - **Divergence risk management**: diff niflheim's wire layer against the
   Slice-2 port baseline first; forward-port anything that changed since.
 - niflheim adoption ADR; its contract tests re-pointed at heimq-wire.
+- Current external remainder: Heimq has shipped the request-level handler seam
+  in `35e8a15` / `v0.1.4`; Niflheim still needs to delegate its request path
+  to that seam under `niflheim-ba3e609c`.
 
 **Exit gate**: niflheim workspace suite + kafka contract tests green on
 heimq-wire; WAL-backed `TopicLog` passes the per-trait conformance suite;

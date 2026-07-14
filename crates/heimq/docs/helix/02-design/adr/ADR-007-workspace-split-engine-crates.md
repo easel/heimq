@@ -8,7 +8,7 @@ ddx:
     reviewed_at: "2026-06-22T21:30:26Z"
 ---
 
-# ADR-007: Four-Crate Workspace Split and Engine Consumption Model
+# ADR-007: Workspace Split and Engine Consumption Model
 
 | Date | Status | Deciders | Related | Confidence |
 |------|--------|----------|---------|------------|
@@ -19,27 +19,37 @@ ddx:
 | Aspect | Description |
 |--------|-------------|
 | Problem | heimq is a single-crate broker used only as a standalone test tool. Three consumer projects (fjord, niflheim, pqueue) each need Kafka wire and/or broker semantics; without a shared engine they each implement or re-implement the stack independently. |
-| Current State | Single `heimq/` crate; no published library surface; niflheim carries its own wire-layer implementation (`niflheim-protocol/src/kafka/`); fjord ADR-002 planned to extract a shared crate from fjord's repo. |
+| Current State | Workspace split has landed as five first-party members (`heimq`, `heimq-wire`, `heimq-broker`, `heimq-handlers`, `heimq-testkit`) plus an excluded vendored `heimq-protocol` fork; niflheim still has downstream request-path delegation work tracked by `niflheim-ba3e609c`. |
 | Requirements | Consumers must be able to embed wire and/or broker crates independently. Trait conformance must be provable once and reused. Binary distribution (`heimq` CLI) must remain independently releasable. |
 | Decision Drivers | niflheim and pqueue are real consumers with concrete requirements now; heimq already has the most complete implementation and test assets; trait conformance proved once on the in-memory backend eliminates per-consumer re-verification. |
 
 ## Decision
 
-We will restructure heimq into a four-crate Cargo workspace within this repo
-(no rename), with crate boundaries and a consumption model as follows.
+We will maintain heimq as a Cargo workspace within this repo (no rename), with
+five first-party workspace members and one excluded vendored protocol fork.
+The current request-handler extraction landed upstream in commit `35e8a15` and
+release `v0.1.4`; Niflheim's request-path delegation remains downstream work
+tracked by `niflheim-ba3e609c`.
 
-**Crate boundaries:**
+**First-party workspace members:**
 
 | Crate | Contents |
 |---|---|
-| `heimq-wire` | Framing, codec, flexible headers, connection loop, SASL/TLS as a gated capability, error-frame policy, handler registry |
-| `heimq-broker` | Handlers, group/idempotence/transaction semantics, capability gating, trait families (`LogBackend`/`TopicLog`/`PartitionLog`, `OffsetStore`, `GroupCoordinatorBackend`, `ClusterView`), in-memory reference backends |
-| `heimq-testkit` | Per-trait conformance suites, contract-test pattern, differential parity harness |
 | `heimq` (bin) | CLI, config, backend dispatch — the distribution; consumers never depend on this crate |
+| `heimq-wire` | Framing, flexible headers, connection loop, SASL/TLS as a gated capability, frame-size and error-frame policy |
+| `heimq-broker` | Produce core, group/idempotence/transaction semantics, capability gating, trait families (`LogBackend`/`TopicLog`/`PartitionLog`, `OffsetStore`, `GroupCoordinatorBackend`, `ClusterView`), in-memory reference backends |
+| `heimq-handlers` | Request-level decode/dispatch/encode layer above `heimq-broker`; exposes embedder-facing codec helpers and typed handlers for Produce, ApiVersions, Metadata, and InitProducerId |
+| `heimq-testkit` | Per-trait conformance suites, contract-test pattern, differential parity harness |
+
+**Excluded vendored dependency:**
+
+| Crate | Status |
+|---|---|
+| `heimq-protocol` | Vendored fork of `kafka-protocol` 0.15.1, excluded from the workspace so it builds as third-party dependency code under dependency lint policy; first-party members depend on it by path. |
 
 **Consumption model:**
 - fjord embeds `heimq-broker` (object-log backends + `ClusterView`)
-- niflheim embeds `heimq-wire` AND `heimq-broker`'s produce path via a WAL-backed `TopicLog`
+- niflheim embeds `heimq-wire`, `heimq-handlers`, and `heimq-broker`'s produce path via a WAL-backed `TopicLog`; upstream handler extraction is present in `35e8a15` / `v0.1.4`, while the downstream Niflheim request-path delegation remains tracked by `niflheim-ba3e609c`
 - pqueue embeds `heimq-wire` as a producer front-end (shape finalized at Slice 7 framing)
 - Consumers pin git tags, never branches
 
@@ -57,7 +67,7 @@ recorded here. Header-version selection delegates to
 | New repo + new name (`kafrost`) | Clean namespace; clear brand separation | Two brands to maintain; repo migration cost; loses history, CI, and tracker continuity | Rejected: migration cost not justified; single-repo history is an asset |
 | Extract shared crate into fjord's planned repo (per fjord ADR-002) | Keeps fjord repo self-contained | heimq already has the more complete implementation and test assets; two real consumers (niflheim, pqueue) exist today and need the engine from heimq's tree | Rejected: moves the engine away from where the work already is |
 | Wire-only shared crate without broker engine | Smaller shared surface; less coupling | Every consumer re-implements produce/group semantics; niflheim has explicitly decided to adopt heimq-broker's produce path | Rejected: conformance-once principle requires the broker engine to be shared |
-| **Four-crate workspace in this repo** | One engine; conformance proved once; consumers delete wire code; no migration | heimq repo becomes a multi-consumer dependency — semver discipline and consumer-matrix CI required | **Selected**: benefit outweighs the governance overhead; governance is manageable with pinned tags and additive trait evolution |
+| **Five-member first-party workspace in this repo** | One engine; request handlers have a stable embedder layer; conformance proved once; consumers delete wire code; no migration | heimq repo becomes a multi-consumer dependency — semver discipline and consumer-matrix CI required | **Selected**: benefit outweighs the governance overhead; governance is manageable with pinned tags and additive trait evolution |
 
 ## Consequences
 
