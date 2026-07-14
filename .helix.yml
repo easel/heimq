@@ -1,0 +1,9 @@
+helix_version: 2
+
+flows:
+  - id: helix
+    root: crates/heimq/docs/helix/
+    version: "0.10.2"
+
+defaults:
+  flow: helix
