@@ -12,10 +12,10 @@ ddx:
   review:
     self_hash: de364438fe7c52ed13c6debb0f5a76ac7f4e7ee50ad3e3a27852c7dbe601eaa9
     deps:
-      API-001: d85884155fba0fe46b242b6bdc939b612c55ea033bc2d68b6cf0c50c114d18b4
-      CODEC-001: c6d7122c6717a77692e3af031be383978036f7c85d57813998b33c51cd81c9ff
-      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
-    reviewed_at: "2026-06-22T21:30:26Z"
+      API-001: 85aaecdeafe47af73d0e287b3851f021313a23a96dc492d2646f78913978d5de
+      CODEC-001: d83709237e2ca19409a81cc063bfba856b91e67d8231964561686d2ec602c919
+      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 
 # WIRE-001: Wire Scaffolding Contract

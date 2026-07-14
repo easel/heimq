@@ -12,6 +12,11 @@ ddx:
       to: TRAIT-001
     - kind: covers
       to: FR-13
+  review:
+    self_hash: 9a8ed6ad154999b4271a14704f58b6d0ba07c1ed61970fc54e42dbce77c07940
+    deps:
+      FEAT-008: 9c4681949c5ee4823eb76b3b78411e72752795175efa03ac41f2c30d38d8f7a4
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 # US-017 — Request-level handler delegation for embedders
 

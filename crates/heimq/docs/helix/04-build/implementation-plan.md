@@ -7,11 +7,11 @@ ddx:
     - helix.prd
     - helix.product-vision
   review:
-    self_hash: 329b4d9ab3db67b9977ed0bf2c489426542a9e510e26154558f87ba51913fee4
+    self_hash: a81de258a7ce95ebf74b07d1f46b742c0e5c24013b6a8d41ae6ca8d6ccf5be7a
     deps:
-      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
       helix.product-vision: 8fda503ba36c48175e42be03782c96af196de39d6e87b6edab88d853ee1857ca
-    reviewed_at: "2026-06-22T21:30:26Z"
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 # Implementation Plan: heimq Engine Restructuring Program
 

@@ -11,14 +11,14 @@ ddx:
     - FEAT-006
     - ADR-003
   review:
-    self_hash: d85884155fba0fe46b242b6bdc939b612c55ea033bc2d68b6cf0c50c114d18b4
+    self_hash: 85aaecdeafe47af73d0e287b3851f021313a23a96dc492d2646f78913978d5de
     deps:
       ADR-003: c06761cf28323ddb6162d309cfcfe4db1037f915a2c05a716ad4262222193145
       FEAT-001: 7133c264bc364ec4535c1d6b6187a90c9ba66d1fa3df30731ade260c2e092479
       FEAT-002: 164350929c7bbc09a589f3cd1a80b685e88cce1054445fe5373aec566464636f
       FEAT-006: e59d3b8965ebd35b4bbe9c5302f4218432ad83ec27691989dfd4c345ac2ae004
-      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
-    reviewed_at: "2026-06-22T21:30:26Z"
+      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 
 # API Contract: Kafka Wire Protocol [heimq]
@@ -62,7 +62,7 @@ ddx:
   generated encode/decode (see ADR-003); a thin dispatch shim under
   `src/protocol/codec/` may or may not be introduced during FEAT-006
   implementation.
-- The static version table is `SUPPORTED_APIS` in `src/protocol/mod.rs`;
+- The static version table is `SUPPORTED_APIS` in `mod.rs` under `crates/heimq/src/protocol/`;
   the matrix below mirrors it. Any change to advertised versions must
   update both.
 - **Per-API maxima** (pinned by FEAT-006 FR-03):
@@ -72,8 +72,8 @@ ddx:
   ApiVersions v3, CreateTopics v7, DeleteTopics v6, InitProducerId v5,
   AddPartitionsToTxn v5, AddOffsetsToTxn v4, EndTxn v4, WriteTxnMarkers v1,
   TxnOffsetCommit v4. The matrix below mirrors `SUPPORTED_APIS` in
-  `src/protocol/mod.rs`; any change to advertised versions must update both.
-- **Capability-derived advertisement**: The ApiVersions response is not a verbatim copy of `SUPPORTED_APIS`. At runtime, `compute_supported_apis` (`src/protocol/mod.rs`) intersects the static table with the per-API `CapabilityGate` against each backend's descriptor (`BackendCapabilities`, `OffsetStoreCapabilities`, `GroupCoordinatorCapabilities`). APIs whose required backend is absent (e.g. no group coordinator) are filtered out before the response is encoded, so heimq advertises only what its currently configured backends can actually serve. Gating is per-API, not a global meet — a backend that lacks compaction does not lose unrelated APIs.
+  `mod.rs` under `crates/heimq/src/protocol/`; any change to advertised versions must update both.
+- **Capability-derived advertisement**: The ApiVersions response is not a verbatim copy of `SUPPORTED_APIS`. At runtime, `compute_supported_apis` (`mod.rs` under `crates/heimq/src/protocol/`) intersects the static table with the per-API `CapabilityGate` against each backend's descriptor (`BackendCapabilities`, `OffsetStoreCapabilities`, `GroupCoordinatorCapabilities`). APIs whose required backend is absent (e.g. no group coordinator) are filtered out before the response is encoded, so heimq advertises only what its currently configured backends can actually serve. Gating is per-API, not a global meet — a backend that lacks compaction does not lose unrelated APIs.
 
 ### Support Matrix (Kafka API Keys)
 
@@ -92,31 +92,31 @@ Reason codes (Exclusions):
 
 | API Key | Name | heimq Status | Supported Versions | Tests | Notes |
 | --- | --- | --- | --- | --- | --- |
-| 0 | Produce | Supported | 0-11 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory append only |
-| 1 | Fetch | Supported | 0-12 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory read only; capped at v12 (v13+ uses topic_id UUID, name-based lookup unsupported) |
-| 2 | ListOffsets | Supported | 0-9 | `src/handler/tests.rs`; `tests/contract.rs` | Timestamp lookups simplified |
-| 3 | Metadata | Supported | 0-12 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | Single broker only |
-| 8 | OffsetCommit | Supported | 0-9 | `src/handler/tests.rs`; `tests/contract.rs` | In-memory offsets |
-| 9 | OffsetFetch | Supported | 0-9 | `src/handler/tests.rs`; `tests/contract.rs`; `tests/integration.rs` | In-memory offsets; v8+ uses groups response structure |
-| 10 | FindCoordinator | Supported | 0-6 | `src/handler/tests.rs` | Single coordinator (self) |
-| 11 | JoinGroup | Supported | 0-9 | `src/handler/tests.rs` | Simplified group state |
-| 12 | Heartbeat | Supported | 0-4 | `src/handler/tests.rs` | Simplified liveness |
-| 13 | LeaveGroup | Supported | 0-5 | `src/handler/tests.rs` | Member removal only |
-| 14 | SyncGroup | Supported | 0-5 | `src/handler/tests.rs` | Simplified assignment |
+| 0 | Produce | Supported | 0-11 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/`; `tests/conformance/integration/` | In-memory append only |
+| 1 | Fetch | Supported | 0-12 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/`; `tests/conformance/integration/` | In-memory read only; capped at v12 (v13+ uses topic_id UUID, name-based lookup unsupported) |
+| 2 | ListOffsets | Supported | 0-9 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/` | Timestamp lookups simplified |
+| 3 | Metadata | Supported | 0-12 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/`; `tests/conformance/integration/` | Single broker only |
+| 8 | OffsetCommit | Supported | 0-9 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/` | In-memory offsets |
+| 9 | OffsetFetch | Supported | 0-9 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/`; `tests/conformance/integration/` | In-memory offsets; v8+ uses groups response structure |
+| 10 | FindCoordinator | Supported | 0-6 | `crates/heimq/src/handler/tests.rs` | Single coordinator (self) |
+| 11 | JoinGroup | Supported | 0-9 | `crates/heimq/src/handler/tests.rs` | Simplified group state |
+| 12 | Heartbeat | Supported | 0-4 | `crates/heimq/src/handler/tests.rs` | Simplified liveness |
+| 13 | LeaveGroup | Supported | 0-5 | `crates/heimq/src/handler/tests.rs` | Member removal only |
+| 14 | SyncGroup | Supported | 0-5 | `crates/heimq/src/handler/tests.rs` | Simplified assignment |
 | 15 | DescribeGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
 | 16 | ListGroups | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
 | 17 | SaslHandshake | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
-| 18 | ApiVersions | Supported | 0-3 | `src/handler/tests.rs`; `tests/contract.rs`; `src/protocol/router.rs` | Version negotiation only |
-| 19 | CreateTopics | Supported | 0-7 | `src/handler/tests.rs`; `tests/contract.rs` | No config validation |
-| 20 | DeleteTopics | Supported | 0-6 | `src/handler/tests.rs`; `tests/contract.rs` | Best-effort delete |
+| 18 | ApiVersions | Supported | 0-3 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/`; `crates/heimq/src/protocol/router.rs` | Version negotiation only |
+| 19 | CreateTopics | Supported | 0-7 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/` | No config validation |
+| 20 | DeleteTopics | Supported | 0-6 | `crates/heimq/src/handler/tests.rs`; `contract.rs` under `crates/heimq/tests/` | Best-effort delete |
 | 21 | DeleteRecords | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
-| 22 | InitProducerId | Supported (FEAT-002) | 0-5 | `tests/contract.rs` | Required for idempotent producer + transactions |
+| 22 | InitProducerId | Supported (FEAT-002) | 0-5 | `contract.rs` under `crates/heimq/tests/` | Required for idempotent producer + transactions |
 | 23 | OffsetForLeaderEpoch | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
-| 24 | AddPartitionsToTxn | Supported (FEAT-002) | 0-5 | `tests/contract.rs` | Single-coordinator transaction state machine |
-| 25 | AddOffsetsToTxn | Supported (FEAT-002) | 0-4 | `tests/contract.rs` | Single-coordinator transaction state machine |
-| 26 | EndTxn | Supported (FEAT-002) | 0-4 | `tests/contract.rs` | Single-coordinator transaction state machine |
-| 27 | WriteTxnMarkers | Supported (FEAT-002) | 0-1 | `tests/contract.rs` | Control batches drive read_committed visibility |
-| 28 | TxnOffsetCommit | Supported (FEAT-002) | 0-4 | `tests/contract.rs` | EOS consumer offset commits |
+| 24 | AddPartitionsToTxn | Supported (FEAT-002) | 0-5 | `contract.rs` under `crates/heimq/tests/` | Single-coordinator transaction state machine |
+| 25 | AddOffsetsToTxn | Supported (FEAT-002) | 0-4 | `contract.rs` under `crates/heimq/tests/` | Single-coordinator transaction state machine |
+| 26 | EndTxn | Supported (FEAT-002) | 0-4 | `contract.rs` under `crates/heimq/tests/` | Single-coordinator transaction state machine |
+| 27 | WriteTxnMarkers | Supported (FEAT-002) | 0-1 | `contract.rs` under `crates/heimq/tests/` | Control batches drive read_committed visibility |
+| 28 | TxnOffsetCommit | Supported (FEAT-002) | 0-4 | `contract.rs` under `crates/heimq/tests/` | EOS consumer offset commits |
 | 29 | DescribeAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
 | 30 | CreateAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
 | 31 | DeleteAcls | Excluded (R2) | N/A | N/A | Out of scope for current single-node implementation |
@@ -143,10 +143,10 @@ Reason codes (Exclusions):
 | 55 | DescribeQuorum | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
 | 57 | UpdateFeatures | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
 | 60 | DescribeCluster | Excluded (R4) | N/A | N/A | Out of scope for current single-node implementation |
-| 61 | DescribeProducers | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Producer-id state introspection |
+| 61 | DescribeProducers | Planned (FEAT-002) | TBD | Pending per-API contract test | Producer-id state introspection |
 | 64 | UnregisterBroker | Excluded (R1) | N/A | N/A | Out of scope for current single-node implementation |
-| 65 | DescribeTransactions | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Transaction-state introspection |
-| 66 | ListTransactions | Planned (FEAT-002) | TBD | Pending (`tests/contract/transactions.rs`) | Transaction-state introspection |
+| 65 | DescribeTransactions | Planned (FEAT-002) | TBD | Pending per-API contract test | Transaction-state introspection |
+| 66 | ListTransactions | Planned (FEAT-002) | TBD | Pending per-API contract test | Transaction-state introspection |
 | 68 | ConsumerGroupHeartbeat | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
 | 69 | ConsumerGroupDescribe | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
 | 71 | GetTelemetrySubscriptions | Excluded (R5) | N/A | N/A | Out of scope for current single-node implementation |
@@ -177,7 +177,7 @@ Reason codes (Exclusions):
 ## Validation Checklist
 
 ### Required Contract Tests (per supported API)
-1. **ApiVersions**: version negotiation reflects `compute_supported_apis(SUPPORTED_APIS, backend capabilities)` — i.e. the static table intersected with the per-API capability gates of the configured backends. Unit tests in `src/protocol/mod.rs` pin the intersection behaviour (memory default advertises full set; missing group coordinator drops only group APIs; missing offset store drops only offset APIs; capability flags do not leak across APIs).
+1. **ApiVersions**: version negotiation reflects `compute_supported_apis(SUPPORTED_APIS, backend capabilities)` — i.e. the static table intersected with the per-API capability gates of the configured backends. Unit tests in `mod.rs` under `crates/heimq/src/protocol/` pin the intersection behaviour (memory default advertises full set; missing group coordinator drops only group APIs; missing offset store drops only offset APIs; capability flags do not leak across APIs).
 2. **Metadata**: topic discovery, auto-create behavior, error for disabled auto-create.
 3. **Produce**: empty batch, keyed/unkeyed, large batch, partition error codes.
 4. **Fetch**: offsets, high watermark, empty responses, max_bytes enforcement.
@@ -192,7 +192,7 @@ Reason codes (Exclusions):
 
 - Versioning: per-API supported version ranges are advertised via ApiVersions
   (see Version Policy above); the static table is `SUPPORTED_APIS` in
-  `src/protocol/mod.rs`.
+  `mod.rs` under `crates/heimq/src/protocol/`.
 - Flexible versions are supported per FEAT-006; legacy versions remain
   supported and are exercised by existing contract tests.
 - All future changes must remain additive or gated by ApiVersions.
@@ -210,13 +210,13 @@ zero diffs at flexible versions vs Redpanda.
 Concrete request/response examples are not inlined here. Wire-format examples
 for each API follow the Kafka Protocol Guide (see **Source** above); per-API
 executable examples are pinned by the contract tests listed in the Support
-Matrix `Tests` column (`tests/contract.rs`, `tests/integration.rs`,
-`src/handler/tests.rs`).
+Matrix `Tests` column (`contract.rs` under `crates/heimq/tests/`, `tests/conformance/integration/`,
+`crates/heimq/src/handler/tests.rs`).
 
 ## Feature Traceability
 
 - **PRD**: `docs/helix/01-frame/prd.md` (P0 #1 wire compat, #2 groups, #3 idempotent producers, #4 transactions, #5 parity, #6 benchmarks, #7 ecosystem).
 - **Feature specs**: FEAT-001 (wire protocol), FEAT-002 (groups + transactions + idempotency), FEAT-003 (differential parity), FEAT-004 (benchmark conformance), FEAT-005 (ecosystem integrations), FEAT-006 (flexible-version protocol).
-- **Implementation**: `src/handler/*.rs`, `src/protocol/*`, `src/storage/*`; transaction coordinator and producer-id manager TBD under FEAT-002.
-- **Tests**: `tests/contract.rs`, `tests/integration.rs`, `src/handler/tests.rs`, `src/protocol/router.rs`, storage module unit/property tests; planned `tests/contract/transactions.rs`, `tests/parity/`, `tests/ecosystem/`, `scripts/bench/`.
+- **Implementation**: `crates/heimq/src/handler/*.rs`, `crates/heimq/src/protocol/*`, `crates/heimq/src/storage/*`; transaction coordinator and producer-id manager TBD under FEAT-002.
+- **Tests**: `contract.rs` under `crates/heimq/tests/`, `tests/conformance/integration/`, `crates/heimq/src/handler/tests.rs`, `crates/heimq/src/protocol/router.rs`, storage module unit/property tests; planned per-API contract files, `tests/conformance/`, `tests/ecosystem/`, `scripts/bench/`.
 - **Related Doc**: `docs/helix/03-test/test-plan/test-plan.md`.

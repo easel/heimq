@@ -13,16 +13,16 @@ ddx:
     - FEAT-005
     - FEAT-006
   review:
-    self_hash: 0ab4a39b378230423b0e06e506a3948adef3e14c246517906f88c8d33d1e14be
+    self_hash: 85693e54a11e4843d420d965d5fb01311581237c65579516411cc5516279d4d1
     deps:
       FEAT-001: 7133c264bc364ec4535c1d6b6187a90c9ba66d1fa3df30731ade260c2e092479
       FEAT-002: 164350929c7bbc09a589f3cd1a80b685e88cce1054445fe5373aec566464636f
       FEAT-003: d134a5740222f1b59ecda81b318c7b28de9968bba9f640bb6280310c1e906233
-      FEAT-004: 15d88aa986503176f2e6b5020d55ec106bc1f7d6c05c7a1ea322d2bb9003f91e
+      FEAT-004: 84531399bf0bf4d4ff962e6f516c45506d67340944a8ba924e6010b4a39b64a6
       FEAT-005: c8b17ef2e79181581f03413860ea3e074364440af280321171b639668cb3aebc
       FEAT-006: e59d3b8965ebd35b4bbe9c5302f4218432ad83ec27691989dfd4c345ac2ae004
-      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
-    reviewed_at: "2026-06-22T21:30:26Z"
+      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 
 # Test Plan
@@ -100,8 +100,8 @@ heimq/
 
 ### Naming Conventions
 
-- Contract tests: `tests/contract.rs` (current), `tests/contract/{api}.rs` (target)
-- Integration tests: `tests/integration.rs`
+- Contract tests: `contract.rs` under `crates/heimq/tests/` (current); per-API files are a future target when introduced.
+- Integration tests: `tests/conformance/integration/`
 - Property/unit tests: module-level `#[cfg(test)]`
 
 ### Test Data Strategy
@@ -133,7 +133,7 @@ heimq/
 
 ## Baseline Alignment
 
-- **Differential parity harness (FEAT-003)**: A harness in `tests/parity/`
+- **Differential parity harness (FEAT-003)**: A harness in `tests/conformance/`
   drives identical client workloads against heimq and Redpanda, normalizes
   non-determinism, and asserts zero behavioral diffs for in-scope APIs
   (produce/fetch and consumer groups as gating workloads at FEAT-003
@@ -164,10 +164,10 @@ heimq/
 - [x] Produce + Fetch: offsets, max_bytes, empty record batches.
 - [x] ListOffsets: earliest/latest/timestamp semantics.
 - [x] CreateTopics/DeleteTopics: idempotency and errors.
-- [x] Consumer Groups: FindCoordinator, Join/Sync/Heartbeat/Leave, OffsetCommit/Fetch (`tests/contract.rs`).
+- [x] Consumer Groups: FindCoordinator, Join/Sync/Heartbeat/Leave, OffsetCommit/Fetch (`contract.rs` under `crates/heimq/tests/`).
 
 ### Phase 3: Integration and Regression (P0)
-- [x] Expand integration test coverage to include consumer group offsets and group lifecycle (`tests/integration.rs`).
+- [x] Expand integration test coverage to include consumer group offsets and group lifecycle (`tests/conformance/integration/`).
 - [ ] Add legacy protocol edge cases via `kafka` crate.
 
 ### Phase 4: Baseline Parity — Parked — superseded by Phase 8 (differential parity harness); see docs/helix/parking-lot.md
@@ -184,7 +184,7 @@ Redpanda. See the parking-lot entry for the revisit trigger.
 
 Scope: rdkafka-driven end-to-end tests only. Contract/property/unit
 layers are covered by Phases 1–2. Prioritization follows external
-review (codex) after auditing `tests/integration.rs`.
+review (codex) after auditing `tests/conformance/integration/`.
 
 Spec traceability: exercises API-001 APIs Produce (0), Fetch (1),
 ListOffsets (2), Metadata (3), OffsetCommit (8), OffsetFetch (9),
@@ -192,8 +192,7 @@ FindCoordinator (10), JoinGroup (11), Heartbeat (12), LeaveGroup
 (13), SyncGroup (14).
 
 All Phase 5 items are landed under epic heimq-700e47b2; tests live in
-`heimq/tests/integration.rs` (run with `cargo test --test integration --
---ignored`).
+`tests/conformance/integration/`.
 
 #### P0 — Consumer group correctness
 - [x] Single-group delivery integrity on a multi-partition topic: no gaps, no duplicate ownership across members (supersedes any "exactly-once" framing — not a Kafka guarantee). [heimq-f17da917]
@@ -315,7 +314,7 @@ AddOffsetsToTxn (25), EndTxn (26), WriteTxnMarkers (27), TxnOffsetCommit
 
 ### Phase 8: Differential Parity Harness (P0, FEAT-003)
 
-Spec traceability: FEAT-003, PRD P0 #5. Lives under `tests/parity/`.
+Spec traceability: FEAT-003, PRD P0 #5. Lives under `tests/conformance/`.
 
 - [x] Harness scaffolding: same client workload against heimq and Redpanda; structured diff output.
 - [x] Normalization rules for broker ids, host timestamps, monotonic ids.
@@ -448,12 +447,12 @@ Machine-checkable via `grep -r '@covers' crates/heimq/tests/`. Legend: **C** = c
 | US-004-AC9 | — | — | NYI: capability-gated off |
 | US-004-AC10 | — | — | NYI: capability-gated off |
 | US-004-AC11 | — | — | NYI: capability-gated off |
-| US-005-AC1 | P | `tests/parity/main.rs` (harness entry point) | Automated |
-| US-005-AC2 | P | `tests/parity/diff.rs` | Automated |
-| US-005-AC3 | P | `tests/parity/normalize.rs` | Automated |
+| US-005-AC1 | P | `tests/conformance/go/main.go` (harness entry point) | Automated |
+| US-005-AC2 | P | `tests/conformance/go/observation.go` | Automated |
+| US-005-AC3 | P | `tests/conformance/go/raw.go` | Automated |
 | US-005-AC4 | P | `parity::workloads::produce_fetch`, `parity::workloads::consumer_group` | Automated |
 | US-005-AC5 | P | `parity::workloads::produce_fetch`, `parity::workloads::consumer_group` | Automated |
-| US-005-AC6 | P | `tests/parity/exemptions.rs` | Automated |
+| US-005-AC6 | P | `tests/conformance/exemptions.toml` | Automated |
 | US-005-AC7 | — | — | NYI: txn workloads gated off (FEAT-002) |
 | US-006-AC1 | E | `scripts/bench/run-smoke.sh` + CI (`bench-smoke.yml`) | Automated (CI) |
 | US-006-AC2 | E | `scripts/bench/run-smoke.sh` + CI (`bench-smoke.yml`) | Automated (CI) |

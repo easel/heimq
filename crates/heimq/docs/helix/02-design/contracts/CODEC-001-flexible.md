@@ -9,12 +9,12 @@ ddx:
     - API-001
     - ADR-003
   review:
-    self_hash: c6d7122c6717a77692e3af031be383978036f7c85d57813998b33c51cd81c9ff
+    self_hash: d83709237e2ca19409a81cc063bfba856b91e67d8231964561686d2ec602c919
     deps:
       ADR-003: c06761cf28323ddb6162d309cfcfe4db1037f915a2c05a716ad4262222193145
-      API-001: d85884155fba0fe46b242b6bdc939b612c55ea033bc2d68b6cf0c50c114d18b4
+      API-001: 85aaecdeafe47af73d0e287b3851f021313a23a96dc492d2646f78913978d5de
       FEAT-006: e59d3b8965ebd35b4bbe9c5302f4218432ad83ec27691989dfd4c345ac2ae004
-    reviewed_at: "2026-06-22T21:30:26Z"
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 
 # CODEC-001: Flexible-Version Codec Module Surface
@@ -82,7 +82,7 @@ version. No heimq-owned codec primitive module is required.
 
 #### `is_flexible(api_key: i16, api_version: i16) -> bool`
 
-**Location**: `src/protocol/flexible.rs` (re-exported via `src/protocol/mod.rs`)
+**Location**: `crates/heimq-handlers/src/flexible.rs` (re-exported via `mod.rs` under `crates/heimq/src/protocol/`)
 
 Returns `true` when the request/response pair for `(api_key, api_version)`
 must use flexible framing. Implemented as a lookup against the
@@ -187,7 +187,7 @@ from the `RequestHeader`.
 
 ### Router Integration
 
-**Location**: `src/protocol/router.rs`
+**Location**: `crates/heimq/src/protocol/router.rs`
 
 `Router::route` calls `decode_request`, which already returns the parsed
 `RequestHeader` (containing `api_key` and `api_version`). No change to the
@@ -296,7 +296,7 @@ The following tests verify this contract at FEAT-006 implementation time:
    end-to-end; assert correlation_id is preserved and response decodes cleanly.
 
 Test locations: `src/protocol/codec.rs` (unit tests 1–5),
-`src/protocol/router.rs` (integration test 6).
+`crates/heimq/src/protocol/router.rs` (integration test 6).
 
 ---
 

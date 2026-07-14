@@ -10,6 +10,11 @@ ddx:
       to: TRAIT-001
     - kind: covers
       to: FR-12
+  review:
+    self_hash: dbc937ade93ef6f92e5ee3a5f95ee4a23a7383ca0e4c94bd69e92099ed1d0b92
+    deps:
+      FEAT-008: 9c4681949c5ee4823eb76b3b78411e72752795175efa03ac41f2c30d38d8f7a4
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 # US-016 — Backend trait conformance for embedders
 

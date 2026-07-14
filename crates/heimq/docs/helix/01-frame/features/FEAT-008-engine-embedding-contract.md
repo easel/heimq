@@ -14,6 +14,13 @@ ddx:
       to: WIRE-001
     - kind: resolves
       to: AR-2026-07-13-repo
+  review:
+    self_hash: 9c4681949c5ee4823eb76b3b78411e72752795175efa03ac41f2c30d38d8f7a4
+    deps:
+      TRAIT-001: 0f7508ff4e3da65c8f84f465ea2b2c7db82797016f5333240148cdcaa7e7cc23
+      WIRE-001: de364438fe7c52ed13c6debb0f5a76ac7f4e7ee50ad3e3a27852c7dbe601eaa9
+      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 # Feature Specification: FEAT-008 — Engine Embedding Contract
 

@@ -10,12 +10,12 @@ ddx:
     - ADR-006
     - ADR-007
   review:
-    self_hash: 34a65294dc8ed94e0fb07b0f1c247f23a2ffacf24b42164b375320148462d3c3
+    self_hash: 0f7508ff4e3da65c8f84f465ea2b2c7db82797016f5333240148cdcaa7e7cc23
     deps:
       ADR-006: 881bf5e99cfef0f38fec536b48898ee1d3bf40b1be8bd2fbfc036f48aabfc385
-      ADR-007: 44b47ae3485b6c355c48380610ad1ae6d2cb3779c8ea5d2f0b96910993826500
-      helix.prd: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
-    reviewed_at: "2026-06-22T21:30:26Z"
+      ADR-007: 8d887546b3e7a83c6648b84d4c325cd3a1a1545ebabb877cedf17f8ca9195ea0
+      helix.prd: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 
 # TRAIT-001: Backend Trait Families
@@ -44,7 +44,7 @@ principal context threading, per-family conformance suite obligations.
 Out of scope: internal backend implementations; wire framing (WIRE-001,
 CODEC-001); SASL/TLS; fjord/pqueue/niflheim product semantics.
 
-Owning system: `heimq-broker` crate (`src/storage/`, `src/consumer_group/`).
+Owning system: `heimq-broker` crate (`crates/heimq-broker/src/storage/`, `crates/heimq-broker/src/consumer_group/`).
 
 ---
 
@@ -64,7 +64,7 @@ covers only the context threading.
 
 **Capability-gated advertisement**: A backend family absent or returning
 `name == "unknown"` causes `compute_supported_apis`
-(`src/protocol/mod.rs:108`) to filter all APIs gated on that family from the
+(`mod.rs` under `crates/heimq/src/protocol/`) to filter all APIs gated on that family from the
 ApiVersions response. Gating is per-API — a missing family does not remove
 unrelated APIs.
 
@@ -80,12 +80,12 @@ on restart. Clients receive `UNKNOWN_PRODUCER_ID` and re-initialize via
 
 ### Family 1 — Log (`LogBackend` / `TopicLog` / `PartitionLog`)
 
-Provenance: `src/storage/mod.rs:64–148`
+Provenance: `crates/heimq-broker/src/storage/mod.rs:64–148`
 
 Existing baseline signatures (verbatim):
 
 ```rust
-// src/storage/mod.rs:64
+// crates/heimq-broker/src/storage/mod.rs:64
 pub trait LogBackend: Send + Sync {
     fn create_topic(&self, name: &str, num_partitions: i32) -> Result<Arc<dyn TopicLog>>;
     fn delete_topic(&self, name: &str) -> Result<()>;
@@ -113,7 +113,7 @@ pub trait LogBackend: Send + Sync {
     fn log_start_offset(&self, topic_name: &str, partition: i32) -> Result<i64>;
 }
 
-// src/storage/mod.rs:112
+// crates/heimq-broker/src/storage/mod.rs:112
 pub trait TopicLog: Send + Sync {
     fn name(&self) -> &str;
     fn num_partitions(&self) -> i32;
@@ -121,7 +121,7 @@ pub trait TopicLog: Send + Sync {
     fn config(&self) -> &TopicConfig;
 }
 
-// src/storage/mod.rs:121
+// crates/heimq-broker/src/storage/mod.rs:121
 pub trait PartitionLog: Send + Sync {
     fn id(&self) -> i32;
     fn append(&self, view: &RecordBatchView<'_>, raw_bytes: Option<&[u8]>) -> Result<(i64, i64)>;
@@ -164,10 +164,10 @@ Normative rules:
 
 ### Family 2 — `OffsetStore`
 
-Provenance: `src/storage/offset_store.rs:58–84`
+Provenance: `crates/heimq-broker/src/storage/offset_store.rs:58–84`
 
 ```rust
-// src/storage/offset_store.rs:58
+// crates/heimq-broker/src/storage/offset_store.rs:58
 pub trait OffsetStore: Send + Sync {
     // Returns Result<()> since seam heimq-ec30673c: completion semantics require
     // the impl to complete all durability work before returning and signal failure.
@@ -182,7 +182,7 @@ pub trait OffsetStore: Send + Sync {
 
 Normative rules:
 - Durability is an impl property declared in `OffsetStoreCapabilities`
-  (`src/storage/offset_store.rs:28`): `durability: Durability`,
+  (`crates/heimq-broker/src/storage/offset_store.rs:28`): `durability: Durability`,
   `survives_restart: bool`.
 - After `commit` returns, a subsequent `fetch` for the same key MUST return the
   committed value (read-your-writes within a process).
@@ -195,10 +195,10 @@ Normative rules:
 
 ### Family 3 — `GroupCoordinatorBackend`
 
-Provenance: `src/consumer_group/backend.rs:123–142`
+Provenance: `crates/heimq-broker/src/consumer_group/backend.rs:123–142`
 
 ```rust
-// src/consumer_group/backend.rs:123
+// crates/heimq-broker/src/consumer_group/backend.rs:123
 pub trait GroupCoordinatorBackend: Send + Sync {
     fn join_group(&self, req: JoinRequest) -> JoinResult;
     fn sync_group(&self, req: SyncRequest) -> SyncResult;
@@ -234,10 +234,10 @@ the current synchronous surface.
 
 Key DTOs are normative: `JoinRequest`, `JoinResult`, `JoinMember`,
 `SyncRequest`, `SyncResult`, `HeartbeatResult`, `LeaveResult`
-(verbatim `src/consumer_group/backend.rs:53–116`). Field semantics match the
+(verbatim `crates/heimq-broker/src/consumer_group/backend.rs:53–116`). Field semantics match the
 Kafka protocol.
 
-`GroupCoordinatorCapabilities` (`src/consumer_group/backend.rs:19`):
+`GroupCoordinatorCapabilities` (`crates/heimq-broker/src/consumer_group/backend.rs:19`):
 `name`, `version`, `durability`, `survives_restart`, `multi_node: bool`.
 
 ---
@@ -352,7 +352,7 @@ fn find_coordinator(&self, _g: &str) -> Result<BrokerInfo, ClusterViewError> {
 - [x] Normative fields and rules are explicit.
 - [x] Compatibility and precedence rules are explicit.
 - [x] Error handling is explicit.
-- [x] Executable tests derivable: per-family conformance suites; `compute_supported_apis` tests at `src/protocol/mod.rs:125–250`.
+- [x] Executable tests derivable: per-family conformance suites; `compute_supported_apis` tests in `mod.rs` under `crates/heimq/src/protocol/`.
 - [x] Non-normative notes cannot be mistaken for contract requirements.
 - [ ] `ClusterView` trait and DTOs finalized in Slice 1 (currently proposed).
 - [x] `RequestContext` principal/tenant/client-id threading implemented in backend traits (bead heimq-43770932).

@@ -4,10 +4,10 @@ ddx:
   depends_on:
     - helix.product-vision
   review:
-    self_hash: 236574e8f31d3847bb8269d538fe07d0a47376aa7d7e75c30dca783e479ad4ab
+    self_hash: 96f0479e307f2c240e8f47b69fff510164d0b9eda132abb22cc4a860932984fe
     deps:
       helix.product-vision: 8fda503ba36c48175e42be03782c96af196de39d6e87b6edab88d853ee1857ca
-    reviewed_at: "2026-06-22T21:30:26Z"
+    reviewed_at: "2026-07-14T05:12:26Z"
 ---
 # Product Requirements Document
 
@@ -69,10 +69,10 @@ broker semantics that then drift independently.
 
 | Metric | Target | Measurement Method |
 |--------|--------|--------------------|
-| Differential parity with Redpanda for in-scope APIs | 100% of in-scope APIs pass diff tests | Differential test harness in `tests/parity/` running same workload against heimq and Redpanda |
+| Differential parity with Redpanda for in-scope APIs | 100% of in-scope APIs pass diff tests | Differential test harness in `tests/conformance/` running same workload against heimq and Redpanda |
 | Standard Kafka benchmark conformance | `kafka-producer-perf-test` and `kafka-consumer-perf-test` complete with no errors at documented load; OpenMessaging Benchmark runs to completion | Bench harness scripts in `scripts/bench/` |
 | Ecosystem integration coverage | ≥1 tested integration each for: Kafka Connect, Flink, ksqlDB, Debezium, a Schema Registry client, librdkafka in ≥3 languages | Integration test suite in `tests/ecosystem/` (planned) |
-| Wire-protocol contract coverage | 100% of in-scope APIs covered by contract tests | `tests/contract.rs` + per-API contract files |
+| Wire-protocol contract coverage | 100% of in-scope APIs covered by contract tests | `contract.rs` under `crates/heimq/tests/` + per-API contract files |
 | Startup and footprint (vision differentiator) | Cold start — process exec to first successful client produce/consume round-trip — < 1 second on a CI runner; distributed as a single self-contained binary with no JVM or external services required | Startup-timing check in CI (planned); release artifact inspection |
 
 ### Non-Goals
