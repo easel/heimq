@@ -1,6 +1,7 @@
 name: workspace-tests
 when: pre_merge
 command: |
+  bash <<'BASH'
   set -euo pipefail
   result_file="${EVIDENCE_DIR}/workspace-tests.json"
   cd "${PROJECT_ROOT}"
@@ -11,4 +12,5 @@ command: |
     printf '{"status":"block","summary":"workspace tests failed","failing_tests":"%s"}' "$failing" > "$result_file"
     exit 1
   fi
+  BASH
 applies_to: {}
