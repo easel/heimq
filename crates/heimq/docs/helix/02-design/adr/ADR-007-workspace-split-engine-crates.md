@@ -41,6 +41,14 @@ tracked by `niflheim-ba3e609c`.
 | `heimq-handlers` | Request-level decode/dispatch/encode layer above `heimq-broker`; exposes embedder-facing codec helpers and typed handlers for Produce, ApiVersions, Metadata, and InitProducerId |
 | `heimq-testkit` | Per-trait conformance suites, contract-test pattern, differential parity harness |
 
+**Authentication ownership:** TLS/SASL authentication is embedder-owned for the
+engine consumption model. `heimq-handlers` does not own authentication, does not
+run SASL handshakes, and does not dispatch SaslHandshake/SaslAuthenticate as
+handler APIs. An embedding gateway authenticates the connection before handler
+dispatch and threads any principal, tenant, or client identity through
+`RequestContext`. The standalone `heimq` distribution and future wire gateways
+may choose their own TLS/SASL policy outside the `heimq-handlers` crate.
+
 **Excluded vendored dependency:**
 
 | Crate | Status |

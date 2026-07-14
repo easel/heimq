@@ -7,6 +7,26 @@
 //! directly on its public surface. Embedders adopt the same `heimq_protocol`
 //! fork, so exposing those types here does not resolve a second, conflicting
 //! copy of `kafka-protocol`.
+//!
+//! ## Supported embedder API
+//!
+//! The public embedder contract intentionally includes:
+//!
+//! - [`codec::decode_request`], [`codec::decode_request_bytes`],
+//!   [`codec::encode_response`], and [`codec::encode_response_body`] for
+//!   request-envelope decode and response-envelope encode.
+//! - [`produce::handle_async_with_context_and_config_store`] for async Produce
+//!   dispatch with [`storage::RequestContext`] and [`config_store::ConfigStore`]
+//!   supplied by the embedding broker.
+//! - [`metadata::handle`], [`api_versions::handle`], and
+//!   [`init_producer_id::handle`] for the Metadata, ApiVersions, and
+//!   InitProducerId request handlers.
+//! - [`heimq_broker::storage::RecordBatchView::decode_all`] for decoding every
+//!   record set carried by a produce partition before backend append.
+//!
+//! TLS/SASL authentication is not part of this crate's dispatch contract.
+//! Embedders authenticate connections before calling `heimq-handlers` and pass
+//! any resulting identity through [`storage::RequestContext`].
 
 // The handler and codec modules were extracted from the heimq binary, which
 // allows this lint crate-wide; keep the same policy so the moved code's
