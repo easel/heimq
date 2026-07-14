@@ -67,7 +67,9 @@ tests miss.
   driver against heimq for at least one documented workload (e.g., 1KB
   records, N partitions, M producers, K consumers, capped duration)
   and asserts it completes without protocol/client errors. Version
-  bumps are tracked as ordinary maintenance.
+  pin: upstream tag `jms` at commit
+  `c0e51b8b86a3b0ff50b935152d6e600602a7f0a0`; bumps are tracked as
+  ordinary maintenance.
 - **FR-04** — The bench harness is runnable locally and in CI; it is not on the
   default test path but is gated on protocol-touching changes.
 - **FR-05** — Idempotent and transactional bench profiles are included (e.g.,

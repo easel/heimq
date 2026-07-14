@@ -22,7 +22,7 @@ FEAT-004 (benchmark conformance) requires heimq to run under the OpenMessaging B
 
 ## Decision
 
-OpenMessaging Benchmark version: target the latest released driver. The bench harness pins to that release; bumps are tracked as ordinary maintenance.
+OpenMessaging Benchmark version: pin the latest released upstream tag available from `openmessaging/benchmark`, `jms`, at commit `c0e51b8b86a3b0ff50b935152d6e600602a7f0a0`. The bench harness checks out that commit; bumps are tracked as ordinary maintenance.
 
 ## Alternatives
 

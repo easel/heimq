@@ -1,7 +1,8 @@
 name: bench-omb
 
 # FEAT-004 FR-03: OpenMessaging Benchmark conformance.
-# Builds OMB from source (cached), then runs a 1-minute smoke workload
+# Builds OMB tag jms (c0e51b8b86a3b0ff50b935152d6e600602a7f0a0) from source
+# (cached), then runs a 1-minute smoke workload
 # against heimq. Not a required gate (slow Docker build), but must be
 # green before FEAT-004 close.
 
@@ -23,7 +24,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Clone OpenMessaging Benchmark
-        run: git clone --depth 1 https://github.com/openmessaging/benchmark /tmp/ombbench
+        run: git clone --no-checkout --filter=blob:none https://github.com/openmessaging/benchmark /tmp/ombbench && git -C /tmp/ombbench checkout c0e51b8b86a3b0ff50b935152d6e600602a7f0a0
 
       - name: Build OMB Docker image (cached)
         uses: docker/build-push-action@v5

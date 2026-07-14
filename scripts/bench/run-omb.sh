@@ -2,7 +2,7 @@
 # OpenMessaging Benchmark conformance run against heimq.
 #
 # Requirements:
-#   - Docker + the ombbuild-heimq image (built once — see below)
+#   - Docker + the ombbuild-heimq image (built once; see below)
 #   - heimq running on BOOTSTRAP (default localhost:9094)
 #
 # Build the image once:
@@ -11,8 +11,8 @@
 #     -t ombbuild-heimq \
 #     /tmp/ombbench
 #
-# (Clone OMB first if needed:
-#   git clone --depth 1 https://github.com/openmessaging/benchmark /tmp/ombbench)
+# (Clone OMB first if needed; this is OMB tag jms pinned to its current commit:
+#   git clone --no-checkout --filter=blob:none https://github.com/openmessaging/benchmark /tmp/ombbench && git -C /tmp/ombbench checkout c0e51b8b86a3b0ff50b935152d6e600602a7f0a0)
 #
 # Usage:
 #   BOOTSTRAP=localhost:9094 ./scripts/bench/run-omb.sh
