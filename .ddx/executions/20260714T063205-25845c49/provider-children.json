@@ -1,0 +1,64 @@
+{
+  "attempt_id": "20260714T063205-25845c49",
+  "bead_id": "heimq-168f24e2",
+  "trigger": "context canceled",
+  "scanned_at": "2026-07-14T06:32:34.395839359Z",
+  "reaped": [
+    {
+      "pid": 3633465,
+      "provider": "claude",
+      "command": "/home/erik/.local/bin/claude",
+      "age_seconds": 0,
+      "action": "terminated",
+      "reason": "running_phase_non_route_provider_child"
+    },
+    {
+      "pid": 3633425,
+      "provider": "claude",
+      "command": "/home/erik/.local/bin/claude",
+      "age_seconds": 0,
+      "action": "terminated",
+      "reason": "running_phase_non_route_provider_child"
+    },
+    {
+      "pid": 3634170,
+      "provider": "claude",
+      "command": "/home/erik/.local/bin/claude",
+      "age_seconds": 0,
+      "action": "terminated",
+      "reason": "running_phase_non_route_provider_child"
+    },
+    {
+      "pid": 3634172,
+      "provider": "claude",
+      "command": "/home/erik/.local/bin/claude",
+      "age_seconds": 0,
+      "action": "terminated",
+      "reason": "running_phase_non_route_provider_child"
+    },
+    {
+      "pid": 3634650,
+      "provider": "claude",
+      "command": "/home/erik/.local/bin/claude --version",
+      "age_seconds": 0,
+      "action": "terminated",
+      "reason": "running_phase_non_route_provider_child"
+    },
+    {
+      "pid": 3634651,
+      "provider": "claude",
+      "command": "/home/erik/.local/bin/claude",
+      "age_seconds": 0,
+      "action": "terminated",
+      "reason": "running_phase_non_route_provider_child"
+    },
+    {
+      "pid": 3634711,
+      "provider": "claude",
+      "command": "/home/erik/.local/bin/claude",
+      "age_seconds": 0,
+      "action": "terminated",
+      "reason": "attempt_ended"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "attempt_id": "20260714T063205-25845c49",
+  "bead_id": "heimq-168f24e2",
+  "base_rev": "bf09f03b003e14ca60364fb9ec431539c9e7d6d7",
+  "created_at": "2026-07-14T06:32:06.17481442Z",
+  "requested": {
+    "prompt": "synthesized"
+  },
+  "bead": {
+    "id": "heimq-168f24e2",
+    "title": "Stabilize and document the heimq-handlers embedder contract and SASL ownership",
+    "description": "Document the supported public embedder contract required by Niflheim: codec request/response envelope entrypoints; the async Produce handler with context and config store; Metadata, ApiVersions, and InitProducerId handlers; and RecordBatchView::decode_all. Record the architectural decision that TLS/SASL authentication remains embedder-owned and is intentionally outside heimq-handlers dispatch. Add API-level tests or compile-time coverage sufficient to detect accidental surface removal.",
+    "acceptance": "1. Public rustdoc identifies codec::{decode_request, decode_request_bytes, encode_response, encode_response_body}, produce::handle_async_with_context_and_config_store, the Metadata/ApiVersions/InitProducerId handlers, and RecordBatchView::decode_all as supported embedder APIs. 2. A governing HELIX artifact explicitly states that TLS/SASL is embedder-owned and Heimq handlers do not own authentication. 3. Tests exercise or compile against every named entrypoint. 4. cargo test --workspace --all-features and cargo doc --workspace --no-deps complete successfully.",
+    "parent": "heimq-0362a710",
+    "labels": [
+      "helix",
+      "cross-repo",
+      "niflheim",
+      "embedder",
+      "kafka",
+      "documentation"
+    ],
+    "metadata": {
+      "events": [
+        {
+          "actor": "erik",
+          "body": "{\"decision\":\"warn\",\"decision_source\":\"pre_claim_intake\",\"detail\":\"project root mutation rejected\",\"fingerprint\":\"14dfad3e8360df050ef8e97beebd6d35f6bab18d3a57e1a8d7acdc94828e3b7f\",\"policy_mode\":\"warn-only\",\"reason\":\"system_unready\",\"rule_id\":\"pre_claim_intake.system_unready\",\"suggested_action\":\"revise the rewrite so it preserves every explicit commitment\",\"warning_fingerprint\":\"14dfad3e8360df050ef8e97beebd6d35f6bab18d3a57e1a8d7acdc94828e3b7f\"}",
+          "created_at": "2026-07-14T06:32:01.867587872Z",
+          "kind": "intake.warn",
+          "source": "ddx work",
+          "summary": "system_unready"
+        }
+      ]
+    }
+  },
+  "paths": {
+    "dir": ".ddx/executions/20260714T063205-25845c49",
+    "prompt": ".ddx/executions/20260714T063205-25845c49/prompt.md",
+    "manifest": ".ddx/executions/20260714T063205-25845c49/manifest.json",
+    "result": ".ddx/executions/20260714T063205-25845c49/result.json",
+    "checks": ".ddx/executions/20260714T063205-25845c49/checks.json",
+    "usage": ".ddx/executions/20260714T063205-25845c49/usage.json",
+    "worktree": "home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49"
+  },
+  "prompt_sha": "43fb00e82272b3b22a150010c850297456e20e657beafa89743bc3fcc86f6fbe"
+}

@@ -1,0 +1,97 @@
+{
+  "attempt_id": "20260714T063205-25845c49",
+  "bead_id": "heimq-168f24e2",
+  "worktree": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+  "trigger": "context canceled",
+  "started_at": "2026-07-14T06:32:33.921089006Z",
+  "finished_at": "2026-07-14T06:32:34.202089161Z",
+  "scanned": 718,
+  "candidates": [
+    {
+      "pid": 3632220,
+      "ppid": 3632212,
+      "pgid": 3631564,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "node /home/erik/.npm/_npx/de2bd410102f5eda/node_modules/.bin/mcp-server-sequential-thinking"
+    },
+    {
+      "pid": 3632203,
+      "ppid": 3632202,
+      "pgid": 3631571,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "node /home/erik/.npm/_npx/a3241bba59c344f5/node_modules/.bin/mcp-server-filesystem ${CLAUDE_PLUGIN_ROOT}/../.."
+    },
+    {
+      "pid": 3632212,
+      "ppid": 3631564,
+      "pgid": 3631564,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "sh -c 'mcp-server-sequential-thinking'"
+    },
+    {
+      "pid": 3632202,
+      "ppid": 3631571,
+      "pgid": 3631571,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "sh -c 'mcp-server-filesystem' '${CLAUDE_PLUGIN_ROOT}/../..'"
+    },
+    {
+      "pid": 3631571,
+      "ppid": 3630388,
+      "pgid": 3631571,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "npm exec @modelcontextprotocol/server-filesystem ${CLAUDE_PLUGIN_ROOT}/../.."
+    },
+    {
+      "pid": 3631564,
+      "ppid": 3630388,
+      "pgid": 3631564,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "npm exec @modelcontextprotocol/server-sequential-thinking"
+    }
+  ],
+  "killed": [
+    {
+      "pid": 3632220,
+      "ppid": 3632212,
+      "pgid": 3631564,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "node /home/erik/.npm/_npx/de2bd410102f5eda/node_modules/.bin/mcp-server-sequential-thinking"
+    },
+    {
+      "pid": 3632203,
+      "ppid": 3632202,
+      "pgid": 3631571,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "node /home/erik/.npm/_npx/a3241bba59c344f5/node_modules/.bin/mcp-server-filesystem ${CLAUDE_PLUGIN_ROOT}/../.."
+    },
+    {
+      "pid": 3632212,
+      "ppid": 3631564,
+      "pgid": 3631564,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "sh -c 'mcp-server-sequential-thinking'"
+    },
+    {
+      "pid": 3632202,
+      "ppid": 3631571,
+      "pgid": 3631571,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "sh -c 'mcp-server-filesystem' '${CLAUDE_PLUGIN_ROOT}/../..'"
+    },
+    {
+      "pid": 3631571,
+      "ppid": 3630388,
+      "pgid": 3631571,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "npm exec @modelcontextprotocol/server-filesystem ${CLAUDE_PLUGIN_ROOT}/../.."
+    },
+    {
+      "pid": 3631564,
+      "ppid": 3630388,
+      "pgid": 3631564,
+      "cwd": "/home/erik/.cache/ddx/exec-wt/.execute-bead-wt-heimq-168f24e2-20260714T063205-25845c49",
+      "command": "npm exec @modelcontextprotocol/server-sequential-thinking"
+    }
+  ]
+}

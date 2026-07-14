@@ -1,0 +1,23 @@
+{
+  "bead_id": "heimq-168f24e2",
+  "attempt_id": "20260714T063205-25845c49",
+  "base_rev": "bf09f03b003e14ca60364fb9ec431539c9e7d6d7",
+  "result_rev": "6b80c9a31d2b85760dd16de27da54b84ca7a35eb",
+  "implementation_rev": "6b80c9a31d2b85760dd16de27da54b84ca7a35eb",
+  "outcome": "task_failed",
+  "status": "execution_failed",
+  "detail": "agent: provider process exited without emitting a final event",
+  "session_id": "eb-3e0db67a",
+  "duration_ms": 28186,
+  "exit_code": 1,
+  "error": "agent: provider process exited without emitting a final event",
+  "project_root": "/home/erik/Projects/heimq",
+  "failure_mode": "unknown",
+  "execution_dir": ".ddx/executions/20260714T063205-25845c49",
+  "prompt_file": ".ddx/executions/20260714T063205-25845c49/prompt.md",
+  "manifest_file": ".ddx/executions/20260714T063205-25845c49/manifest.json",
+  "result_file": ".ddx/executions/20260714T063205-25845c49/result.json",
+  "rate_limit_budget": 300000000000,
+  "started_at": "2026-07-14T06:32:06.210018706Z",
+  "finished_at": "2026-07-14T06:32:34.396021566Z"
+}
