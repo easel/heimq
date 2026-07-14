@@ -48,7 +48,8 @@ mod tests {
     use super::*;
 
     #[test]
-    // @covers US-016-AC4 US-017-AC1
+    // @covers US-016-AC4
+    // @covers US-017-AC1
     fn request_context_carries_identity_without_policy_decisions() {
         let ctx = RequestContext::new(
             Some("principal-a".to_string()),

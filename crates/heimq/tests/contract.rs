@@ -307,7 +307,8 @@ fn set_topic_config(server: &TestServer, topic: &str, key: &str, value: &str) ->
     response.responses[0].error_code
 }
 
-// @covers US-001-AC1 US-013-AC2
+// @covers US-001-AC1
+// @covers US-013-AC2
 #[test]
 fn contract_api_versions_matches_supported_range() {
     let server = TestServer::start();
@@ -403,7 +404,9 @@ fn contract_create_and_delete_topics() {
     assert_eq!(delete_result.error_code, 0);
 }
 
-// @covers US-001-AC1 US-001-AC2 US-013-AC3
+// @covers US-001-AC1
+// @covers US-001-AC2
+// @covers US-013-AC3
 #[test]
 fn contract_produce_fetch_roundtrip() {
     let server = TestServer::start();
@@ -1175,7 +1178,8 @@ fn contract_init_producer_id_returns_valid_id() {
     );
 }
 
-// @covers US-003-AC2 US-003-AC4
+// @covers US-003-AC2
+// @covers US-003-AC4
 #[test]
 fn contract_out_of_order_sequence_returns_error() {
     let server = TestServer::start();
@@ -1626,7 +1630,8 @@ fn contract_transactional_produce_commit_fetch() {
     assert_eq!(records[0].value, Some(bytes::Bytes::from("txn-val")));
 }
 
-// @covers US-003-AC2 US-003-AC3
+// @covers US-003-AC2
+// @covers US-003-AC3
 #[test]
 fn contract_duplicate_sequence_is_deduplicated() {
     use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;

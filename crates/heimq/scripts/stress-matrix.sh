@@ -27,7 +27,8 @@ export PRODUCERS="${PRODUCERS:-1}"
 export CONSUMERS="${CONSUMERS:-1}"
 export GROUPS_PER_TOPIC="${GROUPS_PER_TOPIC:-1}"
 
-# @covers US-015-AC3 US-015-AC4
+# @covers US-015-AC3
+# @covers US-015-AC4
 # Matrix rows: "label|log|offsets|groups|requires_pg|features"
 ROWS=(
   "memory-only|memory://|memory://|memory://|0|"

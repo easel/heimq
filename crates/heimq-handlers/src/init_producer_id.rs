@@ -11,7 +11,8 @@ use heimq_protocol::protocol::Decodable;
 use std::sync::Arc;
 use tracing::debug;
 
-// @covers US-003-AC1 US-004-AC1
+// @covers US-003-AC1
+// @covers US-004-AC1
 pub fn handle(
     api_version: i16,
     body: &[u8],

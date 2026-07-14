@@ -910,6 +910,7 @@ mod tests {
     // Demonstrates reader/writer split: two requests sent back-to-back without
     // waiting for intermediate responses; both responses arrive in order.
     #[tokio::test]
+    // @covers US-017-AC3
     async fn test_pipelined_requests_fifo_order() {
         init_tracing();
         let config = test_config(true);

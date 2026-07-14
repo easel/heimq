@@ -10,7 +10,9 @@ from confluent_kafka.admin import AdminClient
 
 from .helpers import consume_n, consumer, payloads, produce_n, produce_sync, producer
 
-# @covers US-001-AC1 US-001-AC3 US-013-AC1
+# @covers US-001-AC1
+# @covers US-001-AC3
+# @covers US-013-AC1
 
 
 def test_rdkafka_simple_produce(bootstrap, topic):
@@ -45,7 +47,9 @@ def test_rdkafka_rapid_produce(bootstrap, topic):
     produce_n(p, topic, 100, "rapid-{}", "k-{}")
 
 
-# @covers US-001-AC1 US-001-AC2 US-001-AC3
+# @covers US-001-AC1
+# @covers US-001-AC2
+# @covers US-001-AC3
 def test_rdkafka_produce_consume_roundtrip(bootstrap, topic, group):
     p = producer(bootstrap)
     produce_n(p, topic, 5, "roundtrip-{}", "key-{}")

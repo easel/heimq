@@ -19,7 +19,10 @@ NAME = "produce_fetch_roundtrip"
 TOPIC = "parity-produce-fetch"
 N = 10
 
-# @covers US-001-AC4 US-005-AC4 US-005-AC5 US-013-AC4
+# @covers US-001-AC4
+# @covers US-005-AC4
+# @covers US-005-AC5
+# @covers US-013-AC4
 
 
 def run(target: Target) -> list[Observation]:
