@@ -51,6 +51,8 @@ func mustEnv(k string) string {
 	return v
 }
 
+// @covers US-005-AC1
+// @covers US-005-AC3
 func run() error {
 	ctx := context.Background()
 

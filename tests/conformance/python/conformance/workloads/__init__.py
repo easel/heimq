@@ -14,6 +14,8 @@ from . import (
 )
 
 
+# @covers US-005-AC4
+# @covers US-005-AC7
 def all() -> list[ModuleType]:
     """Every workload, in execution order. Each module exposes NAME and run()."""
     return [

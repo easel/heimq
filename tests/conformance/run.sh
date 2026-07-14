@@ -30,6 +30,8 @@ status=0
 for runner in "${runners[@]}"; do
   echo "═══ conformance runner: ${runner} ═══"
   cleanup
+  # @covers US-005-AC1
+  # @covers US-005-AC5
   if ! docker compose up --build --abort-on-container-exit \
       --exit-code-from "$runner" "$runner"; then
     status=1

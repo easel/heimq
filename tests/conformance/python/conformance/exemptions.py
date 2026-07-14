@@ -25,6 +25,7 @@ class Exemptions:
     def __init__(self, entries: list[Exemption]):
         self.entries = entries
 
+    # @covers US-005-AC6
     def find(self, field: str, workload: str, oracle: str) -> str | None:
         for e in self.entries:
             if (
@@ -37,6 +38,7 @@ class Exemptions:
         return None
 
 
+# @covers US-005-AC6
 def load(path: Path) -> Exemptions:
     if not path.exists():
         return Exemptions([])

@@ -19,6 +19,8 @@ from .exemptions import load as load_exemptions
 EXEMPTIONS_PATH = Path("/conformance/exemptions.toml")
 
 
+# @covers US-005-AC1
+# @covers US-005-AC3
 def main() -> int:
     heimq, oracles = targets.from_env()
     exemptions = load_exemptions(EXEMPTIONS_PATH)

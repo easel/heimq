@@ -20,6 +20,7 @@ TXN_ID = "parity-txn-test"
 COMMITTED = 3
 
 # @covers US-004-AC6
+# @covers US-005-AC7
 
 
 def run(target: Target) -> list[Observation]:

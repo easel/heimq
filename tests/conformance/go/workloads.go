@@ -17,6 +17,8 @@ type Workload struct {
 }
 
 // workloads in the same execution order as the Rust harness's workloads::all().
+// @covers US-005-AC4
+// @covers US-005-AC7
 func allWorkloads() []Workload {
 	return []Workload{
 		{"produce_fetch_roundtrip", produceFetch},
@@ -136,6 +138,7 @@ func produceFetch(ctx context.Context, bootstrap string) ([]Observation, error) 
 
 // ── idempotent_produce_roundtrip ──────────────────────────────────────────────
 // @covers US-003-AC5
+// @covers US-005-AC7
 
 func idempotentProduce(ctx context.Context, bootstrap string) ([]Observation, error) {
 	const topic, n = "parity-idempotent-produce", 10
@@ -216,6 +219,7 @@ func consumerGroup(ctx context.Context, bootstrap string) ([]Observation, error)
 
 // ── transactional_produce_roundtrip ───────────────────────────────────────────
 // @covers US-004-AC6
+// @covers US-005-AC7
 
 func transactionalProduce(ctx context.Context, bootstrap string) ([]Observation, error) {
 	const topic, txnID = "parity-txn-produce", "parity-txn-test"

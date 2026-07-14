@@ -40,6 +40,9 @@ def _to_json(value: Any) -> Any:
     return value
 
 
+# @covers US-005-AC1
+# @covers US-005-AC3
+# @covers US-005-AC6
 def diff(
     workload: str,
     oracle: str,

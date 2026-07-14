@@ -16,6 +16,7 @@ type Observation struct {
 	Event    map[string]any
 }
 
+// @covers US-005-AC2
 func recordConsumed(key, value []byte, partition int32, offset int64) map[string]any {
 	return map[string]any{
 		"type":      "RecordConsumed",
@@ -55,6 +56,7 @@ type DiffRecord struct {
 
 // comparedFields lists, per event type, the (event key, diff field name) pairs.
 // Order matches the Python runner.
+// @covers US-005-AC1
 var comparedFields = map[string][][2]string{
 	"RecordConsumed": {
 		{"key", "record.key"},
@@ -98,6 +100,7 @@ type Exemptions struct{ Entries []Exemption }
 
 // find matches on field, active status, scope ("all" or the workload), and
 // oracle ("all" or the reference broker).
+// @covers US-005-AC6
 func (e *Exemptions) find(field, workload, oracle string) *string {
 	for i := range e.Entries {
 		x := &e.Entries[i]
@@ -110,6 +113,7 @@ func (e *Exemptions) find(field, workload, oracle string) *string {
 	return nil
 }
 
+// @covers US-005-AC6
 func loadExemptions(path string) (*Exemptions, error) {
 	var doc struct {
 		Exemption []Exemption `toml:"exemption"`
@@ -137,6 +141,9 @@ func loadExemptions(path string) (*Exemptions, error) {
 }
 
 // diff compares two normalized observation streams: heimq against one oracle.
+// @covers US-005-AC1
+// @covers US-005-AC3
+// @covers US-005-AC6
 func diff(workload, oracle string, heimq, oracleObs []Observation, ex *Exemptions) []DiffRecord {
 	var out []DiffRecord
 	shared := min(len(heimq), len(oracleObs))

@@ -20,6 +20,7 @@ TOPIC = "parity-idempotent-produce"
 N = 10
 
 # @covers US-003-AC5
+# @covers US-005-AC7
 
 
 def run(target: Target) -> list[Observation]:
