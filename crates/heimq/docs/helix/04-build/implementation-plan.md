@@ -50,9 +50,13 @@ The workspace also carries `crates/heimq-protocol`, a vendored fork of
 first-party workspace member.
 
 Status update (2026-07-14): upstream handler extraction into
-`heimq-handlers` landed in commit `35e8a15` and release `v0.1.4`. That
-satisfies Heimq's side of the request-level seam, but Niflheim's request-path
-delegation remains downstream work tracked by `niflheim-ba3e609c`.
+`heimq-handlers` landed in commit `35e8a15` and release `v0.1.4`
+(`48e6e34`). That tag contains `crates/heimq-handlers/src/codec.rs` with
+request decode and response encode helpers, and `produce.rs` with async
+Produce dispatch over `LogBackend` plus `RequestContext`. Heimq's side of the
+request-level seam is therefore published; Niflheim's dependency bump and
+request-path delegation remain downstream work tracked by
+`niflheim-ba3e609c`.
 
 Governing decisions recorded 2026-06-12 (formalized in Slice 0): single name
 `heimq` for engine and distribution; conformance on the in-memory reference
@@ -240,8 +244,12 @@ wire + produce-path conformance subset; pqueue suite green.
   Slice-2 port baseline first; forward-port anything that changed since.
 - niflheim adoption ADR; its contract tests re-pointed at heimq-wire.
 - Current external remainder: Heimq has shipped the request-level handler seam
-  in `35e8a15` / `v0.1.4`; Niflheim still needs to delegate its request path
-  to that seam under `niflheim-ba3e609c`.
+  in `35e8a15` / `v0.1.4` (`48e6e34`): `codec.rs` exposes request decode and
+  response encode helpers, and `produce.rs` exposes async Produce dispatch
+  through `LogBackend` and `RequestContext`. Niflheim can replace its stale
+  external-blocker reason with the published Heimq tag after release, but it
+  still needs to bump its Heimq dependencies and delegate its request path
+  under `niflheim-ba3e609c`.
 
 **Exit gate**: niflheim workspace suite + kafka contract tests green on
 heimq-wire; WAL-backed `TopicLog` passes the per-trait conformance suite;
