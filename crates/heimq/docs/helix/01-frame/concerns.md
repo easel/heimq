@@ -43,8 +43,14 @@ instead of a browser runner.
 
 | Concern | Practice | Override | Authority |
 |---------|----------|----------|-----------|
-| `rust-cargo` | Shipped `language-runtime` slot default is `typescript-bun`. | `rust-cargo` fills the slot; the codebase is a Rust Cargo workspace. | Needs ADR (source: assumption) |
-| `verification` | Whole-stack evidence via browser e2e flows. | Whole-stack evidence is the differential parity harness vs Redpanda plus benchmark and ecosystem harness runs (PRD FEAT-003/004/005). | Needs ADR (source: assumption) |
+| `rust-cargo` | Shipped `language-runtime` slot default is `typescript-bun`; HELIX rust-cargo practices expect pinned Rust, Cargo workspace gates, dependency checks, lint policy, and unsafe/dependency governance. | `rust-cargo` fills the slot; edition 2021, Rust 1.88/1.88.0 lockstep, clippy/fmt/test/deny/machete gates, excluded vendored `heimq-protocol`, and authorized deviations for unsafe helper code, manifest lint inheritance, dependency centralization, and local pinned-command execution are governed by ADR-008. | ADR-008 (source: assumption) |
+| `verification` | Whole-stack evidence via browser e2e flows. | Whole-stack evidence is the differential parity harness vs Redpanda plus benchmark and ecosystem harness runs (PRD FEAT-003/004/005). | ADR-008 for the runtime-slot conflict; PRD FEAT-003/004/005 for harness authority (source: assumption) |
+
+## Artifact Impact Evidence
+
+| Finding | Impacted Artifacts | Resolution Evidence |
+|---------|--------------------|---------------------|
+| AR13-08 | `Cargo.toml`, `rust-toolchain.toml`, crate manifests, `justfile`, `.github/workflows/test.yml`, `deny.toml`, ADR set | ADR-008 accepts the Rust/Cargo workspace policy, records intentional deviations from the HELIX 0.10.2 `rust-cargo` concern, and makes the missing `cargo machete` gate explicit in local and CI commands. |
 
 ## Area Labels
 

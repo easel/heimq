@@ -13,6 +13,9 @@ test:
 deny:
     cargo deny --all-features check
 
+machete:
+    cargo machete
+
 docker-build:
     docker build -t heimq:local .
 
@@ -34,7 +37,7 @@ bench-smoke:
     timeout 15 bash -c 'until nc -z localhost 9094; do sleep 0.2; done'
     PATH="$tmpdir/kafka_2.13-4.3.0/bin:$PATH" BOOTSTRAP=localhost:9094 bash scripts/bench/run-smoke.sh
 
-ci: fmt clippy test deny helm-check
+ci: fmt clippy test deny machete helm-check
 
 release-check:
     cargo build -p heimq --release
@@ -42,5 +45,6 @@ release-check:
     cargo clippy --workspace --all-targets -- -D warnings
     cargo test --workspace --all-targets
     cargo deny --all-features check
+    cargo machete
     helm lint charts/heimq
     helm template heimq charts/heimq >/dev/null

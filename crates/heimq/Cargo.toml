@@ -46,28 +46,14 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5", features = ["derive", "env"] }
 
 # Error handling
-thiserror = "2.0"
 anyhow = "1.0"
 
 # Data structures
 dashmap = "6.1"
 parking_lot = "0.12"
-crossbeam = "0.8"
 
 # Time
 chrono = "0.4"
-
-# CRC for record batches
-crc32c = "0.6"
-
-# Compression support
-flate2 = "1.0"          # gzip
-snap = "1.1"            # snappy
-lz4 = "1.28"            # lz4
-zstd = "0.13"           # zstd
-
-# Optional persistence
-memmap2 = "0.9"
 
 # Metrics
 metrics = "0.24"

@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.88.0
         with:
           components: clippy, rustfmt
 
@@ -46,3 +46,9 @@ jobs:
 
       - name: Run workspace tests
         run: cargo test --workspace --all-targets
+
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked --version 0.9.1
+
+      - name: Check unused dependencies
+        run: cargo machete
