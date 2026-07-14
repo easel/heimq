@@ -88,6 +88,7 @@ def test_rdkafka_consumer_group_manual_offset_fetch(bootstrap, topic, group):
         c.close()
 
 
+# @covers US-002-AC1
 def test_rdkafka_multiple_consumers_same_group(bootstrap, topic, group):
     p = producer(bootstrap)
     produce_n(p, topic, 20, "multi-consumer-{}", "key-{}")
@@ -110,7 +111,7 @@ def test_rdkafka_multiple_consumers_same_group(bootstrap, topic, group):
         c2.close()
 
 
-# @covers US-002-AC1
+# @covers US-002-AC1 US-002-AC4
 def test_rdkafka_consumer_group_lifecycle(bootstrap, topic, group):
     p = producer(bootstrap)
     produce_n(p, topic, 5, "lifecycle-batch1-{}", "key")
@@ -261,6 +262,7 @@ def test_rdkafka_seek_to_offset(bootstrap, topic, group):
         c.close()
 
 
+# @covers US-002-AC1
 def test_rdkafka_group_multi_partition_delivery(bootstrap_3p, topic, group):
     """300 keyed messages across 3 partitions must all be delivered exactly once."""
     p = producer(bootstrap_3p)
@@ -284,6 +286,7 @@ def test_rdkafka_group_multi_partition_delivery(bootstrap_3p, topic, group):
         c.close()
 
 
+# @covers US-002-AC2
 def test_rdkafka_group_rebalance_on_graceful_leave(bootstrap_3p, topic, group):
     """After consumer 2 leaves gracefully, consumer 1 must own all 3 partitions."""
     p = producer(bootstrap_3p)
@@ -313,6 +316,7 @@ def test_rdkafka_group_rebalance_on_graceful_leave(bootstrap_3p, topic, group):
         c1.close()
 
 
+# @covers US-002-AC2
 def test_rdkafka_group_rebalance_on_session_timeout(bootstrap_3p, topic, group):
     """When consumer 2 stops polling, its session expires and consumer 1 takes over."""
     p = producer(bootstrap_3p)

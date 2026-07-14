@@ -1175,7 +1175,7 @@ fn contract_init_producer_id_returns_valid_id() {
     );
 }
 
-// @covers US-003-AC4
+// @covers US-003-AC2 US-003-AC4
 #[test]
 fn contract_out_of_order_sequence_returns_error() {
     let server = TestServer::start();
@@ -1274,7 +1274,7 @@ fn contract_init_producer_id_with_transactional_id() {
     );
 }
 
-// @covers US-004-AC2 US-004-AC9
+// @covers US-004-AC2
 #[test]
 fn contract_add_partitions_to_txn_basic() {
     use heimq_protocol::messages::add_partitions_to_txn_request::{
@@ -1320,7 +1320,7 @@ fn contract_add_partitions_to_txn_basic() {
     );
 }
 
-// @covers US-004 EndTxn basic flow
+// @covers US-004-AC9
 #[test]
 fn contract_end_txn_basic() {
     use heimq_protocol::messages::end_txn_request::EndTxnRequest;
@@ -1351,7 +1351,7 @@ fn contract_end_txn_basic() {
     assert_eq!(end_resp.error_code, 0, "EndTxn commit should succeed");
 }
 
-// @covers US-004 AddOffsetsToTxn basic flow
+// @covers US-004-AC8
 #[test]
 fn contract_add_offsets_to_txn_basic() {
     use heimq_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
@@ -1383,7 +1383,7 @@ fn contract_add_offsets_to_txn_basic() {
     assert_eq!(resp.error_code, 0, "AddOffsetsToTxn should succeed");
 }
 
-// @covers US-004 TxnOffsetCommit basic flow
+// @covers US-004-AC11
 #[test]
 fn contract_txn_offset_commit_basic() {
     use heimq_protocol::messages::add_offsets_to_txn_request::AddOffsetsToTxnRequest;
@@ -1448,7 +1448,7 @@ fn contract_txn_offset_commit_basic() {
     );
 }
 
-// @covers US-004 WriteTxnMarkers basic flow
+// @covers US-004-AC10
 #[test]
 fn contract_write_txn_markers_basic() {
     use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
@@ -1487,7 +1487,7 @@ fn contract_write_txn_markers_basic() {
     );
 }
 
-// @covers US-004-AC6
+// @covers US-004-AC3
 #[test]
 fn contract_transactional_produce_commit_fetch() {
     use heimq_protocol::messages::add_partitions_to_txn_request::{
@@ -1626,7 +1626,7 @@ fn contract_transactional_produce_commit_fetch() {
     assert_eq!(records[0].value, Some(bytes::Bytes::from("txn-val")));
 }
 
-// @covers US-003-AC3 (duplicate retry is de-duplicated)
+// @covers US-003-AC2 US-003-AC3
 #[test]
 fn contract_duplicate_sequence_is_deduplicated() {
     use heimq_protocol::messages::init_producer_id_request::InitProducerIdRequest;
@@ -1682,7 +1682,7 @@ fn contract_duplicate_sequence_is_deduplicated() {
     );
 }
 
-// @covers US-004 (stale producer epoch fencing)
+// @covers US-004-AC7
 #[test]
 fn contract_stale_epoch_returns_invalid_producer_epoch() {
     use heimq_protocol::messages::add_partitions_to_txn_request::{
@@ -1735,7 +1735,7 @@ fn contract_stale_epoch_returns_invalid_producer_epoch() {
     );
 }
 
-// @covers US-004 (aborted transaction invisible to read_committed)
+// @covers US-004-AC4
 #[test]
 fn contract_aborted_transaction_invisible_to_read_committed() {
     use heimq_protocol::messages::add_partitions_to_txn_request::{
@@ -1868,7 +1868,7 @@ fn contract_aborted_transaction_invisible_to_read_committed() {
     );
 }
 
-// @covers US-004
+// @covers US-004-AC5
 #[test]
 fn contract_read_uncommitted_observes_aborted_records() {
     use heimq_protocol::messages::add_partitions_to_txn_request::{

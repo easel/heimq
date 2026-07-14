@@ -121,7 +121,7 @@ func produceN(ctx context.Context, bootstrap, topic, keyPrefix, valPrefix string
 }
 
 // ── produce_fetch_roundtrip ───────────────────────────────────────────────────
-// @covers US-001-AC4 US-005-AC4 US-005-AC5
+// @covers US-001-AC4 US-005-AC4 US-005-AC5 US-013-AC4
 
 func produceFetch(ctx context.Context, bootstrap string) ([]Observation, error) {
 	const topic, n = "parity-produce-fetch", 10
