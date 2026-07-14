@@ -50,6 +50,7 @@ docker run -d --name "$KSQL_CID" \
     -e KSQL_BOOTSTRAP_SERVERS="$DOCKER_BOOTSTRAP" \
     -e KSQL_LISTENERS="http://0.0.0.0:${KSQL_PORT}" \
     -e KSQL_KSQL_SERVICE_ID="eco-ksql-${RUN_ID}" \
+    -e KSQL_KSQL_STREAMS_NUM_STREAM_THREADS=1 \
     -e KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE=true \
     -e KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE=true \
     confluentinc/ksqldb-server:0.29.0 >/dev/null

@@ -44,8 +44,6 @@ impl MemoryPartitionLog {
     ///
     /// Returns `(base_offset, record_count)`.
     pub fn append_raw(&self, record_batch_data: &[u8]) -> (i64, i64) {
-        let base_offset = self.next_offset.load(Ordering::SeqCst);
-
         // Read record count from the batch header (BE at offset 57..61).
         let record_count = if record_batch_data.len() >= 61 {
             let count_bytes = &record_batch_data[57..61];
@@ -60,6 +58,12 @@ impl MemoryPartitionLog {
         };
 
         let mut batch = record_batch_data.to_vec();
+
+        // Allocate the offset while holding the segment write lock. Without
+        // this serialization, concurrent producers can observe the same next
+        // offset and one batch will overwrite the other in the segment map.
+        let mut segment = self.active_segment.write();
+        let base_offset = self.next_offset.load(Ordering::SeqCst);
         if batch.len() >= 8 {
             batch[0..8].copy_from_slice(&base_offset.to_be_bytes());
         }
@@ -68,7 +72,6 @@ impl MemoryPartitionLog {
         // sees the new high_watermark is guaranteed to also see the data in the
         // segment (RwLock ensures the read lock cannot be acquired until the
         // write lock is released, at which point both segment and HW are current).
-        let mut segment = self.active_segment.write();
         segment.append(base_offset, batch);
         self.next_offset.fetch_add(record_count, Ordering::SeqCst);
 
@@ -280,6 +283,40 @@ mod tests {
                 .unwrap();
         assert_eq!(hw, 1);
         assert!(!data.is_empty());
+    }
+
+    #[test]
+    fn concurrent_appends_allocate_unique_contiguous_offsets() {
+        use std::sync::{Arc, Barrier};
+
+        const PRODUCERS: usize = 32;
+        const APPENDS_PER_PRODUCER: usize = 64;
+
+        let partition = Arc::new(MemoryPartitionLog::new(0));
+        let barrier = Arc::new(Barrier::new(PRODUCERS));
+        let mut handles = Vec::with_capacity(PRODUCERS);
+
+        for _ in 0..PRODUCERS {
+            let partition = Arc::clone(&partition);
+            let barrier = Arc::clone(&barrier);
+            handles.push(std::thread::spawn(move || {
+                let batch = record_batch_with_count(1);
+                barrier.wait();
+                (0..APPENDS_PER_PRODUCER)
+                    .map(|_| partition.append_raw(&batch).0)
+                    .collect::<Vec<_>>()
+            }));
+        }
+
+        let mut offsets = handles
+            .into_iter()
+            .flat_map(|handle| handle.join().expect("producer thread panicked"))
+            .collect::<Vec<_>>();
+        offsets.sort_unstable();
+
+        let expected_count = (PRODUCERS * APPENDS_PER_PRODUCER) as i64;
+        assert_eq!(offsets, (0..expected_count).collect::<Vec<_>>());
+        assert_eq!(partition.high_watermark(), expected_count);
     }
 
     #[test]

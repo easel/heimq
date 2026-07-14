@@ -16,14 +16,24 @@ TM_CID="eco-flink-tm-${RUN_ID}"
 FLINK_NET="eco-flink-net-${RUN_ID}"
 SRC_TOPIC="eco-flink-src-${RUN_ID}"
 SINK_TOPIC="eco-flink-sink-${RUN_ID}"
+FLINK_SQL_CONNECTOR_VERSION="3.3.0-1.19"
+FLINK_SQL_CONNECTOR_JAR="$(mktemp /tmp/flink-sql-connector-kafka.XXXXXX.jar)"
 
 cleanup() {
     docker rm -f "$JM_CID" "$TM_CID" 2>/dev/null || true
     docker network rm "$FLINK_NET" 2>/dev/null || true
+    rm -f "$FLINK_SQL_CONNECTOR_JAR"
 }
 trap cleanup EXIT
 
 echo "==> [8/8] Apache Flink Kafka source + sink (EOS)"
+
+# The stock Flink image intentionally does not bundle optional connectors.
+# Pin and mount the SQL connector into both processes so the SQL client and
+# TaskManager execute the same Kafka connector implementation.
+curl -fsSL \
+    "https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/${FLINK_SQL_CONNECTOR_VERSION}/flink-sql-connector-kafka-${FLINK_SQL_CONNECTOR_VERSION}.jar" \
+    -o "$FLINK_SQL_CONNECTOR_JAR"
 
 # Seed source topic
 docker run --rm \
@@ -55,6 +65,7 @@ docker network create "$FLINK_NET" >/dev/null
 
 # Start Flink JobManager
 docker run -d --name "$JM_CID" --network "$FLINK_NET" \
+    -v "$FLINK_SQL_CONNECTOR_JAR:/opt/flink/lib/flink-sql-connector-kafka.jar:ro" \
     -e FLINK_PROPERTIES="$(printf 'jobmanager.rpc.address: %s\nrest.port: %s\nrest.bind-address: 0.0.0.0' "$JM_CID" "$FLINK_PORT")" \
     apache/flink:1.19-java17 \
     jobmanager >/dev/null
@@ -73,6 +84,7 @@ echo "  Flink JobManager is up"
 
 # Start TaskManager
 docker run -d --name "$TM_CID" --network "$FLINK_NET" \
+    -v "$FLINK_SQL_CONNECTOR_JAR:/opt/flink/lib/flink-sql-connector-kafka.jar:ro" \
     -e FLINK_PROPERTIES="$(printf 'jobmanager.rpc.address: %s\ntaskmanager.numberOfTaskSlots: 2' "$JM_CID")" \
     apache/flink:1.19-java17 \
     taskmanager >/dev/null
@@ -96,7 +108,8 @@ echo "  TaskManager registered ($SLOTS slots available)"
 # @covers US-009-AC1
 # @covers US-009-AC2
 # Run Flink SQL: copy SRC to SINK with exactly-once semantics and checkpoints enabled.
-SQL_JOB="SET 'execution.checkpointing.interval' = '1s';
+SQL_JOB="ADD JAR 'file:///opt/flink/lib/flink-sql-connector-kafka.jar';
+SET 'execution.checkpointing.interval' = '1s';
 SET 'execution.checkpointing.mode' = 'EXACTLY_ONCE';
 CREATE TABLE src (\`value\` BYTES) WITH ('connector' = 'kafka', 'topic' = '${SRC_TOPIC}', 'properties.bootstrap.servers' = '${DOCKER_BOOTSTRAP}', 'properties.group.id' = 'eco-flink-src', 'scan.startup.mode' = 'earliest-offset', 'value.format' = 'raw');
 CREATE TABLE sink (\`value\` BYTES) WITH ('connector' = 'kafka', 'topic' = '${SINK_TOPIC}', 'properties.bootstrap.servers' = '${DOCKER_BOOTSTRAP}', 'properties.transaction.timeout.ms' = '30000', 'sink.delivery-guarantee' = 'exactly-once', 'sink.transactional-id-prefix' = 'eco-flink-eos', 'value.format' = 'raw');
