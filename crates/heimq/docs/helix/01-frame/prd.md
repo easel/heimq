@@ -73,7 +73,7 @@ broker semantics that then drift independently.
 | Standard Kafka benchmark conformance | `kafka-producer-perf-test` and `kafka-consumer-perf-test` complete with no errors at documented load; OpenMessaging Benchmark runs to completion | Bench harness scripts in `scripts/bench/` |
 | Ecosystem integration coverage | ≥1 tested integration each for: Kafka Connect, Flink, ksqlDB, Debezium, a Schema Registry client, librdkafka in ≥3 languages | Integration test suite in `tests/ecosystem/` (planned) |
 | Wire-protocol contract coverage | 100% of in-scope APIs covered by contract tests | `contract.rs` under `crates/heimq/tests/` + per-API contract files |
-| Startup and footprint (vision differentiator) | Cold start — process exec to first successful client produce/consume round-trip — < 1 second on a CI runner; distributed as a single self-contained binary with no JVM or external services required | Startup-timing check in CI (planned); release artifact inspection |
+| Startup and footprint (vision differentiator) | Cold start — process exec to first successful client produce/consume round-trip — < 1 second on a CI runner; distributed as a single self-contained binary with no JVM or external services required | `scripts/startup-roundtrip-budget.sh` in `.github/workflows/conformance.yml`; execution evidence recorded in `.ddx/executions/20260714T055432-be1997d6/cold-start-budget.md` |
 
 ### Non-Goals
 

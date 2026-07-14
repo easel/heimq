@@ -346,6 +346,15 @@ Spec traceability: FEAT-004, PRD P0 #6. Lives under `scripts/bench/`.
 - [ ] OpenMessaging Benchmark Kafka driver runs at least one documented workload to completion.
 - [ ] Bench profiles, expected exit codes, and acceptable warnings checked in.
 
+### Phase 9b: Cold-start budget gate (P0, PRD startup metric)
+
+Spec traceability: PRD Startup and footprint success metric. Lives under `scripts/` and `.github/workflows/`.
+
+- [x] `scripts/startup-roundtrip-budget.sh` starts a fresh broker process, performs a real librdkafka produce/consume roundtrip, prints elapsed milliseconds, and exits non-zero at 1000 ms or above.
+- [x] The command uses a bounded readiness/client timeout and deterministic cleanup for each attempt.
+- [x] CI runs the command three consecutive times on fresh broker processes.
+- [x] Execution evidence: `.ddx/executions/20260714T055432-be1997d6/cold-start-budget.md`.
+
 ### Phase 10: Ecosystem Integrations (P0, FEAT-005)
 
 Spec traceability: FEAT-005, PRD P0 #7. Lives under `tests/ecosystem/`.

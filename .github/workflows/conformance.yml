@@ -1,8 +1,9 @@
 name: conformance
 
-# The Kafka-facing test suite. Everything here runs in containers and needs
-# nothing on the runner but Docker -- no Rust toolchain, no librdkafka, no Go,
-# Node or kcat. A missing runtime is a build failure, never a skipped test.
+# The Kafka-facing test suite. The parity and compat jobs run in containers
+# and need only Docker; the runner-based startup gate uses the Rust toolchain
+# plus a Python Kafka client wheel. A missing runtime is a build failure,
+# never a skipped test.
 #
 #   parity      heimq vs apache/kafka + redpanda, two independent clients
 #   compat      independent client oracles against heimq alone
@@ -57,3 +58,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run integration suite
         run: ./tests/conformance/integration/run.sh
+
+  # Cold-start budget gate: a fresh broker process must complete a real
+  # produce/consume roundtrip under 1s, three times in a row.
+  cold-start:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Python Kafka client
+        run: python3 -m pip install --user --no-cache-dir confluent-kafka==2.6.1
+      - name: Run cold-start budget gate
+        run: ./scripts/startup-roundtrip-budget.sh
