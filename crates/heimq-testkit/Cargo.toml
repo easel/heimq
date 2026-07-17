@@ -9,7 +9,7 @@ repository.workspace = true
 description = "Per-trait conformance suites and differential parity harness for heimq"
 
 [dependencies]
-heimq = { path = "../heimq", version = "0.1.5", features = ["test-support"] }
+heimq = { path = "../heimq", version = "0.1.6", features = ["test-support"] }
 # Vendored fork of kafka-protocol 0.15.1; imported as `heimq_protocol`.
 heimq-protocol = { path = "../heimq-protocol", version = "0.15.1" }
 
