@@ -37,8 +37,16 @@ struct PartitionState {
     producer_epoch: Option<i16>,
     /// Next expected base_sequence for this (producer, partition).
     next_sequence: i32,
-    /// Only one append for a producer-partition may be in flight at a time.
-    reservation_pending: bool,
+    /// Only one append for a producer-partition may be reserved at a time.
+    reservation: Option<ReservationState>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReservationState {
+    /// The append is still being driven to a terminal storage result.
+    Active { producer_epoch: i16 },
+    /// The append future was dropped with an unknown storage result.
+    Abandoned { producer_epoch: i16 },
 }
 
 pub struct ProducerStateManager {
@@ -63,7 +71,8 @@ impl ProducerStateManager {
     /// reservation advances the next sequence by this amount only when
     /// committed after storage success. A definite storage error rolls it
     /// back; dropping it with an unknown storage outcome leaves the partition
-    /// fenced. Concurrent validation for the same producer-partition returns
+    /// fenced until a strictly newer epoch restarts at sequence zero.
+    /// Concurrent validation for the same producer-partition returns
     /// [`SequenceCheck::InFlight`] without blocking the caller's executor.
     ///
     /// Returns `Accept` without touching state when `producer_id == -1`
@@ -88,11 +97,27 @@ impl ProducerStateManager {
         };
 
         let mut states = self.states.lock();
-        if states
-            .get(&key)
-            .is_some_and(|state| state.reservation_pending)
-        {
-            return SequenceCheck::InFlight;
+        if let Some(reservation) = states.get(&key).and_then(|state| state.reservation) {
+            match reservation {
+                ReservationState::Active { .. } => return SequenceCheck::InFlight,
+                ReservationState::Abandoned {
+                    producer_epoch: abandoned_epoch,
+                } if producer_epoch <= abandoned_epoch => return SequenceCheck::InFlight,
+                ReservationState::Abandoned { .. } => {
+                    if base_sequence != 0 {
+                        return SequenceCheck::OutOfOrder;
+                    }
+                    states
+                        .get_mut(&key)
+                        .expect("reservation state must have a partition state")
+                        .reservation = Some(ReservationState::Active { producer_epoch });
+                    drop(states);
+
+                    return SequenceCheck::Accept(SequenceReservation::new(move |completion| {
+                        self.complete_reservation(&key, producer_epoch, record_count, completion);
+                    }));
+                }
+            }
         }
 
         let state = states.get(&key);
@@ -110,9 +135,9 @@ impl ProducerStateManager {
                 .or_insert(PartitionState {
                     producer_epoch: None,
                     next_sequence: 0,
-                    reservation_pending: false,
+                    reservation: None,
                 })
-                .reservation_pending = true;
+                .reservation = Some(ReservationState::Active { producer_epoch });
             drop(states);
 
             return SequenceCheck::Accept(SequenceReservation::new(move |completion| {
@@ -134,7 +159,10 @@ impl ProducerStateManager {
     ) {
         let mut states = self.states.lock();
         if let Some(state) = states.get_mut(key) {
-            debug_assert!(state.reservation_pending);
+            if state.reservation != Some(ReservationState::Active { producer_epoch }) {
+                debug_assert!(false, "completion must match the active reservation epoch");
+                return;
+            }
             match completion {
                 SequenceCompletion::Commit => {
                     if state.producer_epoch == Some(producer_epoch) {
@@ -143,10 +171,12 @@ impl ProducerStateManager {
                         state.producer_epoch = Some(producer_epoch);
                         state.next_sequence = record_count;
                     }
-                    state.reservation_pending = false;
+                    state.reservation = None;
                 }
-                SequenceCompletion::Rollback => state.reservation_pending = false,
-                SequenceCompletion::Abandon => {}
+                SequenceCompletion::Rollback => state.reservation = None,
+                SequenceCompletion::Abandon => {
+                    state.reservation = Some(ReservationState::Abandoned { producer_epoch });
+                }
             }
         }
     }
@@ -293,5 +323,57 @@ mod tests {
             manager.validate(7, 0, "events", 0, 0, 1),
             SequenceCheck::InFlight
         ));
+    }
+
+    #[test]
+    fn newer_epoch_recovers_abandoned_sequence_and_fences_old_epoch() {
+        let manager = ProducerStateManager::new();
+        reserve_with_epoch(&manager, 3, 0).commit();
+        drop(reserve_with_epoch(&manager, 3, 1));
+
+        assert!(matches!(
+            manager.validate(7, 3, "events", 0, 1, 1),
+            SequenceCheck::InFlight
+        ));
+        assert!(matches!(
+            manager.validate(7, 2, "events", 0, 0, 1),
+            SequenceCheck::InFlight
+        ));
+        reserve_with_epoch(&manager, 4, 0).commit();
+
+        assert!(matches!(
+            manager.validate(7, 3, "events", 0, 1, 1),
+            SequenceCheck::OutOfOrder
+        ));
+        assert!(matches!(
+            manager.validate(7, 4, "events", 0, 0, 1),
+            SequenceCheck::Duplicate
+        ));
+    }
+
+    #[test]
+    fn newer_epoch_must_restart_at_zero_to_recover_abandoned_sequence() {
+        let manager = ProducerStateManager::new();
+        drop(reserve_with_epoch(&manager, 3, 0));
+
+        assert!(matches!(
+            manager.validate(7, 4, "events", 0, 1, 1),
+            SequenceCheck::OutOfOrder
+        ));
+        reserve_with_epoch(&manager, 4, 0).commit();
+    }
+
+    #[test]
+    fn active_reservation_cannot_be_preempted_by_newer_epoch() {
+        let manager = ProducerStateManager::new();
+        let active = reserve_with_epoch(&manager, 3, 0);
+
+        assert!(matches!(
+            manager.validate(7, 4, "events", 0, 0, 1),
+            SequenceCheck::InFlight
+        ));
+
+        active.rollback();
+        reserve_with_epoch(&manager, 4, 0).commit();
     }
 }
