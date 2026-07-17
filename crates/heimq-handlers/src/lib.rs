@@ -16,8 +16,9 @@
 //!   [`codec::encode_response`], and [`codec::encode_response_body`] for
 //!   request-envelope decode and response-envelope encode.
 //! - [`produce::handle_async_with_context_and_config_store`] for async Produce
-//!   dispatch with [`storage::RequestContext`] and [`config_store::ConfigStore`]
-//!   supplied by the embedding broker.
+//!   dispatch with native HeimQ producer sequence state, and
+//!   [`produce::handle_async_with_context_and_config_store_and_sequence_validator`]
+//!   for embedders that own sequence policy at their storage boundary.
 //! - [`metadata::handle`], [`api_versions::handle`], and
 //!   [`init_producer_id::handle`] for the Metadata, ApiVersions, and
 //!   InitProducerId request handlers.
