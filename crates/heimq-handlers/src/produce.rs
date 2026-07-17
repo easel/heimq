@@ -382,7 +382,8 @@ pub async fn handle_async_with_context_and_config_store(
 /// This entrypoint leaves producer IDs, epochs, and base sequences unchanged
 /// and asks `sequence_validator` whether each idempotent batch may append. Use
 /// [`heimq_broker::produce::AcceptAllSequenceValidator`] when the embedding
-/// broker already enforces producer sequence semantics at its storage boundary.
+/// broker intentionally accepts every sequence. Embedders may instead provide
+/// a validator that enforces sequence policy at another boundary.
 ///
 /// Native HeimQ callers should use
 /// [`handle_async_with_context_and_config_store`], which retains
