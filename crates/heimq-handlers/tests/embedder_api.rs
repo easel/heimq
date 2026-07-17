@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use heimq_broker::produce::AcceptAllSequenceValidator;
 use heimq_broker::storage::{ClusterView, LogBackend, RecordBatchView};
 use heimq_broker::RequestContext;
 use heimq_handlers::config_store::ConfigStore;
@@ -79,5 +80,16 @@ fn compile_against_async_produce_embedder_signature(storage: Option<Arc<dyn LogB
             &config_store,
             604_800_000,
         );
+        let _injected_future =
+            produce::handle_async_with_context_and_config_store_and_sequence_validator(
+                11,
+                &[],
+                &storage,
+                &AcceptAllSequenceValidator,
+                &transaction_manager,
+                &ctx,
+                &config_store,
+                604_800_000,
+            );
     }
 }

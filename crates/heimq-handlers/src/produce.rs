@@ -308,11 +308,14 @@ pub async fn handle_async(
     producer_state: &Arc<ProducerStateManager>,
     transaction_manager: &Arc<TransactionManager>,
 ) -> Result<ProduceResponse> {
+    let sequence_validator = ProducerStateSequenceValidator {
+        producer_state: producer_state.as_ref(),
+    };
     handle_async_inner(
         api_version,
         body,
         storage,
-        producer_state,
+        &sequence_validator,
         transaction_manager,
         &RequestContext::ANONYMOUS,
         None,
@@ -330,11 +333,14 @@ pub async fn handle_async_with_config_store(
     config_store: &Arc<ConfigStore>,
     default_retention_ms: u64,
 ) -> Result<ProduceResponse> {
+    let sequence_validator = ProducerStateSequenceValidator {
+        producer_state: producer_state.as_ref(),
+    };
     handle_async_inner(
         api_version,
         body,
         storage,
-        producer_state,
+        &sequence_validator,
         transaction_manager,
         &RequestContext::ANONYMOUS,
         Some(config_store),
@@ -354,11 +360,56 @@ pub async fn handle_async_with_context_and_config_store(
     config_store: &Arc<ConfigStore>,
     default_retention_ms: u64,
 ) -> Result<ProduceResponse> {
+    let sequence_validator = ProducerStateSequenceValidator {
+        producer_state: producer_state.as_ref(),
+    };
     handle_async_inner(
         api_version,
         body,
         storage,
-        producer_state,
+        &sequence_validator,
+        transaction_manager,
+        ctx,
+        Some(config_store),
+        default_retention_ms,
+    )
+    .await
+}
+
+/// Handle an async Produce request using embedder-owned producer sequence
+/// policy.
+///
+/// This entrypoint leaves producer IDs, epochs, and base sequences unchanged
+/// and asks `sequence_validator` whether each idempotent batch may append. Use
+/// [`heimq_broker::produce::AcceptAllSequenceValidator`] when the embedding
+/// broker already enforces producer sequence semantics at its storage boundary.
+///
+/// Native HeimQ callers should use
+/// [`handle_async_with_context_and_config_store`], which retains
+/// [`ProducerStateManager`] reservations and commits them only after storage
+/// completes successfully.
+///
+/// # Cancellation
+///
+/// Once polled, the returned future must be driven to completion when the
+/// validator returns a stateful reservation. Dropping it can abandon the
+/// reservation when the storage outcome is unknown.
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_async_with_context_and_config_store_and_sequence_validator(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    sequence_validator: &dyn SequenceValidator,
+    transaction_manager: &Arc<TransactionManager>,
+    ctx: &RequestContext,
+    config_store: &Arc<ConfigStore>,
+    default_retention_ms: u64,
+) -> Result<ProduceResponse> {
+    handle_async_inner(
+        api_version,
+        body,
+        storage,
+        sequence_validator,
         transaction_manager,
         ctx,
         Some(config_store),
@@ -372,7 +423,7 @@ async fn handle_async_inner(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
-    producer_state: &Arc<ProducerStateManager>,
+    sequence_validator: &dyn SequenceValidator,
     transaction_manager: &Arc<TransactionManager>,
     ctx: &RequestContext,
     config_store: Option<&Arc<ConfigStore>>,
@@ -405,10 +456,6 @@ async fn handle_async_inner(
     let max_message_bytes = caps.max_message_bytes;
     let max_batch_bytes = caps.max_batch_bytes;
 
-    let sequence_validator = ProducerStateSequenceValidator {
-        producer_state: producer_state.as_ref(),
-    };
-
     for topic_data in request.topic_data {
         let topic_name = topic_data.name.0.to_string();
         debug!(topic = %topic_name, partitions = topic_data.partition_data.len(), "Processing topic");
@@ -429,7 +476,7 @@ async fn handle_async_inner(
                     partition,
                     records: records.as_ref(),
                     transactional_attempted,
-                    sequence_validator: &sequence_validator,
+                    sequence_validator,
                     retention_policy: effective_retention_policy(
                         config_store,
                         default_retention_ms,
