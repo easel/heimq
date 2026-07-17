@@ -8,20 +8,32 @@ use crate::error::HeimqError;
 use crate::storage::{LogBackend, RecordBatchHeader, RetentionPolicy};
 use crate::RequestContext;
 
+/// Terminal outcome for a provisional sequence reservation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SequenceCompletion {
+    /// Storage completed the append successfully.
+    Commit,
+    /// Storage returned a definite error without committing the append.
+    Rollback,
+    /// The append future was dropped with an unknown storage outcome.
+    Abandon,
+}
+
 /// A provisional sequence reservation that is committed only after storage
 /// accepts the corresponding append.
 ///
-/// Dropping an uncommitted reservation rolls it back. This also covers async
-/// append cancellation, so a retry can reserve the same sequence again.
-#[must_use = "a sequence reservation must be committed after a successful append"]
+/// Dropping an unfinished reservation abandons it rather than rolling it back:
+/// a generic storage future may have committed before cancellation. Callers of
+/// [`append_records_async`] must drive the future to terminal completion unless
+/// their backend provides a stronger cancellation contract.
+#[must_use = "a sequence reservation must be completed after the append terminates"]
 pub struct SequenceReservation<'a> {
-    completion: Option<Box<dyn FnOnce(bool) + Send + 'a>>,
+    completion: Option<Box<dyn FnOnce(SequenceCompletion) + Send + 'a>>,
 }
 
 impl<'a> SequenceReservation<'a> {
-    /// Create a reservation whose completion callback receives `true` on
-    /// commit and `false` when the reservation is dropped before commit.
-    pub fn new(completion: impl FnOnce(bool) + Send + 'a) -> Self {
+    /// Create a reservation whose callback receives its terminal outcome.
+    pub fn new(completion: impl FnOnce(SequenceCompletion) + Send + 'a) -> Self {
         Self {
             completion: Some(Box::new(completion)),
         }
@@ -31,7 +43,14 @@ impl<'a> SequenceReservation<'a> {
     /// has completed successfully.
     pub fn commit(mut self) {
         if let Some(completion) = self.completion.take() {
-            completion(true);
+            completion(SequenceCompletion::Commit);
+        }
+    }
+
+    /// Roll back the reserved sequence after storage returns a definite error.
+    pub fn rollback(mut self) {
+        if let Some(completion) = self.completion.take() {
+            completion(SequenceCompletion::Rollback);
         }
     }
 }
@@ -39,7 +58,7 @@ impl<'a> SequenceReservation<'a> {
 impl Drop for SequenceReservation<'_> {
     fn drop(&mut self) {
         if let Some(completion) = self.completion.take() {
-            completion(false);
+            completion(SequenceCompletion::Abandon);
         }
     }
 }
@@ -52,6 +71,8 @@ pub enum SequenceDecision<'a> {
     Duplicate,
     /// Sequence has a gap or otherwise violates ordering.
     OutOfOrder,
+    /// Another append for this producer-partition has not completed yet.
+    InFlight,
 }
 
 /// Hook used by protocol/front-end crates to supply idempotent producer state.
@@ -144,6 +165,7 @@ pub enum ProduceAppendError {
     TransactionsUnsupported,
     MessageTooLarge,
     OutOfOrderSequenceNumber,
+    SequenceInFlight,
     Storage(HeimqError),
 }
 
@@ -186,12 +208,24 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
                 header,
             })
         }
-        Err(err) => Err(ProduceAppendError::Storage(err)),
+        Err(err) => {
+            if let Some(reservation) = sequence_reservation {
+                reservation.rollback();
+            }
+            Err(ProduceAppendError::Storage(err))
+        }
     }
 }
 
 /// Async variant of [`append_records`] for storage backends that can defer
 /// commit completion without blocking the caller's worker thread.
+///
+/// # Cancellation
+///
+/// Once polled, this future must be driven to completion. Dropping it abandons
+/// any idempotent sequence reservation because a generic [`LogBackend`] cannot
+/// prove whether its append committed before cancellation. The affected
+/// producer-partition remains fenced instead of risking a duplicate append.
 pub async fn append_records_async(
     cmd: ProduceAppend<'_>,
 ) -> Result<ProduceAppendOutcome, ProduceAppendError> {
@@ -226,7 +260,12 @@ pub async fn append_records_async(
                 header,
             })
         }
-        Err(err) => Err(ProduceAppendError::Storage(err)),
+        Err(err) => {
+            if let Some(reservation) = sequence_reservation {
+                reservation.rollback();
+            }
+            Err(ProduceAppendError::Storage(err))
+        }
     }
 }
 
@@ -283,6 +322,9 @@ fn plan_append<'a>(cmd: &'a ProduceAppend<'a>) -> Result<AppendPlan<'a>, Produce
                 }
                 SequenceDecision::OutOfOrder => {
                     return Err(ProduceAppendError::OutOfOrderSequenceNumber);
+                }
+                SequenceDecision::InFlight => {
+                    return Err(ProduceAppendError::SequenceInFlight);
                 }
             }
         }
@@ -577,6 +619,7 @@ mod tests {
     enum StaticSequenceDecision {
         Duplicate,
         OutOfOrder,
+        InFlight,
     }
 
     struct StaticSequenceValidator(StaticSequenceDecision);
@@ -594,12 +637,13 @@ mod tests {
             match self.0 {
                 StaticSequenceDecision::Duplicate => SequenceDecision::Duplicate,
                 StaticSequenceDecision::OutOfOrder => SequenceDecision::OutOfOrder,
+                StaticSequenceDecision::InFlight => SequenceDecision::InFlight,
             }
         }
     }
 
     struct TrackingSequenceValidator {
-        completions: Arc<Mutex<Vec<bool>>>,
+        completions: Arc<Mutex<Vec<SequenceCompletion>>>,
     }
 
     impl SequenceValidator for TrackingSequenceValidator {
@@ -612,8 +656,8 @@ mod tests {
             _base_sequence: i32,
             _record_count: i32,
         ) -> SequenceDecision<'a> {
-            SequenceDecision::Accept(SequenceReservation::new(move |committed| {
-                self.completions.lock().push(committed);
+            SequenceDecision::Accept(SequenceReservation::new(move |completion| {
+                self.completions.lock().push(completion);
             }))
         }
     }
@@ -790,6 +834,18 @@ mod tests {
     }
 
     #[test]
+    fn produce_append_core_reports_in_flight_sequence_without_appending() {
+        let storage = TestStorage::new();
+        let records = record_batch_header_bytes(1, 22, 1);
+        let validator = StaticSequenceValidator(StaticSequenceDecision::InFlight);
+
+        let err = append_records(append(&storage, &records, &validator)).unwrap_err();
+
+        assert!(matches!(err, ProduceAppendError::SequenceInFlight));
+        assert_eq!(storage.append_count(), 0);
+    }
+
+    #[test]
     fn produce_append_core_rejects_transactional_write_when_backend_lacks_support() {
         let storage = TestStorage::new();
         let records = record_batch_header_bytes(1, -1, 0);
@@ -839,7 +895,7 @@ mod tests {
         let err = append_records(append(&storage, &records, &validator)).unwrap_err();
 
         assert!(matches!(err, ProduceAppendError::Storage(_)));
-        assert_eq!(*completions.lock(), vec![false]);
+        assert_eq!(*completions.lock(), vec![SequenceCompletion::Rollback]);
     }
 
     #[test]
@@ -853,11 +909,11 @@ mod tests {
 
         append_records(append(&storage, &records, &validator)).expect("append succeeds");
 
-        assert_eq!(*completions.lock(), vec![true]);
+        assert_eq!(*completions.lock(), vec![SequenceCompletion::Commit]);
     }
 
     #[test]
-    fn cancelled_async_append_rolls_back_sequence() {
+    fn cancelled_async_append_abandons_sequence_with_unknown_outcome() {
         let state = Arc::new(DeferredAppendState::new());
         let storage = DeferredStorage::new(state);
         let records = record_batch_header_bytes(1, 22, 0);
@@ -872,6 +928,6 @@ mod tests {
         assert!(matches!(future.as_mut().poll(&mut cx), Poll::Pending));
         drop(future);
 
-        assert_eq!(*completions.lock(), vec![false]);
+        assert_eq!(*completions.lock(), vec![SequenceCompletion::Abandon]);
     }
 }

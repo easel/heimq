@@ -42,6 +42,7 @@ impl SequenceValidator for ProducerStateSequenceValidator<'_> {
             SequenceCheck::Accept(reservation) => SequenceDecision::Accept(reservation),
             SequenceCheck::Duplicate => SequenceDecision::Duplicate,
             SequenceCheck::OutOfOrder => SequenceDecision::OutOfOrder,
+            SequenceCheck::InFlight => SequenceDecision::InFlight,
         }
     }
 }
@@ -266,6 +267,11 @@ fn handle_inner(
                             "Out-of-order sequence"
                         );
                         partition_response.error_code = 45; // OUT_OF_ORDER_SEQUENCE_NUMBER
+                        partition_response.base_offset = -1;
+                    }
+                    Err(ProduceAppendError::SequenceInFlight) => {
+                        warn!(topic = %topic_name, partition, "Producer sequence append is still in flight");
+                        partition_response.error_code = 7; // REQUEST_TIMED_OUT (retriable)
                         partition_response.base_offset = -1;
                     }
                     Err(err @ ProduceAppendError::Storage(_)) => {
@@ -498,6 +504,11 @@ async fn handle_async_inner(
                             "Out-of-order sequence"
                         );
                         partition_response.error_code = 45;
+                        partition_response.base_offset = -1;
+                    }
+                    Err(ProduceAppendError::SequenceInFlight) => {
+                        warn!(topic = %topic_name, partition, "Producer sequence append is still in flight");
+                        partition_response.error_code = 7;
                         partition_response.base_offset = -1;
                     }
                     Err(err @ ProduceAppendError::Storage(_)) => {

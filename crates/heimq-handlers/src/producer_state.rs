@@ -5,8 +5,8 @@
 //! Producer IDs are allocated from a global counter so they remain unique
 //! across Router instances (connections) within a process.
 
-use heimq_broker::produce::SequenceReservation;
-use parking_lot::{Condvar, Mutex};
+use heimq_broker::produce::{SequenceCompletion, SequenceReservation};
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
@@ -21,6 +21,8 @@ pub enum SequenceCheck<'a> {
     Duplicate,
     /// Sequence is out-of-order (gap or non-zero first batch).
     OutOfOrder,
+    /// Another append for this producer-partition is still in flight.
+    InFlight,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone)]
@@ -41,14 +43,12 @@ struct PartitionState {
 
 pub struct ProducerStateManager {
     states: Mutex<HashMap<ProducerPartitionKey, PartitionState>>,
-    state_changed: Condvar,
 }
 
 impl ProducerStateManager {
     pub fn new() -> Arc<Self> {
         Arc::new(Self {
             states: Mutex::new(HashMap::new()),
-            state_changed: Condvar::new(),
         })
     }
 
@@ -59,11 +59,12 @@ impl ProducerStateManager {
 
     /// Validate and reserve the sequence state for a produce batch.
     ///
-    /// `record_count` is the number of records in the batch; the expected
-    /// The returned reservation advances the next sequence by this amount only
-    /// when committed after storage success. Dropping it rolls the reservation
-    /// back. Concurrent validation for the same producer-partition waits for
-    /// the in-flight reservation to resolve before making a decision.
+    /// `record_count` is the number of records in the batch. The returned
+    /// reservation advances the next sequence by this amount only when
+    /// committed after storage success. A definite storage error rolls it
+    /// back; dropping it with an unknown storage outcome leaves the partition
+    /// fenced. Concurrent validation for the same producer-partition returns
+    /// [`SequenceCheck::InFlight`] without blocking the caller's executor.
     ///
     /// Returns `Accept` without touching state when `producer_id == -1`
     /// (non-idempotent producer).
@@ -87,44 +88,41 @@ impl ProducerStateManager {
         };
 
         let mut states = self.states.lock();
-        loop {
-            if states
-                .get(&key)
-                .is_some_and(|state| state.reservation_pending)
-            {
-                self.state_changed.wait(&mut states);
-                continue;
-            }
+        if states
+            .get(&key)
+            .is_some_and(|state| state.reservation_pending)
+        {
+            return SequenceCheck::InFlight;
+        }
 
-            let state = states.get(&key);
-            let committed_epoch = state.and_then(|state| state.producer_epoch);
-            if committed_epoch.is_some_and(|epoch| producer_epoch < epoch) {
-                return SequenceCheck::OutOfOrder;
-            }
-
-            let epoch_advanced = committed_epoch.is_none_or(|epoch| producer_epoch > epoch);
-            let next_sequence = state.map_or(0, |state| state.next_sequence);
-            let expected_sequence = if epoch_advanced { 0 } else { next_sequence };
-            if base_sequence == expected_sequence {
-                states
-                    .entry(key.clone())
-                    .or_insert(PartitionState {
-                        producer_epoch: None,
-                        next_sequence: 0,
-                        reservation_pending: false,
-                    })
-                    .reservation_pending = true;
-                drop(states);
-
-                return SequenceCheck::Accept(SequenceReservation::new(move |committed| {
-                    self.complete_reservation(&key, producer_epoch, record_count, committed);
-                }));
-            }
-            if !epoch_advanced && base_sequence < next_sequence {
-                return SequenceCheck::Duplicate;
-            }
+        let state = states.get(&key);
+        let committed_epoch = state.and_then(|state| state.producer_epoch);
+        if committed_epoch.is_some_and(|epoch| producer_epoch < epoch) {
             return SequenceCheck::OutOfOrder;
         }
+
+        let epoch_advanced = committed_epoch.is_none_or(|epoch| producer_epoch > epoch);
+        let next_sequence = state.map_or(0, |state| state.next_sequence);
+        let expected_sequence = if epoch_advanced { 0 } else { next_sequence };
+        if base_sequence == expected_sequence {
+            states
+                .entry(key.clone())
+                .or_insert(PartitionState {
+                    producer_epoch: None,
+                    next_sequence: 0,
+                    reservation_pending: false,
+                })
+                .reservation_pending = true;
+            drop(states);
+
+            return SequenceCheck::Accept(SequenceReservation::new(move |completion| {
+                self.complete_reservation(&key, producer_epoch, record_count, completion);
+            }));
+        }
+        if !epoch_advanced && base_sequence < next_sequence {
+            return SequenceCheck::Duplicate;
+        }
+        SequenceCheck::OutOfOrder
     }
 
     fn complete_reservation(
@@ -132,31 +130,33 @@ impl ProducerStateManager {
         key: &ProducerPartitionKey,
         producer_epoch: i16,
         record_count: i32,
-        committed: bool,
+        completion: SequenceCompletion,
     ) {
         let mut states = self.states.lock();
         if let Some(state) = states.get_mut(key) {
             debug_assert!(state.reservation_pending);
-            if committed {
-                if state.producer_epoch == Some(producer_epoch) {
-                    state.next_sequence = state.next_sequence.wrapping_add(record_count);
-                } else {
-                    state.producer_epoch = Some(producer_epoch);
-                    state.next_sequence = record_count;
+            match completion {
+                SequenceCompletion::Commit => {
+                    if state.producer_epoch == Some(producer_epoch) {
+                        state.next_sequence = state.next_sequence.wrapping_add(record_count);
+                    } else {
+                        state.producer_epoch = Some(producer_epoch);
+                        state.next_sequence = record_count;
+                    }
+                    state.reservation_pending = false;
                 }
+                SequenceCompletion::Rollback => state.reservation_pending = false,
+                SequenceCompletion::Abandon => {}
             }
-            state.reservation_pending = false;
         }
-        self.state_changed.notify_all();
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc;
-    use std::thread;
-    use std::time::Duration;
+    use std::future::Future;
+    use std::task::{Context, Poll, Waker};
 
     fn reserve<'a>(
         manager: &'a ProducerStateManager,
@@ -174,6 +174,7 @@ mod tests {
             SequenceCheck::Accept(reservation) => reservation,
             SequenceCheck::Duplicate => panic!("expected reservation, got duplicate"),
             SequenceCheck::OutOfOrder => panic!("expected reservation, got out of order"),
+            SequenceCheck::InFlight => panic!("expected reservation, got in flight"),
         }
     }
 
@@ -181,7 +182,7 @@ mod tests {
     fn rolled_back_sequence_can_be_retried() {
         let manager = ProducerStateManager::new();
 
-        drop(reserve(&manager, 0));
+        reserve(&manager, 0).rollback();
         reserve(&manager, 0).commit();
 
         assert!(matches!(
@@ -204,66 +205,53 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_next_sequence_waits_for_commit() {
+    fn concurrent_next_sequence_returns_in_flight_then_accepts_after_commit() {
         let manager = ProducerStateManager::new();
         let first = reserve(&manager, 0);
-        let (started_tx, started_rx) = mpsc::channel();
-        let (result_tx, result_rx) = mpsc::channel();
-        let other_manager = manager.clone();
 
-        let waiter = thread::spawn(move || {
-            started_tx.send(()).expect("signal waiter start");
-            let accepted = match other_manager.validate(7, 0, "events", 0, 1, 1) {
-                SequenceCheck::Accept(reservation) => {
-                    reservation.commit();
-                    true
-                }
-                SequenceCheck::Duplicate | SequenceCheck::OutOfOrder => false,
-            };
-            result_tx.send(accepted).expect("send validation result");
-        });
-
-        started_rx.recv().expect("waiter started");
         assert!(matches!(
-            result_rx.recv_timeout(Duration::from_millis(100)),
-            Err(mpsc::RecvTimeoutError::Timeout)
+            manager.validate(7, 0, "events", 0, 1, 1),
+            SequenceCheck::InFlight
         ));
 
         first.commit();
-        assert!(result_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("waiter completed"));
-        waiter.join().expect("waiter did not panic");
+        reserve(&manager, 1).commit();
     }
 
     #[test]
-    fn concurrent_same_sequence_becomes_duplicate_after_commit() {
+    fn concurrent_same_sequence_returns_in_flight_then_duplicate_after_commit() {
         let manager = ProducerStateManager::new();
         let first = reserve(&manager, 0);
-        let (started_tx, started_rx) = mpsc::channel();
-        let (result_tx, result_rx) = mpsc::channel();
-        let other_manager = manager.clone();
 
-        let waiter = thread::spawn(move || {
-            started_tx.send(()).expect("signal waiter start");
-            let duplicate = matches!(
-                other_manager.validate(7, 0, "events", 0, 0, 1),
-                SequenceCheck::Duplicate
-            );
-            result_tx.send(duplicate).expect("send validation result");
-        });
-
-        started_rx.recv().expect("waiter started");
         assert!(matches!(
-            result_rx.recv_timeout(Duration::from_millis(100)),
-            Err(mpsc::RecvTimeoutError::Timeout)
+            manager.validate(7, 0, "events", 0, 0, 1),
+            SequenceCheck::InFlight
         ));
 
         first.commit();
-        assert!(result_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("waiter completed"));
-        waiter.join().expect("waiter did not panic");
+        assert!(matches!(
+            manager.validate(7, 0, "events", 0, 0, 1),
+            SequenceCheck::Duplicate
+        ));
+    }
+
+    #[test]
+    fn current_thread_async_poll_does_not_block_on_pending_sequence() {
+        let manager = ProducerStateManager::new();
+        let mut future = Box::pin(async {
+            let first = reserve(&manager, 0);
+            assert!(matches!(
+                manager.validate(7, 0, "events", 0, 1, 1),
+                SequenceCheck::InFlight
+            ));
+            first.rollback();
+        });
+        let mut context = Context::from_waker(Waker::noop());
+
+        assert!(matches!(
+            future.as_mut().poll(&mut context),
+            Poll::Ready(())
+        ));
     }
 
     #[test]
@@ -286,12 +274,24 @@ mod tests {
     fn failed_newer_epoch_does_not_fence_committed_epoch() {
         let manager = ProducerStateManager::new();
         reserve_with_epoch(&manager, 3, 0).commit();
-        drop(reserve_with_epoch(&manager, 4, 0));
+        reserve_with_epoch(&manager, 4, 0).rollback();
 
         reserve_with_epoch(&manager, 3, 1).commit();
         assert!(matches!(
             manager.validate(7, 4, "events", 0, 0, 1),
             SequenceCheck::Accept(_)
+        ));
+    }
+
+    #[test]
+    fn abandoned_sequence_remains_fenced_as_in_flight() {
+        let manager = ProducerStateManager::new();
+
+        drop(reserve(&manager, 0));
+
+        assert!(matches!(
+            manager.validate(7, 0, "events", 0, 0, 1),
+            SequenceCheck::InFlight
         ));
     }
 }
