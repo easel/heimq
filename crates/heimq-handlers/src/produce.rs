@@ -22,15 +22,15 @@ struct ProducerStateSequenceValidator<'a> {
 }
 
 impl SequenceValidator for ProducerStateSequenceValidator<'_> {
-    fn validate(
-        &self,
+    fn validate<'a>(
+        &'a self,
         producer_id: i64,
         producer_epoch: i16,
         topic: &str,
         partition: i32,
         base_sequence: i32,
         record_count: i32,
-    ) -> SequenceDecision {
+    ) -> SequenceDecision<'a> {
         match self.producer_state.validate(
             producer_id,
             producer_epoch,
@@ -39,7 +39,7 @@ impl SequenceValidator for ProducerStateSequenceValidator<'_> {
             base_sequence,
             record_count,
         ) {
-            SequenceCheck::Accept => SequenceDecision::Accept,
+            SequenceCheck::Accept(reservation) => SequenceDecision::Accept(reservation),
             SequenceCheck::Duplicate => SequenceDecision::Duplicate,
             SequenceCheck::OutOfOrder => SequenceDecision::OutOfOrder,
         }

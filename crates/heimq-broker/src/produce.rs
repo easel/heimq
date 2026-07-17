@@ -8,11 +8,46 @@ use crate::error::HeimqError;
 use crate::storage::{LogBackend, RecordBatchHeader, RetentionPolicy};
 use crate::RequestContext;
 
+/// A provisional sequence reservation that is committed only after storage
+/// accepts the corresponding append.
+///
+/// Dropping an uncommitted reservation rolls it back. This also covers async
+/// append cancellation, so a retry can reserve the same sequence again.
+#[must_use = "a sequence reservation must be committed after a successful append"]
+pub struct SequenceReservation<'a> {
+    completion: Option<Box<dyn FnOnce(bool) + Send + 'a>>,
+}
+
+impl<'a> SequenceReservation<'a> {
+    /// Create a reservation whose completion callback receives `true` on
+    /// commit and `false` when the reservation is dropped before commit.
+    pub fn new(completion: impl FnOnce(bool) + Send + 'a) -> Self {
+        Self {
+            completion: Some(Box::new(completion)),
+        }
+    }
+
+    /// Commit the reserved sequence after the corresponding storage append
+    /// has completed successfully.
+    pub fn commit(mut self) {
+        if let Some(completion) = self.completion.take() {
+            completion(true);
+        }
+    }
+}
+
+impl Drop for SequenceReservation<'_> {
+    fn drop(&mut self) {
+        if let Some(completion) = self.completion.take() {
+            completion(false);
+        }
+    }
+}
+
 /// Result of an idempotent sequence validation check.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SequenceDecision {
-    /// Sequence is in-order and the append should proceed.
-    Accept,
+pub enum SequenceDecision<'a> {
+    /// Sequence is in-order and reserved while the append is in flight.
+    Accept(SequenceReservation<'a>),
     /// Sequence repeats a previously accepted batch; report success without append.
     Duplicate,
     /// Sequence has a gap or otherwise violates ordering.
@@ -21,15 +56,15 @@ pub enum SequenceDecision {
 
 /// Hook used by protocol/front-end crates to supply idempotent producer state.
 pub trait SequenceValidator: Sync {
-    fn validate(
-        &self,
+    fn validate<'a>(
+        &'a self,
         producer_id: i64,
         producer_epoch: i16,
         topic: &str,
         partition: i32,
         base_sequence: i32,
         record_count: i32,
-    ) -> SequenceDecision;
+    ) -> SequenceDecision<'a>;
 }
 
 /// Default validator for callers that do not track producer sequence state.
@@ -37,16 +72,16 @@ pub trait SequenceValidator: Sync {
 pub struct AcceptAllSequenceValidator;
 
 impl SequenceValidator for AcceptAllSequenceValidator {
-    fn validate(
-        &self,
+    fn validate<'a>(
+        &'a self,
         _producer_id: i64,
         _producer_epoch: i16,
         _topic: &str,
         _partition: i32,
         _base_sequence: i32,
         _record_count: i32,
-    ) -> SequenceDecision {
-        SequenceDecision::Accept
+    ) -> SequenceDecision<'a> {
+        SequenceDecision::Accept(SequenceReservation::new(|_| {}))
     }
 }
 
@@ -95,9 +130,11 @@ impl ProduceAppendStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AppendPlan {
-    Append { header: Option<RecordBatchHeader> },
+enum AppendPlan<'a> {
+    Append {
+        header: Option<RecordBatchHeader>,
+        sequence_reservation: Option<SequenceReservation<'a>>,
+    },
     Complete(ProduceAppendOutcome),
 }
 
@@ -122,8 +159,11 @@ impl ProduceAppendError {
 /// Apply shared produce append semantics without depending on a concrete Kafka
 /// request/response crate version.
 pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, ProduceAppendError> {
-    let header = match plan_append(&cmd)? {
-        AppendPlan::Append { header } => header,
+    let (header, sequence_reservation) = match plan_append(&cmd)? {
+        AppendPlan::Append {
+            header,
+            sequence_reservation,
+        } => (header, sequence_reservation),
         AppendPlan::Complete(outcome) => return Ok(outcome),
     };
 
@@ -134,13 +174,18 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
         cmd.records,
         cmd.retention_policy,
     ) {
-        Ok((base_offset, high_watermark)) => Ok(ProduceAppendOutcome {
-            status: ProduceAppendStatus::Appended {
-                base_offset,
-                high_watermark,
-            },
-            header,
-        }),
+        Ok((base_offset, high_watermark)) => {
+            if let Some(reservation) = sequence_reservation {
+                reservation.commit();
+            }
+            Ok(ProduceAppendOutcome {
+                status: ProduceAppendStatus::Appended {
+                    base_offset,
+                    high_watermark,
+                },
+                header,
+            })
+        }
         Err(err) => Err(ProduceAppendError::Storage(err)),
     }
 }
@@ -150,8 +195,11 @@ pub fn append_records(cmd: ProduceAppend<'_>) -> Result<ProduceAppendOutcome, Pr
 pub async fn append_records_async(
     cmd: ProduceAppend<'_>,
 ) -> Result<ProduceAppendOutcome, ProduceAppendError> {
-    let header = match plan_append(&cmd)? {
-        AppendPlan::Append { header } => header,
+    let (header, sequence_reservation) = match plan_append(&cmd)? {
+        AppendPlan::Append {
+            header,
+            sequence_reservation,
+        } => (header, sequence_reservation),
         AppendPlan::Complete(outcome) => return Ok(outcome),
     };
 
@@ -166,18 +214,23 @@ pub async fn append_records_async(
         )
         .await
     {
-        Ok((base_offset, high_watermark)) => Ok(ProduceAppendOutcome {
-            status: ProduceAppendStatus::Appended {
-                base_offset,
-                high_watermark,
-            },
-            header,
-        }),
+        Ok((base_offset, high_watermark)) => {
+            if let Some(reservation) = sequence_reservation {
+                reservation.commit();
+            }
+            Ok(ProduceAppendOutcome {
+                status: ProduceAppendStatus::Appended {
+                    base_offset,
+                    high_watermark,
+                },
+                header,
+            })
+        }
         Err(err) => Err(ProduceAppendError::Storage(err)),
     }
 }
 
-fn plan_append(cmd: &ProduceAppend<'_>) -> Result<AppendPlan, ProduceAppendError> {
+fn plan_append<'a>(cmd: &'a ProduceAppend<'a>) -> Result<AppendPlan<'a>, ProduceAppendError> {
     let caps = cmd.storage.capabilities();
     let header = RecordBatchHeader::peek(cmd.records);
 
@@ -201,6 +254,7 @@ fn plan_append(cmd: &ProduceAppend<'_>) -> Result<AppendPlan, ProduceAppendError
         return Err(ProduceAppendError::MessageTooLarge);
     }
 
+    let mut sequence_reservation = None;
     if let Some(hdr) = header {
         if hdr.producer_id != -1 {
             match cmd.sequence_validator.validate(
@@ -211,7 +265,9 @@ fn plan_append(cmd: &ProduceAppend<'_>) -> Result<AppendPlan, ProduceAppendError
                 hdr.base_sequence,
                 hdr.record_count,
             ) {
-                SequenceDecision::Accept => {}
+                SequenceDecision::Accept(reservation) => {
+                    sequence_reservation = Some(reservation);
+                }
                 SequenceDecision::Duplicate => {
                     let high_watermark = cmd
                         .storage
@@ -232,7 +288,10 @@ fn plan_append(cmd: &ProduceAppend<'_>) -> Result<AppendPlan, ProduceAppendError
         }
     }
 
-    Ok(AppendPlan::Append { header })
+    Ok(AppendPlan::Append {
+        header,
+        sequence_reservation,
+    })
 }
 
 #[cfg(test)]
@@ -514,19 +573,48 @@ mod tests {
         }
     }
 
-    struct StaticSequenceValidator(SequenceDecision);
+    #[derive(Clone, Copy)]
+    enum StaticSequenceDecision {
+        Duplicate,
+        OutOfOrder,
+    }
+
+    struct StaticSequenceValidator(StaticSequenceDecision);
 
     impl SequenceValidator for StaticSequenceValidator {
-        fn validate(
-            &self,
+        fn validate<'a>(
+            &'a self,
             _producer_id: i64,
             _producer_epoch: i16,
             _topic: &str,
             _partition: i32,
             _base_sequence: i32,
             _record_count: i32,
-        ) -> SequenceDecision {
-            self.0
+        ) -> SequenceDecision<'a> {
+            match self.0 {
+                StaticSequenceDecision::Duplicate => SequenceDecision::Duplicate,
+                StaticSequenceDecision::OutOfOrder => SequenceDecision::OutOfOrder,
+            }
+        }
+    }
+
+    struct TrackingSequenceValidator {
+        completions: Arc<Mutex<Vec<bool>>>,
+    }
+
+    impl SequenceValidator for TrackingSequenceValidator {
+        fn validate<'a>(
+            &'a self,
+            _producer_id: i64,
+            _producer_epoch: i16,
+            _topic: &str,
+            _partition: i32,
+            _base_sequence: i32,
+            _record_count: i32,
+        ) -> SequenceDecision<'a> {
+            SequenceDecision::Accept(SequenceReservation::new(move |committed| {
+                self.completions.lock().push(committed);
+            }))
         }
     }
 
@@ -675,7 +763,7 @@ mod tests {
     fn produce_append_core_reports_duplicate_without_appending() {
         let storage = TestStorage::new().with_high_watermark(7);
         let records = record_batch_header_bytes(3, 22, 0);
-        let validator = StaticSequenceValidator(SequenceDecision::Duplicate);
+        let validator = StaticSequenceValidator(StaticSequenceDecision::Duplicate);
 
         let outcome = append_records(append(&storage, &records, &validator)).unwrap();
 
@@ -693,7 +781,7 @@ mod tests {
     fn produce_append_core_rejects_out_of_order_sequence() {
         let storage = TestStorage::new();
         let records = record_batch_header_bytes(1, 22, 2);
-        let validator = StaticSequenceValidator(SequenceDecision::OutOfOrder);
+        let validator = StaticSequenceValidator(StaticSequenceDecision::OutOfOrder);
 
         let err = append_records(append(&storage, &records, &validator)).unwrap_err();
 
@@ -737,5 +825,53 @@ mod tests {
             append_records(append(&storage, &records, &AcceptAllSequenceValidator)).unwrap_err();
 
         assert!(matches!(err, ProduceAppendError::Storage(_)));
+    }
+
+    #[test]
+    fn produce_append_core_rolls_back_sequence_on_storage_error() {
+        let storage = TestStorage::new().with_fail_append();
+        let records = record_batch_header_bytes(1, 22, 0);
+        let completions = Arc::new(Mutex::new(Vec::new()));
+        let validator = TrackingSequenceValidator {
+            completions: completions.clone(),
+        };
+
+        let err = append_records(append(&storage, &records, &validator)).unwrap_err();
+
+        assert!(matches!(err, ProduceAppendError::Storage(_)));
+        assert_eq!(*completions.lock(), vec![false]);
+    }
+
+    #[test]
+    fn produce_append_core_commits_sequence_after_storage_success() {
+        let storage = TestStorage::new();
+        let records = record_batch_header_bytes(1, 22, 0);
+        let completions = Arc::new(Mutex::new(Vec::new()));
+        let validator = TrackingSequenceValidator {
+            completions: completions.clone(),
+        };
+
+        append_records(append(&storage, &records, &validator)).expect("append succeeds");
+
+        assert_eq!(*completions.lock(), vec![true]);
+    }
+
+    #[test]
+    fn cancelled_async_append_rolls_back_sequence() {
+        let state = Arc::new(DeferredAppendState::new());
+        let storage = DeferredStorage::new(state);
+        let records = record_batch_header_bytes(1, 22, 0);
+        let completions = Arc::new(Mutex::new(Vec::new()));
+        let validator = TrackingSequenceValidator {
+            completions: completions.clone(),
+        };
+        let mut future = Box::pin(append_records_async(append(&storage, &records, &validator)));
+        let waker = noop_waker();
+        let mut cx = Context::from_waker(&waker);
+
+        assert!(matches!(future.as_mut().poll(&mut cx), Poll::Pending));
+        drop(future);
+
+        assert_eq!(*completions.lock(), vec![false]);
     }
 }
