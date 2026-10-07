@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.27.1-alpine AS builder
 WORKDIR /src
 COPY franz_go/go.mod franz_go/go.sum ./
 RUN go mod download

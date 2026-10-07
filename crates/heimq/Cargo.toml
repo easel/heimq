@@ -2,7 +2,7 @@
 name = "heimq"
 version = "0.1.6"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.99.0"
 authors = ["heimq contributors"]
 description = "A fast, lightweight, single-node Kafka-compatible API server"
 license = "MIT"

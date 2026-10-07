@@ -1,6 +1,6 @@
 module github.com/heimq/sarama-oracle
 
-go 1.21
+go 1.27.1
 
 require github.com/IBM/sarama v1.45.1
 
