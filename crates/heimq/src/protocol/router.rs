@@ -96,7 +96,7 @@ impl Router {
 
     /// Route a request and return the response
     /// Async variant of [`route`] that awaits async Produce appends (API 0)
-    /// and honours `max_wait_ms` on Fetch (API 1).
+    /// catalog operations on Metadata (API 3), and honours `max_wait_ms` on Fetch (API 1).
     ///
     /// For all other API keys this behaves identically to [`route`].
     pub async fn route_async(&self, data: &[u8]) -> Result<Bytes> {
@@ -112,6 +112,16 @@ impl Router {
             match header.api_key {
                 0 => return self.handle_produce_async(&header, body).await,
                 1 => return self.handle_fetch_long_poll(header, body).await,
+                3 => {
+                    let response = metadata::handle_async(
+                        header.api_version,
+                        body.as_ref(),
+                        &self.storage,
+                        self.cluster_view.as_ref(),
+                    )
+                    .await?;
+                    return self.encode_response_bytes(&header, &response);
+                }
                 _ => {}
             }
         }
@@ -1372,3 +1382,7 @@ mod tests {
         assert!(!received.is_empty(), "received batch must be non-empty");
     }
 }
+
+#[cfg(test)]
+#[path = "async_catalog_tests.rs"]
+mod async_catalog_tests;

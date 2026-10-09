@@ -177,6 +177,21 @@ Run OpenMessaging Benchmark smoke infrastructure:
 
 Benchmark and stress artifacts live under [scripts/bench](scripts/bench).
 
+## Awaited catalog operations for embedders
+
+The async router uses `heimq_handlers::metadata::handle_async` for Metadata
+requests. Remote catalog backends implement the `LogBackend` methods
+`topic_async`, `get_all_topic_metadata_async`, `create_topic_async`, and
+`get_or_create_topic_async`, returning runtime-neutral `CatalogFuture` values.
+They must await their actual I/O and preserve catalog mutation and retirement
+fences before completing creation. The inherited implementations are intended
+for in-memory backends. Catalog failures propagate to the caller; the async
+metadata path does not fall back to synchronous lookup or creation.
+
+The synchronous metadata entrypoint remains available to in-memory embedders.
+Both paths share response rendering and preserve existing-topic response order,
+unknown-topic errors, partition metadata, and cluster topology.
+
 ## Compatibility and limits
 
 heimq implements a practical subset of Kafka protocol behavior for a

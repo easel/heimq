@@ -25,6 +25,9 @@ use std::sync::Arc;
 /// Runtime-neutral future returned by append entrypoints.
 pub type AppendFuture<'a> = Pin<Box<dyn Future<Output = Result<(i64, i64)>> + Send + 'a>>;
 
+/// Runtime-neutral future for an awaited catalog operation.
+pub type CatalogFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'a>>;
+
 /// Effective retention policy for one append admission decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RetentionPolicy {
@@ -65,6 +68,36 @@ pub enum FetchWait {
 pub trait LogBackend: Send + Sync {
     /// Create a new topic with the given partition count.
     fn create_topic(&self, name: &str, num_partitions: i32) -> Result<Arc<dyn TopicLog>>;
+
+    /// Await catalog creation. Remote backends must override this with native
+    /// async I/O; the default is suitable for synchronous in-memory storage.
+    fn create_topic_async<'a>(
+        &'a self,
+        name: &'a str,
+        num_partitions: i32,
+    ) -> CatalogFuture<'a, Arc<dyn TopicLog>> {
+        Box::pin(async move { self.create_topic(name, num_partitions) })
+    }
+
+    /// Await an existing-topic lookup, including remote catalog failures.
+    fn topic_async<'a>(&'a self, name: &'a str) -> CatalogFuture<'a, Option<Arc<dyn TopicLog>>> {
+        Box::pin(async move { Ok(self.topic(name)) })
+    }
+
+    /// Await topic creation or lookup. Remote backends must preserve their
+    /// catalog mutation/retirement fences before resolving this future.
+    fn get_or_create_topic_async<'a>(
+        &'a self,
+        name: &'a str,
+        num_partitions: i32,
+    ) -> CatalogFuture<'a, Arc<dyn TopicLog>> {
+        Box::pin(async move { Ok(self.get_or_create_topic(name, num_partitions)) })
+    }
+
+    /// Await metadata discovery. Remote backends must override the memory default.
+    fn get_all_topic_metadata_async(&self) -> CatalogFuture<'_, Vec<(String, i32)>> {
+        Box::pin(async move { Ok(self.get_all_topic_metadata()) })
+    }
 
     /// Delete an existing topic.
     fn delete_topic(&self, name: &str) -> Result<()>;

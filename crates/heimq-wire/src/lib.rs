@@ -63,6 +63,7 @@ impl From<FrameError> for WireError {
 /// The handler is called from the writer task with frames in FIFO order.
 #[async_trait]
 pub trait FrameHandler: Send + Sync + 'static {
+    #[must_use = "frame handling must be awaited before sending its response"]
     async fn handle(&self, frame: Bytes) -> Result<Bytes, FrameError>;
 }
 

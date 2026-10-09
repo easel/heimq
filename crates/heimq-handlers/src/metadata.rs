@@ -11,20 +11,101 @@ use heimq_protocol::messages::{BrokerId, MetadataResponse, TopicName};
 use heimq_protocol::protocol::{Decodable, StrBytes};
 use std::sync::Arc;
 
+fn decode_request(api_version: i16, body: &[u8]) -> MetadataRequest {
+    if body.is_empty() {
+        MetadataRequest::default()
+    } else {
+        let mut buf = Bytes::copy_from_slice(body);
+        MetadataRequest::decode(&mut buf, api_version).unwrap_or_default()
+    }
+}
+
+fn requested_names(request: &MetadataRequest) -> Option<Vec<String>> {
+    request
+        .topics
+        .as_ref()
+        .filter(|topics| !topics.is_empty())
+        .map(|topics| {
+            topics
+                .iter()
+                .filter_map(|topic| topic.name.as_ref().map(|name| name.0.to_string()))
+                .collect()
+        })
+}
+
+/// Metadata handler for synchronous in-memory catalog backends.
 pub fn handle(
     api_version: i16,
     body: &[u8],
     storage: &Arc<dyn LogBackend>,
     cluster_view: &dyn ClusterView,
 ) -> Result<MetadataResponse> {
-    // Empty body is treated as "all topics" request (Kafka spec: null topics array).
-    let request: MetadataRequest = if body.is_empty() {
-        MetadataRequest::default()
-    } else {
-        let mut buf = Bytes::copy_from_slice(body);
-        MetadataRequest::decode(&mut buf, api_version).unwrap_or_default()
+    let request = decode_request(api_version, body);
+    let metadata = match requested_names(&request) {
+        None => storage.get_all_topic_metadata(),
+        Some(names) => {
+            let mut metadata = Vec::with_capacity(names.len());
+            let mut missing = Vec::new();
+            for name in names {
+                if let Some(topic) = storage.topic(&name) {
+                    metadata.push((name, topic.num_partitions()));
+                } else {
+                    missing.push(name);
+                }
+            }
+            if storage.auto_create_topics() {
+                for name in missing {
+                    let topic =
+                        storage.get_or_create_topic(&name, storage.default_num_partitions());
+                    metadata.push((name, topic.num_partitions()));
+                }
+            }
+            metadata
+        }
     };
+    render_metadata(api_version, &request, metadata, cluster_view)
+}
 
+/// Metadata handler for backends whose catalog operations require awaited I/O.
+pub async fn handle_async(
+    api_version: i16,
+    body: &[u8],
+    storage: &Arc<dyn LogBackend>,
+    cluster_view: &dyn ClusterView,
+) -> Result<MetadataResponse> {
+    let request = decode_request(api_version, body);
+    let metadata = match requested_names(&request) {
+        None => storage.get_all_topic_metadata_async().await?,
+        Some(names) => {
+            let mut metadata = Vec::with_capacity(names.len());
+            let mut missing = Vec::new();
+            for name in names {
+                if let Some(topic) = storage.topic_async(&name).await? {
+                    metadata.push((name, topic.num_partitions()));
+                } else {
+                    missing.push(name);
+                }
+            }
+            if storage.auto_create_topics() {
+                for name in missing {
+                    let topic = storage
+                        .get_or_create_topic_async(&name, storage.default_num_partitions())
+                        .await?;
+                    metadata.push((name, topic.num_partitions()));
+                }
+            }
+            metadata
+        }
+    };
+    render_metadata(api_version, &request, metadata, cluster_view)
+}
+
+fn render_metadata(
+    api_version: i16,
+    request: &MetadataRequest,
+    topic_metadata: Vec<(String, i32)>,
+    cluster_view: &dyn ClusterView,
+) -> Result<MetadataResponse> {
     let self_broker = cluster_view.self_broker();
     let mut response = MetadataResponse::default();
 
@@ -56,30 +137,6 @@ pub fn handle(
         response.controller_id = BrokerId(self_broker.node_id);
     }
 
-    // None means "all topics"; empty Some([]) also means all topics per Kafka spec (v1+)
-    let requested_topics: Option<Vec<String>> = match &request.topics {
-        None => None,
-        Some(topics) if topics.is_empty() => None,
-        Some(topics) => Some(
-            topics
-                .iter()
-                .filter_map(|t| t.name.as_ref().map(|n| n.0.to_string()))
-                .collect(),
-        ),
-    };
-
-    let topic_metadata = match requested_topics {
-        None => storage.get_all_topic_metadata(),
-        Some(names) => names
-            .iter()
-            .filter_map(|name| {
-                storage
-                    .topic(name)
-                    .map(|t| (name.clone(), t.num_partitions()))
-            })
-            .collect(),
-    };
-
     let mut resolved_names: std::collections::HashSet<String> = std::collections::HashSet::new();
     for (topic_name, num_partitions) in &topic_metadata {
         resolved_names.insert(topic_name.clone());
@@ -105,29 +162,10 @@ pub fn handle(
             if let Some(name) = &t.name {
                 let s = name.0.to_string();
                 if !resolved_names.contains(&s) {
-                    if storage.auto_create_topics() {
-                        let topic =
-                            storage.get_or_create_topic(&s, storage.default_num_partitions());
-                        let mut topic_meta = MetadataResponseTopic::default();
-                        topic_meta.name = Some(TopicName(StrBytes::from_string(s.clone())));
-                        topic_meta.error_code = 0;
-                        for partition_id in 0..topic.num_partitions() {
-                            let mut partition = MetadataResponsePartition::default();
-                            partition.partition_index = partition_id;
-                            partition.error_code = 0;
-                            let leader = leader_for(&s, partition_id);
-                            partition.leader_id = BrokerId(leader);
-                            partition.replica_nodes = vec![BrokerId(leader)];
-                            partition.isr_nodes = vec![BrokerId(leader)];
-                            topic_meta.partitions.push(partition);
-                        }
-                        response.topics.push(topic_meta);
-                    } else {
-                        let mut topic_meta = MetadataResponseTopic::default();
-                        topic_meta.name = Some(TopicName(StrBytes::from_string(s)));
-                        topic_meta.error_code = 3; // UNKNOWN_TOPIC_OR_PARTITION
-                        response.topics.push(topic_meta);
-                    }
+                    let mut topic_meta = MetadataResponseTopic::default();
+                    topic_meta.name = Some(TopicName(StrBytes::from_string(s)));
+                    topic_meta.error_code = 3; // UNKNOWN_TOPIC_OR_PARTITION
+                    response.topics.push(topic_meta);
                 }
             }
         }
